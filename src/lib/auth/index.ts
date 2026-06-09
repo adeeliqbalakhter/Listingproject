@@ -2,10 +2,12 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { db } from "@/lib/db";
+import { hasDb, getDb } from "@/lib/db";
+
+const adapter = hasDb() ? DrizzleAdapter(getDb()) : undefined;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: DrizzleAdapter(db),
+  adapter,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/signin",
@@ -24,7 +26,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        // Will implement full credential auth with bcrypt later
         return null;
       },
     }),
@@ -40,7 +41,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        (session.user as unknown as Record<string, unknown>).role = token.role;
+        (session.user as unknown as Record<string, unknown>).role =
+          token.role;
       }
       return session;
     },
