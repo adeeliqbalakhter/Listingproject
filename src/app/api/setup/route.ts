@@ -315,45 +315,41 @@ export async function POST(request: Request) {
       results.countries = "already seeded";
     }
 
-    // Seed services (always try if fewer than expected)
+    // Seed services using raw SQL (Drizzle ORM schema has parent_id which doesn't exist in DB)
     try {
-      const existingServices = await db.select({ id: services.id }).from(services);
-      if (existingServices.length < SERVICES_LIST.length) {
-        await db
-          .insert(services)
-          .values(
-            SERVICES_LIST.map((name, i) => ({
-              name,
-              slug: toSlug(name),
-              sortOrder: i,
-            }))
-          )
-          .onConflictDoNothing();
-        results.services = `${SERVICES_LIST.length} processed (had ${existingServices.length})`;
+      const existingSvc = await db.execute(sql`SELECT count(*) as count FROM services`);
+      const svcCount = Number((existingSvc as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+      if (svcCount < SERVICES_LIST.length) {
+        for (let i = 0; i < SERVICES_LIST.length; i++) {
+          await db.execute(sql`
+            INSERT INTO services (name, slug, sort_order)
+            VALUES (${SERVICES_LIST[i]}, ${toSlug(SERVICES_LIST[i])}, ${i})
+            ON CONFLICT (slug) DO NOTHING
+          `);
+        }
+        results.services = `${SERVICES_LIST.length} processed (had ${svcCount})`;
       } else {
-        results.services = `already seeded (${existingServices.length})`;
+        results.services = `already seeded (${svcCount})`;
       }
     } catch (e: unknown) {
       results.services = `error: ${e instanceof Error ? e.message : String(e)}`;
     }
 
-    // Seed industries (always try if fewer than expected)
+    // Seed industries using raw SQL
     try {
-      const existingIndustries = await db.select({ id: industries.id }).from(industries);
-      if (existingIndustries.length < INDUSTRIES_LIST.length) {
-        await db
-          .insert(industries)
-          .values(
-            INDUSTRIES_LIST.map((name, i) => ({
-              name,
-              slug: toSlug(name),
-              sortOrder: i,
-            }))
-          )
-          .onConflictDoNothing();
-        results.industries = `${INDUSTRIES_LIST.length} processed (had ${existingIndustries.length})`;
+      const existingInd = await db.execute(sql`SELECT count(*) as count FROM industries`);
+      const indCount = Number((existingInd as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+      if (indCount < INDUSTRIES_LIST.length) {
+        for (let i = 0; i < INDUSTRIES_LIST.length; i++) {
+          await db.execute(sql`
+            INSERT INTO industries (name, slug, sort_order)
+            VALUES (${INDUSTRIES_LIST[i]}, ${toSlug(INDUSTRIES_LIST[i])}, ${i})
+            ON CONFLICT (slug) DO NOTHING
+          `);
+        }
+        results.industries = `${INDUSTRIES_LIST.length} processed (had ${indCount})`;
       } else {
-        results.industries = `already seeded (${existingIndustries.length})`;
+        results.industries = `already seeded (${indCount})`;
       }
     } catch (e: unknown) {
       results.industries = `error: ${e instanceof Error ? e.message : String(e)}`;

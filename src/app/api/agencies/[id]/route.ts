@@ -68,62 +68,42 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Discover actual columns
-    const colRows = await db.execute(
-      sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'agencies' ORDER BY ordinal_position`
+    // Build social_links jsonb
+    const socialLinks: Record<string, string> = {};
+    if (body.linkedinUrl) socialLinks.linkedin = body.linkedinUrl;
+    if (body.twitterUrl) socialLinks.twitter = body.twitterUrl;
+    if (body.facebookUrl) socialLinks.facebook = body.facebookUrl;
+    if (body.instagramUrl) socialLinks.instagram = body.instagramUrl;
+
+    await db.execute(sql`
+      UPDATE agencies SET
+        name = COALESCE(${body.name ?? null}, name),
+        tagline = ${body.tagline ?? null},
+        description = ${body.description ?? null},
+        website = ${body.website ?? null},
+        email = ${body.email ?? null},
+        phone = ${body.phone ?? null},
+        logo = ${body.logo ?? null},
+        cover_image = ${body.coverImage ?? null},
+        founded_year = ${body.foundedYear ?? null},
+        company_size = ${body.companySize ?? null},
+        hourly_rate = ${body.hourlyRate ?? null},
+        min_project_size = ${body.minProjectSize ?? null},
+        country_id = ${body.countryId ?? null},
+        city_id = ${body.cityId ?? null},
+        address = ${body.address ?? null},
+        latitude = ${body.latitude ?? null},
+        longitude = ${body.longitude ?? null},
+        social_links = ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
+        meta_title = ${body.metaTitle ?? null},
+        meta_description = ${body.metaDescription ?? null},
+        updated_at = NOW()
+      WHERE id = ${id}
+    `);
+
+    const updatedRows = await db.execute(
+      sql`SELECT * FROM agencies WHERE id = ${id}`
     );
-    const dbColumns = (colRows as unknown as Array<{ column_name: string }>).map((r) => r.column_name);
-
-    const fieldMap: Record<string, unknown> = {
-      name: body.name,
-      tagline: body.tagline,
-      description: body.description,
-      website: body.website,
-      email: body.email,
-      phone: body.phone,
-      logo: body.logo,
-      cover_image: body.coverImage,
-      founded_year: body.foundedYear,
-      company_size: body.companySize,
-      hourly_rate: body.hourlyRate,
-      min_project_size: body.minProjectSize,
-      country_id: body.countryId,
-      city_id: body.cityId,
-      address: body.address,
-      latitude: body.latitude,
-      longitude: body.longitude,
-      linkedin_url: body.linkedinUrl,
-      twitter_url: body.twitterUrl,
-      facebook_url: body.facebookUrl,
-      instagram_url: body.instagramUrl,
-      meta_title: body.metaTitle,
-      meta_description: body.metaDescription,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Build SET clause with only valid columns that have values
-    const setCols: string[] = [];
-    const setVals: unknown[] = [];
-
-    for (const [col, val] of Object.entries(fieldMap)) {
-      if (val !== undefined && dbColumns.includes(col)) {
-        setCols.push(col);
-        setVals.push(val);
-      }
-    }
-
-    if (setCols.length === 0) {
-      return Response.json({ data: existing });
-    }
-
-    let updateQuery = sql`UPDATE agencies SET `;
-    for (let i = 0; i < setCols.length; i++) {
-      if (i > 0) updateQuery = updateQuery.append(sql`, `);
-      updateQuery = updateQuery.append(sql.raw(`"${setCols[i]}" = `)).append(sql`${setVals[i]}`);
-    }
-    updateQuery = updateQuery.append(sql` WHERE id = ${id} RETURNING *`);
-
-    const updatedRows = await db.execute(updateQuery);
     const updated = (updatedRows as unknown as Array<Record<string, unknown>>)[0];
 
     return Response.json({ data: updated });

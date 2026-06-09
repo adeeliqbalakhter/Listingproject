@@ -5,20 +5,6 @@ import { sql } from "drizzle-orm";
 import { createAgencySchema, searchParamsSchema } from "@/lib/validations";
 import slugify from "slugify";
 
-async function getTableColumns(db: ReturnType<typeof getDb>, tableName: string): Promise<string[]> {
-  const rows = await db.execute(
-    sql`SELECT column_name FROM information_schema.columns WHERE table_name = ${tableName} ORDER BY ordinal_position`
-  );
-  return (rows as unknown as Array<{ column_name: string }>).map((r) => r.column_name);
-}
-
-async function tableExists(db: ReturnType<typeof getDb>, tableName: string): Promise<boolean> {
-  const rows = await db.execute(
-    sql`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ${tableName}) as exists`
-  );
-  return (rows as unknown as Array<{ exists: boolean }>)[0]?.exists === true;
-}
-
 // ─── GET /api/agencies ───────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -106,70 +92,41 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
-    const dbColumns = await getTableColumns(db, "agencies");
 
     const baseSlug = slugify(data.name, { lower: true, strict: true });
     const slug = `${baseSlug}-${Date.now()}`;
 
     const { serviceIds, industryIds, logo, coverImage, ...rest } = data;
 
-    // Map camelCase field names → snake_case DB columns
-    const fieldMap: Record<string, unknown> = {
-      user_id: session.user.id,
-      name: rest.name,
-      slug,
-      tagline: rest.tagline,
-      description: rest.description,
-      website: rest.website,
-      email: rest.email,
-      phone: rest.phone,
-      founded_year: rest.foundedYear,
-      company_size: rest.companySize,
-      hourly_rate: rest.hourlyRate,
-      min_project_size: rest.minProjectSize,
-      country_id: rest.countryId,
-      city_id: rest.cityId,
-      address: rest.address,
-      latitude: rest.latitude,
-      longitude: rest.longitude,
-      linkedin_url: rest.linkedinUrl,
-      twitter_url: rest.twitterUrl,
-      facebook_url: rest.facebookUrl,
-      instagram_url: rest.instagramUrl,
-      meta_title: rest.metaTitle,
-      meta_description: rest.metaDescription,
-      status: "draft",
-    };
+    // Build social_links jsonb from individual social fields
+    const socialLinks: Record<string, string> = {};
+    if (rest.linkedinUrl) socialLinks.linkedin = rest.linkedinUrl;
+    if (rest.twitterUrl) socialLinks.twitter = rest.twitterUrl;
+    if (rest.facebookUrl) socialLinks.facebook = rest.facebookUrl;
+    if (rest.instagramUrl) socialLinks.instagram = rest.instagramUrl;
 
-    // Only include columns that exist in the actual DB table
-    const cols: string[] = [];
-    const vals: unknown[] = [];
+    // Insert agency using only columns that exist in the actual DB
+    const rows = await db.execute(sql`
+      INSERT INTO agencies (
+        user_id, name, slug, tagline, description,
+        website, email, phone, founded_year, company_size,
+        hourly_rate, min_project_size, country_id, city_id, address,
+        latitude, longitude, status, social_links,
+        meta_title, meta_description
+      ) VALUES (
+        ${session.user.id}, ${rest.name}, ${slug},
+        ${rest.tagline ?? null}, ${rest.description ?? null},
+        ${rest.website ?? null}, ${rest.email ?? null}, ${rest.phone ?? null},
+        ${rest.foundedYear ?? null}, ${rest.companySize ?? null},
+        ${rest.hourlyRate ?? null}, ${rest.minProjectSize ?? null},
+        ${rest.countryId ?? null}, ${rest.cityId ?? null}, ${rest.address ?? null},
+        ${rest.latitude ?? null}, ${rest.longitude ?? null},
+        'draft',
+        ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
+        ${rest.metaTitle ?? null}, ${rest.metaDescription ?? null}
+      ) RETURNING *
+    `);
 
-    for (const [col, val] of Object.entries(fieldMap)) {
-      if (val !== undefined && val !== null && val !== "" && dbColumns.includes(col)) {
-        cols.push(col);
-        vals.push(val);
-      }
-    }
-
-    if (!cols.includes("name")) {
-      return Response.json({ error: "Agency name is required" }, { status: 400 });
-    }
-
-    // Build parameterized INSERT using sql template
-    let insertQuery = sql`INSERT INTO agencies (`;
-    for (let i = 0; i < cols.length; i++) {
-      if (i > 0) insertQuery = insertQuery.append(sql`, `);
-      insertQuery = insertQuery.append(sql.raw(`"${cols[i]}"`));
-    }
-    insertQuery = insertQuery.append(sql`) VALUES (`);
-    for (let i = 0; i < vals.length; i++) {
-      if (i > 0) insertQuery = insertQuery.append(sql`, `);
-      insertQuery = insertQuery.append(sql`${vals[i]}`);
-    }
-    insertQuery = insertQuery.append(sql`) RETURNING *`);
-
-    const rows = await db.execute(insertQuery);
     const agency = (rows as unknown as Array<Record<string, unknown>>)[0];
 
     if (!agency) {
@@ -179,32 +136,32 @@ export async function POST(request: NextRequest) {
     const agencyId = agency.id as string;
 
     // Update images separately (large base64 strings)
-    if (logo && dbColumns.includes("logo")) {
+    if (logo) {
       await db.execute(sql`UPDATE agencies SET logo = ${logo} WHERE id = ${agencyId}`);
     }
-    if (coverImage && dbColumns.includes("cover_image")) {
+    if (coverImage) {
       await db.execute(sql`UPDATE agencies SET cover_image = ${coverImage} WHERE id = ${agencyId}`);
     }
 
-    // Insert service relations
-    if (serviceIds?.length && await tableExists(db, "agency_services")) {
+    // Insert service relations (agency_services has no id column)
+    if (serviceIds?.length) {
       for (const serviceId of serviceIds) {
         try {
           await db.execute(
             sql`INSERT INTO agency_services (agency_id, service_id) VALUES (${agencyId}, ${serviceId}) ON CONFLICT DO NOTHING`
           );
-        } catch { /* skip invalid service IDs */ }
+        } catch { /* skip invalid */ }
       }
     }
 
-    // Insert industry relations
-    if (industryIds?.length && await tableExists(db, "agency_industries")) {
+    // Insert industry relations (agency_industries has no id column)
+    if (industryIds?.length) {
       for (const industryId of industryIds) {
         try {
           await db.execute(
             sql`INSERT INTO agency_industries (agency_id, industry_id) VALUES (${agencyId}, ${industryId}) ON CONFLICT DO NOTHING`
           );
-        } catch { /* skip invalid industry IDs */ }
+        } catch { /* skip invalid */ }
       }
     }
 
