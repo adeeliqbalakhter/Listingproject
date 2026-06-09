@@ -217,83 +217,105 @@ function toSlug(name: string) {
     .replace(/^-|-$/g, "");
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     if (!hasDb()) {
       return Response.json({ error: "Database not available" }, { status: 503 });
     }
 
     const db = getDb();
+    const url = new URL(request.url);
+    const force = url.searchParams.get("force") === "true";
 
+    const results: Record<string, string> = {};
+
+    // Seed countries
     const existingCountries = await db.select({ id: countries.id }).from(countries).limit(1);
-    if (existingCountries.length > 0) {
-      return Response.json({ message: "Seed data already exists. Skipping." });
-    }
+    if (existingCountries.length === 0 || force) {
+      try {
+        const inserted = await db
+          .insert(countries)
+          .values(
+            COUNTRIES.map((c) => ({
+              name: c.name,
+              slug: toSlug(c.name),
+              code: c.code,
+              continent: c.continent,
+            }))
+          )
+          .onConflictDoNothing()
+          .returning();
+        results.countries = `${inserted.length} inserted`;
 
-    const insertedCountries = await db
-      .insert(countries)
-      .values(
-        COUNTRIES.map((c) => ({
-          name: c.name,
-          slug: toSlug(c.name),
-          code: c.code,
-          continent: c.continent,
-        }))
-      )
-      .onConflictDoNothing()
-      .returning();
+        const countryMap = new Map(inserted.length > 0
+          ? inserted.map((c) => [c.code, c.id])
+          : (await db.select().from(countries)).map((c) => [c.code, c.id])
+        );
 
-    const countryMap = new Map(insertedCountries.map((c) => [c.code, c.id]));
-
-    const cityValues: { name: string; slug: string; countryId: string; stateProvince: string | null }[] = [];
-    for (const [code, cityNames] of Object.entries(CITIES_BY_COUNTRY)) {
-      const countryId = countryMap.get(code);
-      if (!countryId) continue;
-      for (const name of cityNames) {
-        cityValues.push({
-          name,
-          slug: toSlug(name),
-          countryId,
-          stateProvince: null,
-        });
+        const cityValues: { name: string; slug: string; countryId: string; stateProvince: string | null }[] = [];
+        for (const [code, cityNames] of Object.entries(CITIES_BY_COUNTRY)) {
+          const countryId = countryMap.get(code);
+          if (!countryId) continue;
+          for (const name of cityNames) {
+            cityValues.push({ name, slug: toSlug(name), countryId, stateProvince: null });
+          }
+        }
+        if (cityValues.length > 0) {
+          await db.insert(cities).values(cityValues).onConflictDoNothing();
+        }
+        results.cities = `${cityValues.length} processed`;
+      } catch (e: unknown) {
+        results.countries = `error: ${e instanceof Error ? e.message : String(e)}`;
       }
+    } else {
+      results.countries = "already seeded";
     }
 
-    if (cityValues.length > 0) {
-      await db.insert(cities).values(cityValues).onConflictDoNothing();
+    // Seed services (always try if fewer than expected)
+    try {
+      const existingServices = await db.select({ id: services.id }).from(services);
+      if (existingServices.length < SERVICES_LIST.length) {
+        await db
+          .insert(services)
+          .values(
+            SERVICES_LIST.map((name, i) => ({
+              name,
+              slug: toSlug(name),
+              sortOrder: i,
+            }))
+          )
+          .onConflictDoNothing();
+        results.services = `${SERVICES_LIST.length} processed (had ${existingServices.length})`;
+      } else {
+        results.services = `already seeded (${existingServices.length})`;
+      }
+    } catch (e: unknown) {
+      results.services = `error: ${e instanceof Error ? e.message : String(e)}`;
     }
 
-    await db
-      .insert(services)
-      .values(
-        SERVICES_LIST.map((name, i) => ({
-          name,
-          slug: toSlug(name),
-          sortOrder: i,
-        }))
-      )
-      .onConflictDoNothing();
+    // Seed industries (always try if fewer than expected)
+    try {
+      const existingIndustries = await db.select({ id: industries.id }).from(industries);
+      if (existingIndustries.length < INDUSTRIES_LIST.length) {
+        await db
+          .insert(industries)
+          .values(
+            INDUSTRIES_LIST.map((name, i) => ({
+              name,
+              slug: toSlug(name),
+              sortOrder: i,
+            }))
+          )
+          .onConflictDoNothing();
+        results.industries = `${INDUSTRIES_LIST.length} processed (had ${existingIndustries.length})`;
+      } else {
+        results.industries = `already seeded (${existingIndustries.length})`;
+      }
+    } catch (e: unknown) {
+      results.industries = `error: ${e instanceof Error ? e.message : String(e)}`;
+    }
 
-    await db
-      .insert(industries)
-      .values(
-        INDUSTRIES_LIST.map((name, i) => ({
-          name,
-          slug: toSlug(name),
-          sortOrder: i,
-        }))
-      )
-      .onConflictDoNothing();
-
-    return Response.json({
-      message: "Seed data created successfully",
-      counts: {
-        countries: insertedCountries.length,
-        cities: cityValues.length,
-        services: SERVICES_LIST.length,
-        industries: INDUSTRIES_LIST.length,
-      },
-    });
+    return Response.json({ message: "Setup complete", results });
   } catch (error) {
     console.error("POST /api/setup error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";

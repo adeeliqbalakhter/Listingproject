@@ -11,8 +11,9 @@ export async function GET() {
     const db = getDb();
     const list = await db.select().from(services).orderBy(asc(services.name));
     return Response.json({ data: list });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("GET /api/services error:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return Response.json({ error: "Internal server error", details: msg }, { status: 500 });
   }
 }
