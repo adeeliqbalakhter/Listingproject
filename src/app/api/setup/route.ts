@@ -229,6 +229,50 @@ export async function POST(request: Request) {
 
     const results: Record<string, string> = {};
 
+    // Ensure all tables exist
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "services" (
+          "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          "name" varchar(255) NOT NULL,
+          "slug" varchar(255) NOT NULL UNIQUE,
+          "description" text,
+          "icon" varchar(50),
+          "parent_id" uuid,
+          "agency_count" integer DEFAULT 0,
+          "sort_order" integer DEFAULT 0
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "industries" (
+          "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          "name" varchar(255) NOT NULL,
+          "slug" varchar(255) NOT NULL UNIQUE,
+          "description" text,
+          "icon" varchar(50),
+          "agency_count" integer DEFAULT 0,
+          "sort_order" integer DEFAULT 0
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "agency_services" (
+          "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          "agency_id" uuid NOT NULL REFERENCES "agencies"("id") ON DELETE CASCADE,
+          "service_id" uuid NOT NULL REFERENCES "services"("id") ON DELETE CASCADE
+        )
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "agency_industries" (
+          "id" uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+          "agency_id" uuid NOT NULL REFERENCES "agencies"("id") ON DELETE CASCADE,
+          "industry_id" uuid NOT NULL REFERENCES "industries"("id") ON DELETE CASCADE
+        )
+      `);
+      results.tables = "ensured";
+    } catch (e: unknown) {
+      results.tables = `error: ${e instanceof Error ? e.message : String(e)}`;
+    }
+
     // Seed countries
     const existingCountries = await db.select({ id: countries.id }).from(countries).limit(1);
     if (existingCountries.length === 0 || force) {
