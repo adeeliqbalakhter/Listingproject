@@ -1,97 +1,20 @@
 import { NextRequest } from "next/server";
 import { searchParamsSchema } from "@/lib/validations";
-
-// ─── Mock Data ───────────────────────────────────────────────────
-// TODO: Replace with Drizzle full-text search queries
-
-const mockAgencies = [
-  {
-    id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    name: "PixelCraft Studios",
-    slug: "pixelcraft-studios",
-    tagline: "Crafting digital experiences that matter",
-    description:
-      "Full-service digital agency specialising in web development, UX design, and brand strategy.",
-    logo: null,
-    website: "https://pixelcraft.example.com",
-    companySize: "11-50" as const,
-    hourlyRate: "$100-$150",
-    minProjectSize: 10000,
-    isVerified: true,
-    isFeatured: true,
-    isPremium: false,
-    averageRating: 4.7,
-    totalReviews: 23,
-    country: { name: "United States", slug: "united-states" },
-    city: { name: "San Francisco", slug: "san-francisco" },
-    services: [
-      { id: "s1", name: "Web Development", slug: "web-development" },
-      { id: "s2", name: "UX Design", slug: "ux-design" },
-    ],
-    industries: [
-      { id: "i1", name: "Technology", slug: "technology" },
-      { id: "i2", name: "E-commerce", slug: "e-commerce" },
-    ],
-  },
-  {
-    id: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-    name: "GrowthLab Marketing",
-    slug: "growthlab-marketing",
-    tagline: "Data-driven growth for ambitious brands",
-    description:
-      "Performance marketing agency helping startups and scale-ups achieve sustainable growth.",
-    logo: null,
-    website: "https://growthlab.example.com",
-    companySize: "1-10" as const,
-    hourlyRate: "$75-$120",
-    minProjectSize: 5000,
-    isVerified: false,
-    isFeatured: false,
-    isPremium: true,
-    averageRating: 4.2,
-    totalReviews: 11,
-    country: { name: "United Kingdom", slug: "united-kingdom" },
-    city: { name: "London", slug: "london" },
-    services: [
-      { id: "s3", name: "SEO", slug: "seo" },
-      { id: "s4", name: "PPC", slug: "ppc" },
-    ],
-    industries: [{ id: "i3", name: "SaaS", slug: "saas" }],
-  },
-  {
-    id: "c3d4e5f6-a7b8-9012-cdef-123456789012",
-    name: "BrandForge Agency",
-    slug: "brandforge-agency",
-    tagline: "Forge your brand identity",
-    description:
-      "Creative branding and design agency specializing in visual identity, packaging, and marketing collateral.",
-    logo: null,
-    website: "https://brandforge.example.com",
-    companySize: "11-50" as const,
-    hourlyRate: "$80-$130",
-    minProjectSize: 8000,
-    isVerified: true,
-    isFeatured: false,
-    isPremium: false,
-    averageRating: 4.5,
-    totalReviews: 17,
-    country: { name: "United States", slug: "united-states" },
-    city: { name: "New York", slug: "new-york" },
-    services: [
-      { id: "s5", name: "Branding", slug: "branding" },
-      { id: "s2", name: "UX Design", slug: "ux-design" },
-    ],
-    industries: [
-      { id: "i4", name: "Healthcare", slug: "healthcare" },
-      { id: "i2", name: "E-commerce", slug: "e-commerce" },
-    ],
-  },
-];
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
 
 // ─── GET /api/search ─────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
+    if (!hasDb()) {
+      return Response.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
+
+    const db = getDb();
     const { searchParams } = request.nextUrl;
 
     const params = searchParamsSchema.safeParse(
@@ -120,147 +43,240 @@ export async function GET(request: NextRequest) {
       limit,
     } = params.data;
 
-    // TODO: Replace with Drizzle full-text search:
-    // PostgreSQL full-text search using tsvector/tsquery:
-    // const tsvectorCol = sql`
-    //   to_tsvector('english',
-    //     coalesce(${schema.agencies.name}, '') || ' ' ||
-    //     coalesce(${schema.agencies.tagline}, '') || ' ' ||
-    //     coalesce(${schema.agencies.description}, '')
-    //   )
-    // `;
-    // const conditions = [
-    //   isNull(schema.agencies.deletedAt),
-    //   eq(schema.agencies.status, "active"),
-    // ];
-    // if (query) {
-    //   conditions.push(
-    //     sql`${tsvectorCol} @@ plainto_tsquery('english', ${query})`
-    //   );
-    // }
-    // ... additional filters same as agencies route ...
-    //
-    // const results = await db.select({
-    //   ...getTableColumns(schema.agencies),
-    //   relevance: query
-    //     ? sql`ts_rank(${tsvectorCol}, plainto_tsquery('english', ${query}))`
-    //     : sql`1`,
-    // })
-    //   .from(schema.agencies)
-    //   .where(and(...conditions))
-    //   .orderBy(query ? desc(sql`relevance`) : desc(schema.agencies.averageRating))
-    //   .limit(limit).offset((page - 1) * limit);
+    // Build WHERE conditions
+    const conditions: ReturnType<typeof sql>[] = [
+      sql`a.status = 'active'`,
+      sql`a.deleted_at IS NULL`,
+    ];
 
-    let results = [...mockAgencies];
-
-    // Full-text search simulation
     if (query) {
-      const q = query.toLowerCase();
-      results = results
-        .map((agency) => {
-          let relevance = 0;
-          const nameMatch = agency.name.toLowerCase().includes(q);
-          const taglineMatch = agency.tagline?.toLowerCase().includes(q);
-          const descMatch = agency.description?.toLowerCase().includes(q);
-          const serviceMatch = agency.services.some((s) =>
-            s.name.toLowerCase().includes(q)
-          );
+      conditions.push(
+        sql`(a.name ILIKE ${"%" + query + "%"} OR a.tagline ILIKE ${"%" + query + "%"} OR a.description ILIKE ${"%" + query + "%"})`
+      );
+    }
 
-          if (nameMatch) relevance += 10;
-          if (taglineMatch) relevance += 5;
-          if (descMatch) relevance += 3;
-          if (serviceMatch) relevance += 7;
+    if (services && services.length > 0) {
+      // Agency must have at least one of the requested services (by slug)
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM agency_services asvc
+          JOIN services s ON s.id = asvc.service_id
+          WHERE asvc.agency_id = a.id AND s.slug = ANY(${services})
+        )`
+      );
+    }
 
-          return { ...agency, relevance };
-        })
-        .filter((a) => a.relevance > 0);
+    if (industries && industries.length > 0) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM agency_industries ai
+          JOIN industries i ON i.id = ai.industry_id
+          WHERE ai.agency_id = a.id AND i.slug = ANY(${industries})
+        )`
+      );
+    }
 
-      // Default sort by relevance when searching
-      if (!sortBy) {
-        results.sort((a: any, b: any) => b.relevance - a.relevance);
+    if (country) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM countries co WHERE co.id = a.country_id AND co.slug = ${country}
+        )`
+      );
+    }
+
+    if (city) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM cities ci WHERE ci.id = a.city_id AND ci.slug = ${city}
+        )`
+      );
+    }
+
+    if (minRating) {
+      conditions.push(sql`a.average_rating >= ${minRating}`);
+    }
+
+    if (companySize) {
+      conditions.push(sql`a.company_size = ${companySize}`);
+    }
+
+    if (minBudget) {
+      conditions.push(sql`a.min_project_size >= ${minBudget}`);
+    }
+
+    if (maxBudget) {
+      conditions.push(sql`a.min_project_size <= ${maxBudget}`);
+    }
+
+    // Combine conditions
+    const whereClause = sql.join(conditions, sql` AND `);
+
+    // Sort
+    let orderClause;
+    if (sortBy === "rating") {
+      orderClause = sql`a.average_rating DESC NULLS LAST`;
+    } else if (sortBy === "reviews") {
+      orderClause = sql`a.total_reviews DESC NULLS LAST`;
+    } else if (sortBy === "name") {
+      orderClause = sql`a.name ASC`;
+    } else if (sortBy === "newest") {
+      orderClause = sql`a.created_at DESC`;
+    } else if (query) {
+      // When searching, sort by relevance (name match first)
+      orderClause = sql`
+        CASE WHEN a.name ILIKE ${"%" + query + "%"} THEN 0 ELSE 1 END,
+        a.average_rating DESC NULLS LAST
+      `;
+    } else {
+      orderClause = sql`a.average_rating DESC NULLS LAST`;
+    }
+
+    const offset = (page - 1) * limit;
+
+    // Count total
+    const countResult = await db.execute(
+      sql`SELECT COUNT(*)::int AS total FROM agencies a WHERE ${whereClause}`
+    );
+    const total = (countResult as any[])[0]?.total ?? 0;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch agencies
+    const agencyRows = await db.execute(
+      sql`SELECT
+            a.id, a.name, a.slug, a.tagline, a.description, a.logo, a.website,
+            a.company_size, a.hourly_rate, a.min_project_size,
+            a.is_verified, a.is_featured, a.average_rating, a.total_reviews,
+            co.name AS country_name, co.slug AS country_slug,
+            ci.name AS city_name, ci.slug AS city_slug
+          FROM agencies a
+          LEFT JOIN countries co ON a.country_id = co.id
+          LEFT JOIN cities ci ON a.city_id = ci.id
+          WHERE ${whereClause}
+          ORDER BY ${orderClause}
+          LIMIT ${limit} OFFSET ${offset}`
+    );
+
+    // Fetch services for each agency
+    const data = [];
+    const agencyIds = (agencyRows as any[]).map((r: any) => r.id);
+
+    // Batch fetch services for all agencies in the result set
+    let serviceMap: Record<string, { id: string; name: string; slug: string }[]> = {};
+    if (agencyIds.length > 0) {
+      const svcRows = await db.execute(
+        sql`SELECT asvc.agency_id, s.id, s.name, s.slug
+            FROM agency_services asvc
+            JOIN services s ON s.id = asvc.service_id
+            WHERE asvc.agency_id = ANY(${agencyIds})`
+      );
+      for (const row of svcRows as any[]) {
+        if (!serviceMap[row.agency_id]) serviceMap[row.agency_id] = [];
+        serviceMap[row.agency_id].push({
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+        });
       }
     }
 
-    // Filters
-    if (services && services.length > 0) {
-      results = results.filter((a) =>
-        a.services.some((s) => services.includes(s.slug))
+    // Batch fetch industries for all agencies
+    let industryMap: Record<string, { id: string; name: string; slug: string }[]> = {};
+    if (agencyIds.length > 0) {
+      const indRows = await db.execute(
+        sql`SELECT ai.agency_id, i.id, i.name, i.slug
+            FROM agency_industries ai
+            JOIN industries i ON i.id = ai.industry_id
+            WHERE ai.agency_id = ANY(${agencyIds})`
       );
-    }
-    if (industries && industries.length > 0) {
-      results = results.filter((a) =>
-        a.industries.some((i) => industries.includes(i.slug))
-      );
-    }
-    if (country) {
-      results = results.filter((a) => a.country?.slug === country);
-    }
-    if (city) {
-      results = results.filter((a) => a.city?.slug === city);
-    }
-    if (minRating) {
-      results = results.filter((a) => a.averageRating >= minRating);
-    }
-    if (companySize) {
-      results = results.filter((a) => a.companySize === companySize);
-    }
-    if (minBudget) {
-      results = results.filter(
-        (a) => a.minProjectSize !== null && a.minProjectSize >= minBudget
-      );
-    }
-    if (maxBudget) {
-      results = results.filter(
-        (a) => a.minProjectSize !== null && a.minProjectSize <= maxBudget
-      );
+      for (const row of indRows as any[]) {
+        if (!industryMap[row.agency_id]) industryMap[row.agency_id] = [];
+        industryMap[row.agency_id].push({
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+        });
+      }
     }
 
-    // Explicit sorting
-    if (sortBy === "rating") {
-      results.sort((a, b) => b.averageRating - a.averageRating);
-    } else if (sortBy === "reviews") {
-      results.sort((a, b) => b.totalReviews - a.totalReviews);
-    } else if (sortBy === "name") {
-      results.sort((a, b) => a.name.localeCompare(b.name));
+    for (const row of agencyRows as any[]) {
+      data.push({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        tagline: row.tagline,
+        description: row.description,
+        logo: row.logo,
+        website: row.website,
+        companySize: row.company_size,
+        hourlyRate: row.hourly_rate,
+        minProjectSize: row.min_project_size ? Number(row.min_project_size) : null,
+        isVerified: row.is_verified ?? false,
+        isFeatured: row.is_featured ?? false,
+        averageRating: row.average_rating ? Number(row.average_rating) : 0,
+        totalReviews: row.total_reviews ?? 0,
+        country: row.country_name
+          ? { name: row.country_name, slug: row.country_slug }
+          : null,
+        city: row.city_name
+          ? { name: row.city_name, slug: row.city_slug }
+          : null,
+        services: serviceMap[row.id] ?? [],
+        industries: industryMap[row.id] ?? [],
+      });
     }
 
-    const total = results.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    const paginatedData = results.slice(offset, offset + limit);
+    // Compute real facets from active agencies only
+    const baseFacetWhere = sql`a.status = 'active' AND a.deleted_at IS NULL`;
 
-    // Facets for filter UI
-    // TODO: Compute real facets from the DB:
-    // const serviceFacets = await db.select({
-    //   slug: schema.services.slug,
-    //   name: schema.services.name,
-    //   count: count(),
-    // }).from(schema.agencyServices)
-    //   .innerJoin(schema.services, eq(schema.agencyServices.serviceId, schema.services.id))
-    //   .groupBy(schema.services.slug, schema.services.name);
+    const [serviceFacets, industryFacets, countryFacets] = await Promise.all([
+      db.execute(
+        sql`SELECT s.slug, s.name, COUNT(*)::int AS count
+            FROM agency_services asvc
+            JOIN services s ON s.id = asvc.service_id
+            JOIN agencies a ON a.id = asvc.agency_id
+            WHERE ${baseFacetWhere}
+            GROUP BY s.slug, s.name
+            ORDER BY count DESC`
+      ),
+      db.execute(
+        sql`SELECT i.slug, i.name, COUNT(*)::int AS count
+            FROM agency_industries ai
+            JOIN industries i ON i.id = ai.industry_id
+            JOIN agencies a ON a.id = ai.agency_id
+            WHERE ${baseFacetWhere}
+            GROUP BY i.slug, i.name
+            ORDER BY count DESC`
+      ),
+      db.execute(
+        sql`SELECT co.slug, co.name, COUNT(*)::int AS count
+            FROM agencies a
+            JOIN countries co ON a.country_id = co.id
+            WHERE ${baseFacetWhere}
+            GROUP BY co.slug, co.name
+            ORDER BY count DESC`
+      ),
+    ]);
 
     const facets = {
-      services: [
-        { slug: "web-development", name: "Web Development", count: 1 },
-        { slug: "ux-design", name: "UX Design", count: 2 },
-        { slug: "seo", name: "SEO", count: 1 },
-        { slug: "ppc", name: "PPC", count: 1 },
-        { slug: "branding", name: "Branding", count: 1 },
-      ],
-      industries: [
-        { slug: "technology", name: "Technology", count: 1 },
-        { slug: "e-commerce", name: "E-commerce", count: 2 },
-        { slug: "saas", name: "SaaS", count: 1 },
-        { slug: "healthcare", name: "Healthcare", count: 1 },
-      ],
-      countries: [
-        { slug: "united-states", name: "United States", count: 2 },
-        { slug: "united-kingdom", name: "United Kingdom", count: 1 },
-      ],
+      services: (serviceFacets as any[]).map((r: any) => ({
+        slug: r.slug,
+        name: r.name,
+        count: r.count,
+      })),
+      industries: (industryFacets as any[]).map((r: any) => ({
+        slug: r.slug,
+        name: r.name,
+        count: r.count,
+      })),
+      countries: (countryFacets as any[]).map((r: any) => ({
+        slug: r.slug,
+        name: r.name,
+        count: r.count,
+      })),
     };
 
     return Response.json({
-      data: paginatedData,
+      data,
       pagination: { page, limit, total, totalPages },
       facets,
     });

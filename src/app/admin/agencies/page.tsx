@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   CheckCircle2,
@@ -13,37 +13,22 @@ import {
   ChevronRight,
   MoreHorizontal,
   Eye,
+  Loader2,
 } from "lucide-react";
 
-type AgencyStatus = "active" | "pending" | "suspended";
+type AgencyStatus = "active" | "pending" | "suspended" | "draft";
 
 interface Agency {
-  id: number;
+  id: string;
   name: string;
-  owner: string;
-  ownerEmail: string;
+  user_id: string;
   status: AgencyStatus;
-  rating: number;
-  reviews: number;
-  featured: boolean;
-  verified: boolean;
-  created: string;
+  average_rating: number | null;
+  total_reviews: number | null;
+  is_featured: boolean;
+  is_verified: boolean;
+  created_at: string;
 }
-
-const allAgencies: Agency[] = [
-  { id: 1, name: "BrightSpark Digital", owner: "Maria Chen", ownerEmail: "maria@brightspark.com", status: "pending", rating: 0, reviews: 0, featured: false, verified: false, created: "Jun 5, 2026" },
-  { id: 2, name: "WebWizards Agency", owner: "James Turner", ownerEmail: "james@webwizards.com", status: "active", rating: 4.8, reviews: 124, featured: true, verified: true, created: "Jan 12, 2026" },
-  { id: 3, name: "PixelPerfect Studios", owner: "Jake Wilson", ownerEmail: "jake@pixelperfect.com", status: "pending", rating: 0, reviews: 0, featured: false, verified: false, created: "Jun 4, 2026" },
-  { id: 4, name: "SEO Masters Inc.", owner: "Lisa Park", ownerEmail: "lisa@seomasters.com", status: "active", rating: 4.6, reviews: 89, featured: false, verified: true, created: "Mar 20, 2026" },
-  { id: 5, name: "GrowthLab Marketing", owner: "Aisha Patel", ownerEmail: "aisha@growthlab.com", status: "pending", rating: 0, reviews: 0, featured: false, verified: false, created: "Jun 3, 2026" },
-  { id: 6, name: "AdPro Agency", owner: "Mike Ross", ownerEmail: "mike@adpro.com", status: "active", rating: 4.2, reviews: 56, featured: false, verified: true, created: "Feb 8, 2026" },
-  { id: 7, name: "FakeAgency LLC", owner: "John Doe", ownerEmail: "john@fakeagency.com", status: "suspended", rating: 1.2, reviews: 3, featured: false, verified: false, created: "Dec 1, 2025" },
-  { id: 8, name: "MediaHouse Pro", owner: "Sarah Kim", ownerEmail: "sarah@mediahouse.com", status: "active", rating: 4.9, reviews: 201, featured: true, verified: true, created: "Oct 15, 2025" },
-  { id: 9, name: "DigitalFirst Co.", owner: "Tom Hardy", ownerEmail: "tom@digitalfirst.com", status: "active", rating: 4.4, reviews: 67, featured: false, verified: true, created: "Apr 2, 2026" },
-  { id: 10, name: "QuickRank SEO", owner: "Amy Zhang", ownerEmail: "amy@quickrank.com", status: "suspended", rating: 2.1, reviews: 15, featured: false, verified: false, created: "Nov 22, 2025" },
-  { id: 11, name: "CreativeEdge Studio", owner: "David Lee", ownerEmail: "david@creativeedge.com", status: "active", rating: 4.7, reviews: 143, featured: true, verified: true, created: "Aug 10, 2025" },
-  { id: 12, name: "DataDriven Marketing", owner: "Rachel Green", ownerEmail: "rachel@datadriven.com", status: "active", rating: 4.5, reviews: 92, featured: false, verified: true, created: "May 18, 2026" },
-];
 
 const statusTabs = [
   { label: "All", value: "all" },
@@ -54,20 +39,82 @@ const statusTabs = [
 
 const ITEMS_PER_PAGE = 8;
 
+function formatDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function AdminAgenciesPage() {
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  const filtered = allAgencies.filter((agency) => {
+  useEffect(() => {
+    async function fetchAgencies() {
+      try {
+        const res = await fetch("/api/agencies?limit=100");
+        if (res.ok) {
+          const json = await res.json();
+          const data = (json.data ?? []) as Array<Record<string, unknown>>;
+          setAgencies(
+            data.map((a) => ({
+              id: a.id as string,
+              name: (a.name as string) || "",
+              user_id: (a.user_id as string) || "",
+              status: (a.status as AgencyStatus) || "draft",
+              average_rating: a.average_rating ? Number(a.average_rating) : null,
+              total_reviews: a.total_reviews ? Number(a.total_reviews) : null,
+              is_featured: Boolean(a.is_featured),
+              is_verified: Boolean(a.is_verified),
+              created_at: (a.created_at as string) || "",
+            }))
+          );
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAgencies();
+  }, []);
+
+  const handleStatusChange = async (agencyId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/agencies/${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setAgencies((prev) =>
+          prev.map((a) =>
+            a.id === agencyId ? { ...a, status: newStatus as AgencyStatus } : a
+          )
+        );
+      }
+    } catch {
+      // silently fail
+    }
+    setOpenDropdown(null);
+  };
+
+  const filtered = agencies.filter((agency) => {
     const matchesStatus =
       statusFilter === "all" || agency.status === statusFilter;
     const matchesSearch =
       !searchQuery ||
-      agency.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agency.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agency.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase());
+      agency.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -77,20 +124,29 @@ export default function AdminAgenciesPage() {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const statusBadge = (status: AgencyStatus) => {
-    const styles: Record<AgencyStatus, string> = {
+  const statusBadge = (status: string) => {
+    const styles: Record<string, string> = {
       active: "bg-emerald-50 text-emerald-700",
       pending: "bg-amber-50 text-amber-700",
       suspended: "bg-red-50 text-red-700",
+      draft: "bg-gray-50 text-gray-600",
     };
     return (
       <span
-        className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${styles[status]}`}
+        className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${styles[status] || styles.draft}`}
       >
         {status}
       </span>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -109,8 +165,8 @@ export default function AdminAgenciesPage() {
             {statusTabs.map((tab) => {
               const count =
                 tab.value === "all"
-                  ? allAgencies.length
-                  : allAgencies.filter((a) => a.status === tab.value).length;
+                  ? agencies.length
+                  : agencies.filter((a) => a.status === tab.value).length;
               return (
                 <button
                   key={tab.value}
@@ -157,9 +213,6 @@ export default function AdminAgenciesPage() {
                 <th className="text-left px-5 py-3 font-medium text-gray-500">
                   Agency
                 </th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500 hidden md:table-cell">
-                  Owner
-                </th>
                 <th className="text-left px-5 py-3 font-medium text-gray-500">
                   Status
                 </th>
@@ -194,36 +247,32 @@ export default function AdminAgenciesPage() {
                       <div>
                         <div className="flex items-center gap-1.5">
                           <p className="font-medium text-navy">{agency.name}</p>
-                          {agency.verified && (
+                          {agency.is_verified && (
                             <Shield className="w-3.5 h-3.5 text-brand" />
                           )}
-                          {agency.featured && (
+                          {agency.is_featured && (
                             <Award className="w-3.5 h-3.5 text-amber-500" />
                           )}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 hidden md:table-cell">
-                    <p className="text-navy">{agency.owner}</p>
-                    <p className="text-xs text-gray-400">{agency.ownerEmail}</p>
-                  </td>
                   <td className="px-5 py-3.5">{statusBadge(agency.status)}</td>
                   <td className="px-5 py-3.5 hidden lg:table-cell">
-                    {agency.rating > 0 ? (
+                    {agency.average_rating && agency.average_rating > 0 ? (
                       <div className="flex items-center gap-1">
                         <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                        <span className="text-navy">{agency.rating}</span>
+                        <span className="text-navy">{agency.average_rating.toFixed(1)}</span>
                       </div>
                     ) : (
                       <span className="text-gray-400">N/A</span>
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-navy hidden lg:table-cell">
-                    {agency.reviews}
+                    {agency.total_reviews ?? 0}
                   </td>
                   <td className="px-5 py-3.5 text-gray-500 hidden xl:table-cell">
-                    {agency.created}
+                    {agency.created_at ? formatDate(agency.created_at) : "N/A"}
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="relative inline-block">
@@ -244,30 +293,39 @@ export default function AdminAgenciesPage() {
                             View Details
                           </button>
                           {agency.status === "pending" && (
-                            <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50">
+                            <button
+                              onClick={() => handleStatusChange(agency.id, "active")}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50"
+                            >
                               <CheckCircle2 className="w-4 h-4" />
                               Approve
                             </button>
                           )}
                           {agency.status === "active" && (
-                            <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50">
+                            <button
+                              onClick={() => handleStatusChange(agency.id, "suspended")}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50"
+                            >
                               <XCircle className="w-4 h-4" />
                               Suspend
                             </button>
                           )}
                           {agency.status === "suspended" && (
-                            <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50">
+                            <button
+                              onClick={() => handleStatusChange(agency.id, "active")}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50"
+                            >
                               <CheckCircle2 className="w-4 h-4" />
                               Reactivate
                             </button>
                           )}
-                          {!agency.featured && agency.status === "active" && (
+                          {!agency.is_featured && agency.status === "active" && (
                             <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50">
                               <Award className="w-4 h-4" />
                               Feature
                             </button>
                           )}
-                          {!agency.verified && agency.status === "active" && (
+                          {!agency.is_verified && agency.status === "active" && (
                             <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand hover:bg-blue-50">
                               <Shield className="w-4 h-4" />
                               Verify
@@ -286,7 +344,7 @@ export default function AdminAgenciesPage() {
               ))}
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
+                  <td colSpan={6} className="px-5 py-12 text-center text-gray-400">
                     No agencies found matching your criteria.
                   </td>
                 </tr>
@@ -296,50 +354,52 @@ export default function AdminAgenciesPage() {
         </div>
 
         {/* Pagination */}
-        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            Showing{" "}
-            <span className="font-medium text-navy">
-              {(currentPage - 1) * ITEMS_PER_PAGE + 1}
-            </span>{" "}
-            to{" "}
-            <span className="font-medium text-navy">
-              {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
-            </span>{" "}
-            of{" "}
-            <span className="font-medium text-navy">{filtered.length}</span>{" "}
-            agencies
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => p - 1)}
-              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4 text-gray-600" />
-            </button>
-            {Array.from({ length: totalPages }).map((_, i) => (
+        {filtered.length > 0 && (
+          <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Showing{" "}
+              <span className="font-medium text-navy">
+                {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-medium text-navy">
+                {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-navy">{filtered.length}</span>{" "}
+              agencies
+            </p>
+            <div className="flex items-center gap-1">
               <button
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                  currentPage === i + 1
-                    ? "bg-brand text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {i + 1}
+                <ChevronLeft className="w-4 h-4 text-gray-600" />
               </button>
-            ))}
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => p + 1)}
-              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4 text-gray-600" />
-            </button>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                    currentPage === i + 1
+                      ? "bg-brand text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-gray-600" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

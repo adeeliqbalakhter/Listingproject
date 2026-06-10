@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -31,6 +32,40 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [agencyName, setAgencyName] = useState<string | null>(null);
+  const [agencyInitials, setAgencyInitials] = useState("--");
+  const [loadingAgency, setLoadingAgency] = useState(true);
+
+  useEffect(() => {
+    async function fetchAgency() {
+      try {
+        const res = await fetch("/api/agencies?limit=1");
+        if (res.ok) {
+          const json = await res.json();
+          const agencies = json.data ?? [];
+          if (agencies.length > 0) {
+            const name = agencies[0].name || "My Agency";
+            setAgencyName(name);
+            setAgencyInitials(
+              name
+                .split(" ")
+                .map((w: string) => w[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()
+            );
+          }
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingAgency(false);
+      }
+    }
+    fetchAgency();
+  }, []);
+
+  const displayName = agencyName || "My Agency";
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -39,10 +74,18 @@ export default function DashboardLayout({
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-brand rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">DA</span>
+              <span className="text-white font-bold text-sm">
+                {loadingAgency ? ".." : agencyInitials}
+              </span>
             </div>
             <div>
-              <p className="font-semibold text-navy text-sm">Demo Agency</p>
+              <p className="font-semibold text-navy text-sm">
+                {loadingAgency ? (
+                  <span className="inline-block w-24 h-4 bg-gray-200 rounded animate-pulse" />
+                ) : (
+                  displayName
+                )}
+              </p>
               <p className="text-xs text-gray-500">Free Plan</p>
             </div>
           </div>

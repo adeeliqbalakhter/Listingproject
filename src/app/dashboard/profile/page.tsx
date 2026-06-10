@@ -41,6 +41,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [existingAgencyId, setExistingAgencyId] = useState<string | null>(null);
+  const [agencyStatus, setAgencyStatus] = useState<string | null>(null);
+  const [agencySlug, setAgencySlug] = useState<string | null>(null);
 
   const [countries, setCountries] = useState<LocationItem[]>([]);
   const [citiesList, setCitiesList] = useState<LocationItem[]>([]);
@@ -78,20 +80,84 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
     Promise.all([
       fetch("/api/locations").then((r) => r.json()),
       fetch("/api/services").then((r) => r.json()),
       fetch("/api/industries").then((r) => r.json()),
+      fetch("/api/agencies?limit=100").then((r) => r.json()),
     ])
-      .then(([loc, svc, ind]) => {
+      .then(([loc, svc, ind, agenciesRes]) => {
         setCountries(loc.data || []);
         setServiceOptions(svc.data || []);
         setIndustryOptions(ind.data || []);
-      })
-      .catch(() => {});
 
-    setLoading(false);
-  }, []);
+        const agencies = agenciesRes.data || [];
+        const agency = agencies.find(
+          (a: Record<string, unknown>) => a.user_id === userId
+        );
+
+        if (agency) {
+          setExistingAgencyId(agency.id);
+          setAgencyStatus(agency.status || null);
+          setAgencySlug(agency.slug || null);
+
+          setForm({
+            name: agency.name || "",
+            tagline: agency.tagline || "",
+            description: agency.description || "",
+            website: agency.website || "",
+            email: agency.email || "",
+            phone: agency.phone || "",
+            countryId: agency.country_id || "",
+            cityId: agency.city_id || "",
+            address: agency.address || "",
+            foundedYear: agency.founded_year?.toString() || "",
+            companySize: agency.company_size || "",
+            hourlyRate: agency.hourly_rate || "",
+            minProjectSize: agency.min_project_size?.toString() || "",
+            metaTitle: agency.meta_title || "",
+            metaDescription: agency.meta_description || "",
+          });
+
+          if (agency.logo) setLogoPreview(agency.logo);
+          if (agency.cover_image) setCoverPreview(agency.cover_image);
+
+          // Map social_links jsonb to socialLinks state
+          if (agency.social_links && typeof agency.social_links === "object") {
+            const keyMap: Record<string, string> = {
+              linkedin: "linkedinUrl",
+              twitter: "twitterUrl",
+              facebook: "facebookUrl",
+              instagram: "instagramUrl",
+            };
+            const mapped: SocialLink[] = Object.entries(
+              agency.social_links as Record<string, string>
+            )
+              .filter(([key]) => key in keyMap)
+              .map(([key, url]) => ({ platform: keyMap[key], url: url || "" }));
+            if (mapped.length > 0) {
+              setSocialLinks(mapped);
+            }
+          }
+
+          // Load cities for the saved country
+          if (agency.country_id) {
+            fetch(`/api/locations?countryId=${agency.country_id}`)
+              .then((r) => r.json())
+              .then((data) => setCitiesList(data.data || []))
+              .catch(() => {});
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [session?.user?.id]);
 
   const loadCities = useCallback((countryId: string) => {
     if (!countryId) {
@@ -228,6 +294,8 @@ export default function ProfilePage() {
       if (res.ok) {
         setMessage({ type: "success", text: existingAgencyId ? "Agency updated successfully!" : "Agency created successfully!" });
         if (json.data?.id) setExistingAgencyId(json.data.id);
+        if (json.data?.status) setAgencyStatus(json.data.status);
+        if (json.data?.slug) setAgencySlug(json.data.slug);
       } else {
         setMessage({ type: "error", text: json.error || "Something went wrong" });
       }
@@ -279,6 +347,44 @@ export default function ProfilePage() {
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
           )}
           {message.text}
+        </div>
+      )}
+
+      {existingAgencyId && agencyStatus && (
+        <div
+          className={`mb-6 p-4 rounded-lg text-sm ${
+            agencyStatus === "draft"
+              ? "bg-yellow-50 text-yellow-800 border border-yellow-200"
+              : agencyStatus === "pending"
+              ? "bg-blue-50 text-blue-800 border border-blue-200"
+              : agencyStatus === "active"
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : "bg-gray-50 text-gray-700 border border-gray-200"
+          }`}
+        >
+          {agencyStatus === "draft" && (
+            <p>Your agency profile is in draft. Submit for review to go live.</p>
+          )}
+          {agencyStatus === "pending" && (
+            <p>Your agency is pending admin approval.</p>
+          )}
+          {agencyStatus === "active" && (
+            <p>
+              Your agency is live!{" "}
+              {agencySlug && (
+                <a href={`/agencies/${agencySlug}`} className="underline font-medium">
+                  View public profile
+                </a>
+              )}
+            </p>
+          )}
+          {agencySlug && agencyStatus !== "active" && (
+            <p className="mt-1">
+              <a href={`/agencies/${agencySlug}`} className="underline font-medium">
+                Preview your profile
+              </a>
+            </p>
+          )}
         </div>
       )}
 

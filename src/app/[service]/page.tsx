@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { Star, MapPin, ArrowRight, CheckCircle } from "lucide-react";
+import { Star, MapPin, ArrowRight, CheckCircle, Building2 } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
 
 const serviceData: Record<
   string,
   {
     name: string;
+    serviceSlug: string;
     title: string;
     description: string;
     longDescription: string;
@@ -15,6 +18,7 @@ const serviceData: Record<
 > = {
   "seo-agencies": {
     name: "SEO",
+    serviceSlug: "seo",
     title: "Top SEO Agencies",
     description:
       "Find and compare the best SEO agencies worldwide. Read verified reviews and get free quotes from top-rated search engine optimization experts.",
@@ -30,6 +34,7 @@ const serviceData: Record<
   },
   "ppc-agencies": {
     name: "PPC",
+    serviceSlug: "ppc",
     title: "Top PPC Agencies",
     description:
       "Find and compare the best PPC agencies worldwide. Read verified reviews and get free quotes from top-rated pay-per-click advertising experts.",
@@ -45,6 +50,7 @@ const serviceData: Record<
   },
   "social-media-agencies": {
     name: "Social Media",
+    serviceSlug: "social-media",
     title: "Top Social Media Agencies",
     description:
       "Find and compare the best social media agencies worldwide. Read verified reviews and get free quotes from top-rated social media marketing experts.",
@@ -60,6 +66,7 @@ const serviceData: Record<
   },
   "web-design-agencies": {
     name: "Web Design",
+    serviceSlug: "web-design",
     title: "Top Web Design Agencies",
     description:
       "Find and compare the best web design agencies worldwide. Read verified reviews and get free quotes from top-rated website design and development experts.",
@@ -75,6 +82,7 @@ const serviceData: Record<
   },
   "content-marketing-agencies": {
     name: "Content Marketing",
+    serviceSlug: "content-marketing",
     title: "Top Content Marketing Agencies",
     description:
       "Find and compare the best content marketing agencies worldwide. Read verified reviews and get free quotes from top-rated content strategy experts.",
@@ -90,6 +98,7 @@ const serviceData: Record<
   },
   "email-marketing-agencies": {
     name: "Email Marketing",
+    serviceSlug: "email-marketing",
     title: "Top Email Marketing Agencies",
     description:
       "Find and compare the best email marketing agencies worldwide. Read verified reviews and get free quotes from top-rated email marketing experts.",
@@ -105,11 +114,12 @@ const serviceData: Record<
   },
   "branding-agencies": {
     name: "Branding",
+    serviceSlug: "branding",
     title: "Top Branding Agencies",
     description:
       "Find and compare the best branding agencies worldwide. Read verified reviews and get free quotes from top-rated brand strategy and identity experts.",
     longDescription:
-      "Your brand is more than a logo — it's how customers perceive and experience your business. A branding agency develops your brand strategy, visual identity, messaging, and positioning to differentiate you in the market.",
+      "Your brand is more than a logo -- it's how customers perceive and experience your business. A branding agency develops your brand strategy, visual identity, messaging, and positioning to differentiate you in the market.",
     benefits: [
       "Define your brand strategy and positioning",
       "Create a memorable visual identity",
@@ -120,11 +130,12 @@ const serviceData: Record<
   },
   "digital-marketing-agencies": {
     name: "Digital Marketing",
+    serviceSlug: "digital-marketing",
     title: "Top Digital Marketing Agencies",
     description:
       "Find and compare the best digital marketing agencies worldwide. Read verified reviews and get free quotes from full-service digital marketing experts.",
     longDescription:
-      "A full-service digital marketing agency handles all aspects of your online presence — from SEO and PPC to social media and content. Perfect for businesses wanting a single partner for their entire digital strategy.",
+      "A full-service digital marketing agency handles all aspects of your online presence -- from SEO and PPC to social media and content. Perfect for businesses wanting a single partner for their entire digital strategy.",
     benefits: [
       "One partner for all digital channels",
       "Integrated marketing strategy",
@@ -135,14 +146,51 @@ const serviceData: Record<
   },
 };
 
-const mockAgencies = [
-  { name: "GrowthPulse Digital", slug: "growthpulse-digital", rating: 4.9, reviews: 127, location: "New York, US", size: "51-200" },
-  { name: "ClickBoost Agency", slug: "clickboost-agency", rating: 4.8, reviews: 94, location: "London, UK", size: "11-50" },
-  { name: "NexGen Marketing", slug: "nexgen-marketing", rating: 4.8, reviews: 83, location: "Toronto, CA", size: "11-50" },
-  { name: "Digital Spark Co", slug: "digital-spark-co", rating: 4.7, reviews: 156, location: "Sydney, AU", size: "51-200" },
-  { name: "Elevate Media", slug: "elevate-media", rating: 4.7, reviews: 72, location: "Berlin, DE", size: "11-50" },
-  { name: "Pixel Perfect Studio", slug: "pixel-perfect-studio", rating: 4.6, reviews: 61, location: "Dubai, UAE", size: "1-10" },
-];
+interface AgencyRow {
+  id: string;
+  name: string;
+  slug: string;
+  average_rating: number | null;
+  total_reviews: number | null;
+  company_size: string | null;
+  city_name: string | null;
+  country_name: string | null;
+}
+
+async function fetchAgenciesForService(serviceSlug: string): Promise<AgencyRow[]> {
+  if (!hasDb()) return [];
+  const db = getDb();
+  try {
+    const rows = await db.execute(
+      sql`SELECT a.id, a.name, a.slug, a.average_rating, a.total_reviews, a.company_size,
+            COALESCE(ci.name, '') as city_name,
+            COALESCE(c.name, '') as country_name
+          FROM agencies a
+          JOIN agency_services asv ON a.id = asv.agency_id
+          JOIN services s ON s.id = asv.service_id
+          LEFT JOIN countries c ON a.country_id = c.id
+          LEFT JOIN cities ci ON a.city_id = ci.id
+          WHERE s.slug ILIKE ${serviceSlug}
+            AND a.status = 'active'
+            AND a.deleted_at IS NULL
+          ORDER BY a.average_rating DESC NULLS LAST
+          LIMIT 20`
+    );
+    return (rows as unknown as Array<Record<string, unknown>>).map((row) => ({
+      id: row.id as string,
+      name: (row.name as string) || "",
+      slug: (row.slug as string) || "",
+      average_rating: row.average_rating ? Number(row.average_rating) : null,
+      total_reviews: row.total_reviews ? Number(row.total_reviews) : null,
+      company_size: (row.company_size as string) || null,
+      city_name: (row.city_name as string) || null,
+      country_name: (row.country_name as string) || null,
+    }));
+  } catch (error) {
+    console.error("Error fetching agencies for service:", error);
+    return [];
+  }
+}
 
 type Params = Promise<{ service: string }>;
 
@@ -172,6 +220,8 @@ export default async function ServicePage({ params }: { params: Params }) {
     notFound();
   }
 
+  const agencies = await fetchAgenciesForService(service.serviceSlug);
+
   return (
     <div>
       {/* Hero */}
@@ -199,55 +249,83 @@ export default async function ServicePage({ params }: { params: Params }) {
           {/* Agency List */}
           <div className="lg:col-span-2">
             <h2 className="text-xl font-bold text-navy mb-6">
-              Best {service.name} Agencies ({mockAgencies.length})
+              Best {service.name} Agencies ({agencies.length})
             </h2>
-            <div className="space-y-4">
-              {mockAgencies.map((agency) => (
-                <Link
-                  key={agency.slug}
-                  href={`/agencies/${agency.slug}`}
-                  className="block bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand/30 transition-all"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-brand to-navy-light rounded-xl flex items-center justify-center shrink-0">
-                      <span className="text-white font-bold text-sm">
-                        {agency.name
-                          .split(" ")
-                          .map((w) => w[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-navy">
-                          {agency.name}
-                        </h3>
-                        <CheckCircle className="w-4 h-4 text-brand shrink-0" />
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center gap-1">
-                          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                          <span className="text-sm font-medium text-gray-700">
-                            {agency.rating}
-                          </span>
-                          <span className="text-sm text-gray-400">
-                            ({agency.reviews} reviews)
+
+            {agencies.length > 0 ? (
+              <div className="space-y-4">
+                {agencies.map((agency) => {
+                  const locationParts = [agency.city_name, agency.country_name].filter(Boolean);
+                  const location = locationParts.length > 0 ? locationParts.join(", ") : "Remote";
+
+                  return (
+                    <Link
+                      key={agency.slug}
+                      href={`/agencies/${agency.slug}`}
+                      className="block bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand/30 transition-all"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 bg-gradient-to-br from-brand to-navy-light rounded-xl flex items-center justify-center shrink-0">
+                          <span className="text-white font-bold text-sm">
+                            {agency.name
+                              .split(" ")
+                              .map((w) => w[0])
+                              .join("")
+                              .slice(0, 2)}
                           </span>
                         </div>
-                        <span className="flex items-center gap-1 text-sm text-gray-500">
-                          <MapPin className="w-3.5 h-3.5" />
-                          {agency.location}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-navy">
+                              {agency.name}
+                            </h3>
+                            <CheckCircle className="w-4 h-4 text-brand shrink-0" />
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
+                            <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {agency.average_rating?.toFixed(1) ?? "N/A"}
+                              </span>
+                              <span className="text-sm text-gray-400">
+                                ({agency.total_reviews ?? 0} reviews)
+                              </span>
+                            </div>
+                            <span className="flex items-center gap-1 text-sm text-gray-500">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {location}
+                            </span>
+                          </div>
+                          {agency.company_size && (
+                            <div className="mt-2 text-sm text-gray-500">
+                              {agency.company_size} employees
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-2 text-sm text-gray-500">
-                        {agency.size} employees
-                      </div>
-                    </div>
-                  </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Building2 className="w-7 h-7 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-navy">
+                  No {service.name} agencies found yet
+                </h3>
+                <p className="mt-2 text-gray-500 max-w-md mx-auto">
+                  We are building our directory of {service.name.toLowerCase()} agencies. Check back soon or browse all agencies.
+                </p>
+                <Link
+                  href="/agencies"
+                  className="inline-flex items-center gap-2 mt-6 bg-brand text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
+                >
+                  Browse All Agencies
                 </Link>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}

@@ -1,69 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
 import { createLeadSchema } from "@/lib/validations";
-
-// ─── Mock Data ───────────────────────────────────────────────────
-// TODO: Replace with Drizzle ORM queries against the leads / lead_assignments tables
-
-const mockLeads = [
-  {
-    id: "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
-    userId: "user-004",
-    companyName: "Bright Horizons Ltd",
-    contactName: "Emily Watson",
-    contactEmail: "emily@brighthorizons.example.com",
-    contactPhone: "+1-555-0300",
-    projectDescription:
-      "We need a complete redesign of our corporate website with a focus on lead generation and SEO.",
-    budget: "$25,000-$50,000",
-    timeline: "3-6 months",
-    serviceIds: ["s1", "s2"],
-    industryId: "i1",
-    countryId: null,
-    cityId: null,
-    status: "new" as const,
-    createdAt: new Date("2024-05-28"),
-    updatedAt: new Date("2024-05-28"),
-    assignments: [
-      {
-        agencyId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-        agencyName: "PixelCraft Studios",
-        status: "sent",
-        viewedAt: null,
-        respondedAt: null,
-      },
-    ],
-  },
-  {
-    id: "l2b3c4d5-e6f7-8901-bcde-f12345678901",
-    userId: null,
-    companyName: "Startup Hub",
-    contactName: "Alex Rivera",
-    contactEmail: "alex@startuphub.example.com",
-    contactPhone: null,
-    projectDescription:
-      "Looking for an SEO and content marketing agency to help us grow organic traffic by 200% in the next year.",
-    budget: "$5,000-$10,000",
-    timeline: "Ongoing / monthly retainer",
-    serviceIds: ["s3"],
-    industryId: "i3",
-    countryId: null,
-    cityId: null,
-    status: "sent" as const,
-    createdAt: new Date("2024-06-01"),
-    updatedAt: new Date("2024-06-01"),
-    assignments: [
-      {
-        agencyId: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-        agencyName: "GrowthLab Marketing",
-        status: "viewed",
-        viewedAt: new Date("2024-06-02"),
-        respondedAt: null,
-      },
-    ],
-  },
-];
 
 // ─── Query Params Schema ─────────────────────────────────────────
 
@@ -85,6 +25,13 @@ export async function GET(request: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!hasDb()) {
+      return Response.json({
+        data: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+      });
+    }
+
     const { searchParams } = request.nextUrl;
 
     const params = leadQuerySchema.safeParse(
@@ -99,47 +46,123 @@ export async function GET(request: NextRequest) {
     }
 
     const { agencyId, status, page, limit } = params.data;
+    const offset = (page - 1) * limit;
+    const db = getDb();
 
-    // TODO: Replace with Drizzle query:
-    // Agency owners see leads assigned to their agencies.
-    // const conditions = [];
-    // if (agencyId) {
-    //   // Verify user owns this agency
-    //   const agency = await db.query.agencies.findFirst({
-    //     where: and(eq(schema.agencies.id, agencyId), eq(schema.agencies.userId, session.user.id)),
-    //   });
-    //   if (!agency) return Response.json({ error: "Forbidden" }, { status: 403 });
-    //   conditions.push(eq(schema.leadAssignments.agencyId, agencyId));
-    // }
-    // if (status) conditions.push(eq(schema.leads.status, status));
-    //
-    // const results = await db.select()
-    //   .from(schema.leads)
-    //   .innerJoin(schema.leadAssignments, eq(schema.leads.id, schema.leadAssignments.leadId))
-    //   .where(and(...conditions))
-    //   .orderBy(desc(schema.leads.createdAt))
-    //   .limit(limit).offset((page - 1) * limit);
-
-    let filtered = [...mockLeads];
+    // Build WHERE conditions
+    const conditions: string[] = [];
+    const values: unknown[] = [];
 
     if (agencyId) {
-      filtered = filtered.filter((l) =>
-        l.assignments.some((a) => a.agencyId === agencyId)
+      // If agencyId provided, verify user owns it, then get leads assigned to it
+      const agencyRows = await db.execute(
+        sql`SELECT id FROM agencies WHERE id = ${agencyId} AND user_id = ${session.user.id} AND deleted_at IS NULL`
       );
-    }
-    if (status) {
-      filtered = filtered.filter((l) => l.status === status);
+      const agency = (agencyRows as unknown as Array<Record<string, unknown>>)[0];
+      if (!agency) {
+        return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
+      // Get leads via lead_assignments if that table exists, otherwise filter by user_id
+      try {
+        const leadsQuery = status
+          ? sql`SELECT l.*, json_agg(json_build_object('agencyId', la.agency_id, 'status', la.status)) as assignments
+                FROM leads l
+                LEFT JOIN lead_assignments la ON l.id = la.lead_id
+                WHERE la.agency_id = ${agencyId} AND l.status = ${status}
+                GROUP BY l.id
+                ORDER BY l.created_at DESC
+                LIMIT ${limit} OFFSET ${offset}`
+          : sql`SELECT l.*, json_agg(json_build_object('agencyId', la.agency_id, 'status', la.status)) as assignments
+                FROM leads l
+                LEFT JOIN lead_assignments la ON l.id = la.lead_id
+                WHERE la.agency_id = ${agencyId}
+                GROUP BY l.id
+                ORDER BY l.created_at DESC
+                LIMIT ${limit} OFFSET ${offset}`;
+
+        const countQuery = status
+          ? sql`SELECT count(DISTINCT l.id) as count FROM leads l
+                LEFT JOIN lead_assignments la ON l.id = la.lead_id
+                WHERE la.agency_id = ${agencyId} AND l.status = ${status}`
+          : sql`SELECT count(DISTINCT l.id) as count FROM leads l
+                LEFT JOIN lead_assignments la ON l.id = la.lead_id
+                WHERE la.agency_id = ${agencyId}`;
+
+        const results = await db.execute(leadsQuery);
+        const countResult = await db.execute(countQuery);
+        const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+
+        return Response.json({
+          data: results,
+          pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        });
+      } catch {
+        // lead_assignments table may not exist; fall through to user_id filter
+      }
     }
 
-    const total = filtered.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    const paginatedData = filtered.slice(offset, offset + limit);
+    // Default: get leads created by this user, or assigned to agencies they own
+    const leadsQuery = status
+      ? sql`SELECT l.* FROM leads l
+            WHERE l.user_id = ${session.user.id} AND l.status = ${status}
+            ORDER BY l.created_at DESC
+            LIMIT ${limit} OFFSET ${offset}`
+      : sql`SELECT l.* FROM leads l
+            WHERE l.user_id = ${session.user.id}
+            ORDER BY l.created_at DESC
+            LIMIT ${limit} OFFSET ${offset}`;
 
-    return Response.json({
-      data: paginatedData,
-      pagination: { page, limit, total, totalPages },
-    });
+    const countQuery = status
+      ? sql`SELECT count(*) as count FROM leads WHERE user_id = ${session.user.id} AND status = ${status}`
+      : sql`SELECT count(*) as count FROM leads WHERE user_id = ${session.user.id}`;
+
+    // Also try to get leads assigned to user's agencies
+    try {
+      const combinedQuery = status
+        ? sql`SELECT DISTINCT l.* FROM leads l
+              LEFT JOIN lead_assignments la ON l.id = la.lead_id
+              LEFT JOIN agencies a ON la.agency_id = a.id
+              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+                AND l.status = ${status}
+              ORDER BY l.created_at DESC
+              LIMIT ${limit} OFFSET ${offset}`
+        : sql`SELECT DISTINCT l.* FROM leads l
+              LEFT JOIN lead_assignments la ON l.id = la.lead_id
+              LEFT JOIN agencies a ON la.agency_id = a.id
+              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+              ORDER BY l.created_at DESC
+              LIMIT ${limit} OFFSET ${offset}`;
+
+      const combinedCountQuery = status
+        ? sql`SELECT count(DISTINCT l.id) as count FROM leads l
+              LEFT JOIN lead_assignments la ON l.id = la.lead_id
+              LEFT JOIN agencies a ON la.agency_id = a.id
+              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+                AND l.status = ${status}`
+        : sql`SELECT count(DISTINCT l.id) as count FROM leads l
+              LEFT JOIN lead_assignments la ON l.id = la.lead_id
+              LEFT JOIN agencies a ON la.agency_id = a.id
+              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})`;
+
+      const results = await db.execute(combinedQuery);
+      const countResult = await db.execute(combinedCountQuery);
+      const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+
+      return Response.json({
+        data: results,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      });
+    } catch {
+      // lead_assignments may not exist, fall back to simple query
+      const results = await db.execute(leadsQuery);
+      const countResult = await db.execute(countQuery);
+      const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+
+      return Response.json({
+        data: results,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      });
+    }
   } catch (error) {
     console.error("GET /api/leads error:", error);
     return Response.json(
@@ -166,53 +189,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!hasDb()) {
+      return Response.json({ error: "Database not available" }, { status: 503 });
+    }
+
+    const db = getDb();
     const data = parsed.data;
 
-    // TODO: Replace with Drizzle insert:
-    // const [lead] = await db.insert(schema.leads).values({
-    //   userId: session?.user?.id ?? null,
-    //   companyName: data.companyName,
-    //   contactName: data.contactName,
-    //   contactEmail: data.contactEmail,
-    //   contactPhone: data.contactPhone,
-    //   projectDescription: data.projectDescription,
-    //   budget: data.budget,
-    //   timeline: data.timeline,
-    //   serviceIds: data.serviceIds,
-    //   industryId: data.industryId,
-    //   countryId: data.countryId,
-    //   cityId: data.cityId,
-    // }).returning();
-    //
-    // If specific agencies were selected, create assignments:
-    // if (data.agencyIds?.length) {
-    //   await db.insert(schema.leadAssignments).values(
-    //     data.agencyIds.map(agencyId => ({
-    //       leadId: lead.id,
-    //       agencyId,
-    //       status: "sent",
-    //     }))
-    //   );
-    //   // Update total leads count on each agency
-    //   for (const agencyId of data.agencyIds) {
-    //     await db.update(schema.agencies)
-    //       .set({ totalLeads: sql`${schema.agencies.totalLeads} + 1` })
-    //       .where(eq(schema.agencies.id, agencyId));
-    //   }
-    // }
-    //
-    // TODO: Send notification email to matched agencies
+    const rows = await db.execute(sql`
+      INSERT INTO leads (
+        user_id, company_name, contact_name, contact_email, contact_phone,
+        project_description, budget, timeline, service_ids,
+        industry_id, country_id, city_id, status
+      ) VALUES (
+        ${session?.user?.id ?? null},
+        ${data.companyName},
+        ${data.contactName},
+        ${data.contactEmail},
+        ${data.contactPhone ?? null},
+        ${data.projectDescription},
+        ${data.budget ?? null},
+        ${data.timeline ?? null},
+        ${data.serviceIds ? JSON.stringify(data.serviceIds) : null}::jsonb,
+        ${data.industryId ?? null},
+        ${data.countryId ?? null},
+        ${data.cityId ?? null},
+        'new'
+      ) RETURNING *
+    `);
 
-    const newLead = {
-      id: crypto.randomUUID(),
-      userId: session?.user?.id ?? null,
-      status: "new",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...data,
-    };
+    const lead = (rows as unknown as Array<Record<string, unknown>>)[0];
 
-    return Response.json({ data: newLead }, { status: 201 });
+    if (!lead) {
+      return Response.json({ error: "Failed to create lead" }, { status: 500 });
+    }
+
+    const leadId = lead.id as string;
+
+    // If specific agencies were selected, create assignments
+    if (data.agencyIds?.length) {
+      for (const agencyId of data.agencyIds) {
+        try {
+          await db.execute(
+            sql`INSERT INTO lead_assignments (lead_id, agency_id, status) VALUES (${leadId}, ${agencyId}, 'sent') ON CONFLICT DO NOTHING`
+          );
+          // Increment total_leads on the agency
+          await db.execute(
+            sql`UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agencyId}`
+          );
+        } catch { /* skip invalid agency */ }
+      }
+    }
+
+    return Response.json({ data: lead }, { status: 201 });
   } catch (error) {
     console.error("POST /api/leads error:", error);
     return Response.json(

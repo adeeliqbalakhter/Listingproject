@@ -5,6 +5,8 @@ import {
   AgencySearchBar,
   AgencySidebar,
 } from "@/components/agencies/AgencyFilters";
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
 
 export const metadata: Metadata = {
   title: "Top Marketing Agencies - Browse & Compare",
@@ -38,169 +40,89 @@ interface Agency {
   id: string;
   name: string;
   slug: string;
-  tagline: string;
-  rating: number;
-  reviewCount: number;
-  location: string;
+  tagline: string | null;
+  average_rating: number | null;
+  total_reviews: number | null;
+  company_size: string | null;
+  min_project_size: string | null;
+  logo: string | null;
   services: string[];
-  size: string;
-  budget: string;
-  logoColor: string;
-  logoInitials: string;
+  location: string;
 }
 
-const MOCK_AGENCIES: Agency[] = [
-  {
-    id: "1",
-    name: "NovaSpark Digital",
-    slug: "novaspark-digital",
-    tagline:
-      "Data-driven SEO and content strategies that generate measurable ROI for growth-stage companies.",
-    rating: 4.9,
-    reviewCount: 127,
-    location: "New York, USA",
-    services: ["SEO", "Content Marketing", "PPC"],
-    size: "51-200 employees",
-    budget: "$10,000 - $25,000",
-    logoColor: "bg-blue-600",
-    logoInitials: "NS",
-  },
-  {
-    id: "2",
-    name: "BrightWave Agency",
-    slug: "brightwave-agency",
-    tagline:
-      "Award-winning social media marketing that builds communities and drives engagement at scale.",
-    rating: 4.8,
-    reviewCount: 94,
-    location: "London, UK",
-    services: ["Social Media Marketing", "Branding", "Content Marketing"],
-    size: "11-50 employees",
-    budget: "$5,000 - $10,000",
-    logoColor: "bg-amber-500",
-    logoInitials: "BW",
-  },
-  {
-    id: "3",
-    name: "Pixel & Code Studio",
-    slug: "pixel-and-code-studio",
-    tagline:
-      "Crafting stunning, conversion-focused web experiences for ambitious brands worldwide.",
-    rating: 4.9,
-    reviewCount: 211,
-    location: "San Francisco, USA",
-    services: ["Web Design", "UX/UI Design", "Branding"],
-    size: "51-200 employees",
-    budget: "$25,000 - $50,000",
-    logoColor: "bg-purple-600",
-    logoInitials: "PC",
-  },
-  {
-    id: "4",
-    name: "Meridian Growth",
-    slug: "meridian-growth",
-    tagline:
-      "Performance marketing specialists delivering exceptional ROAS through paid search and programmatic.",
-    rating: 4.7,
-    reviewCount: 68,
-    location: "Toronto, Canada",
-    services: ["PPC", "SEO", "Email Marketing"],
-    size: "11-50 employees",
-    budget: "$10,000 - $25,000",
-    logoColor: "bg-emerald-600",
-    logoInitials: "MG",
-  },
-  {
-    id: "5",
-    name: "Vanguard Creative",
-    slug: "vanguard-creative",
-    tagline:
-      "Full-service branding and design agency helping startups establish unforgettable brand identities.",
-    rating: 4.8,
-    reviewCount: 152,
-    location: "Berlin, Germany",
-    services: ["Branding", "Web Design", "Video Production"],
-    size: "51-200 employees",
-    budget: "$25,000 - $50,000",
-    logoColor: "bg-rose-600",
-    logoInitials: "VC",
-  },
-  {
-    id: "6",
-    name: "Apex Media Group",
-    slug: "apex-media-group",
-    tagline:
-      "Enterprise-level digital marketing solutions with dedicated teams and transparent reporting.",
-    rating: 4.6,
-    reviewCount: 83,
-    location: "Sydney, Australia",
-    services: ["PPC", "Social Media Marketing", "SEO"],
-    size: "201-500 employees",
-    budget: "$50,000 - $100,000",
-    logoColor: "bg-cyan-600",
-    logoInitials: "AM",
-  },
-  {
-    id: "7",
-    name: "Catalyst Communications",
-    slug: "catalyst-communications",
-    tagline:
-      "Strategic PR and communications that position brands as industry thought leaders.",
-    rating: 4.7,
-    reviewCount: 56,
-    location: "Dubai, UAE",
-    services: ["PR & Communications", "Content Marketing", "Social Media Marketing"],
-    size: "11-50 employees",
-    budget: "$10,000 - $25,000",
-    logoColor: "bg-indigo-600",
-    logoInitials: "CC",
-  },
-  {
-    id: "8",
-    name: "Greenline Digital",
-    slug: "greenline-digital",
-    tagline:
-      "Sustainable marketing solutions for eco-conscious brands. B Corp certified agency.",
-    rating: 4.9,
-    reviewCount: 41,
-    location: "Amsterdam, Netherlands",
-    services: ["Content Marketing", "SEO", "Email Marketing"],
-    size: "1-10 employees",
-    budget: "$5,000 - $10,000",
-    logoColor: "bg-green-600",
-    logoInitials: "GL",
-  },
-  {
-    id: "9",
-    name: "Stratosphere Agency",
-    slug: "stratosphere-agency",
-    tagline:
-      "Video-first creative agency producing scroll-stopping content for DTC and SaaS brands.",
-    rating: 4.8,
-    reviewCount: 109,
-    location: "Singapore",
-    services: ["Video Production", "Social Media Marketing", "Branding"],
-    size: "51-200 employees",
-    budget: "$25,000 - $50,000",
-    logoColor: "bg-orange-600",
-    logoInitials: "SA",
-  },
-  {
-    id: "10",
-    name: "Horizon Partners",
-    slug: "horizon-partners",
-    tagline:
-      "End-to-end email marketing automation that nurtures leads and maximizes customer lifetime value.",
-    rating: 4.5,
-    reviewCount: 37,
-    location: "Remote",
-    services: ["Email Marketing", "PPC", "Content Marketing"],
-    size: "1-10 employees",
-    budget: "Under $5,000",
-    logoColor: "bg-teal-600",
-    logoInitials: "HP",
-  },
+const LOGO_COLORS = [
+  "bg-blue-600",
+  "bg-amber-500",
+  "bg-purple-600",
+  "bg-emerald-600",
+  "bg-rose-600",
+  "bg-cyan-600",
+  "bg-indigo-600",
+  "bg-green-600",
+  "bg-orange-600",
+  "bg-teal-600",
 ];
+
+function getLogoColor(index: number): string {
+  return LOGO_COLORS[index % LOGO_COLORS.length];
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+async function fetchAgencies(): Promise<Agency[]> {
+  if (!hasDb()) return [];
+  const db = getDb();
+  try {
+    const rows = await db.execute(
+      sql`SELECT a.*,
+          COALESCE(
+            (SELECT string_agg(s.name, ', ')
+             FROM agency_services asv
+             JOIN services s ON s.id = asv.service_id
+             WHERE asv.agency_id = a.id),
+            ''
+          ) as service_names,
+          COALESCE(c.name, '') as country_name,
+          COALESCE(ci.name, '') as city_name
+        FROM agencies a
+        LEFT JOIN countries c ON a.country_id = c.id
+        LEFT JOIN cities ci ON a.city_id = ci.id
+        WHERE a.status = 'active' AND a.deleted_at IS NULL
+        ORDER BY a.average_rating DESC NULLS LAST`
+    );
+
+    return (rows as unknown as Array<Record<string, unknown>>).map((row) => {
+      const serviceNames = (row.service_names as string) || "";
+      const cityName = (row.city_name as string) || "";
+      const countryName = (row.country_name as string) || "";
+      const locationParts = [cityName, countryName].filter(Boolean);
+
+      return {
+        id: row.id as string,
+        name: (row.name as string) || "",
+        slug: (row.slug as string) || "",
+        tagline: (row.tagline as string) || null,
+        average_rating: row.average_rating ? Number(row.average_rating) : null,
+        total_reviews: row.total_reviews ? Number(row.total_reviews) : null,
+        company_size: (row.company_size as string) || null,
+        min_project_size: row.min_project_size ? String(row.min_project_size) : null,
+        logo: (row.logo as string) || null,
+        services: serviceNames ? serviceNames.split(", ") : [],
+        location: locationParts.length > 0 ? locationParts.join(", ") : "Remote",
+      };
+    });
+  } catch (error) {
+    console.error("Error fetching agencies:", error);
+    return [];
+  }
+}
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -225,16 +147,19 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-function AgencyCard({ agency }: { agency: Agency }) {
+function AgencyCard({ agency, index }: { agency: Agency; index: number }) {
+  const logoColor = getLogoColor(index);
+  const initials = getInitials(agency.name);
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-6 hover:border-brand/40 hover:shadow-md transition-all group">
       <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
         {/* Logo placeholder */}
         <div
-          className={`${agency.logoColor} w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center shrink-0`}
+          className={`${logoColor} w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center shrink-0`}
         >
           <span className="text-white font-bold text-xl sm:text-2xl">
-            {agency.logoInitials}
+            {initials}
           </span>
         </div>
 
@@ -246,12 +171,12 @@ function AgencyCard({ agency }: { agency: Agency }) {
                 {agency.name}
               </h3>
               <div className="flex items-center gap-3 mt-1">
-                <StarRating rating={agency.rating} />
+                <StarRating rating={agency.average_rating ?? 0} />
                 <span className="text-sm font-medium text-navy">
-                  {agency.rating}
+                  {agency.average_rating?.toFixed(1) ?? "N/A"}
                 </span>
                 <span className="text-sm text-gray-500">
-                  ({agency.reviewCount} reviews)
+                  ({agency.total_reviews ?? 0} reviews)
                 </span>
               </div>
             </div>
@@ -265,31 +190,37 @@ function AgencyCard({ agency }: { agency: Agency }) {
             </Link>
           </div>
 
-          <p className="mt-2 text-gray-600 text-sm leading-relaxed line-clamp-2">
-            {agency.tagline}
-          </p>
+          {agency.tagline && (
+            <p className="mt-2 text-gray-600 text-sm leading-relaxed line-clamp-2">
+              {agency.tagline}
+            </p>
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500">
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5" />
               {agency.location}
             </span>
-            <span className="flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" />
-              {agency.size}
-            </span>
+            {agency.company_size && (
+              <span className="flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5" />
+                {agency.company_size}
+              </span>
+            )}
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {agency.services.map((service) => (
-              <span
-                key={service}
-                className="inline-block bg-blue-50 text-brand text-xs font-medium px-2.5 py-1 rounded-full"
-              >
-                {service}
-              </span>
-            ))}
-          </div>
+          {agency.services.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {agency.services.map((service) => (
+                <span
+                  key={service}
+                  className="inline-block bg-blue-50 text-brand text-xs font-medium px-2.5 py-1 rounded-full"
+                >
+                  {service}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -310,7 +241,7 @@ function filterAgencies(
     if (filters.q) {
       const query = filters.q.toLowerCase();
       const matchesName = agency.name.toLowerCase().includes(query);
-      const matchesTagline = agency.tagline.toLowerCase().includes(query);
+      const matchesTagline = (agency.tagline || "").toLowerCase().includes(query);
       const matchesService = agency.services.some((s) =>
         s.toLowerCase().includes(query)
       );
@@ -319,16 +250,13 @@ function filterAgencies(
         return false;
       }
     }
-    if (filters.service && !agency.services.includes(filters.service)) {
+    if (filters.service && !agency.services.some((s) => s.toLowerCase() === filters.service.toLowerCase())) {
       return false;
     }
     if (filters.location && agency.location !== filters.location) {
       return false;
     }
-    if (filters.size && agency.size !== filters.size) {
-      return false;
-    }
-    if (filters.budget && agency.budget !== filters.budget) {
+    if (filters.size && agency.company_size !== filters.size) {
       return false;
     }
     return true;
@@ -348,7 +276,9 @@ export default async function AgenciesPage({
   const size = typeof params.size === "string" ? params.size : "";
   const budget = typeof params.budget === "string" ? params.budget : "";
 
-  const filteredAgencies = filterAgencies(MOCK_AGENCIES, {
+  const allAgencies = await fetchAgencies();
+
+  const filteredAgencies = filterAgencies(allAgencies, {
     q,
     service,
     location,
@@ -367,7 +297,7 @@ export default async function AgenciesPage({
             Find the Best Marketing Agencies
           </h1>
           <p className="mt-3 text-gray-300 text-lg max-w-2xl">
-            Browse {MOCK_AGENCIES.length}+ vetted agencies. Filter by service,
+            Browse {allAgencies.length > 0 ? `${allAgencies.length}` : "our"} vetted agencies. Filter by service,
             location, and budget to find your perfect match.
           </p>
           <div className="mt-8 max-w-2xl">
@@ -416,8 +346,8 @@ export default async function AgenciesPage({
               {/* Agency list */}
               {filteredAgencies.length > 0 ? (
                 <div className="space-y-4">
-                  {filteredAgencies.map((agency) => (
-                    <AgencyCard key={agency.id} agency={agency} />
+                  {filteredAgencies.map((agency, index) => (
+                    <AgencyCard key={agency.id} agency={agency} index={index} />
                   ))}
                 </div>
               ) : (
@@ -429,16 +359,18 @@ export default async function AgenciesPage({
                     No agencies found
                   </h3>
                   <p className="mt-2 text-gray-500 max-w-md mx-auto">
-                    Try adjusting your search or filters to find what you&apos;re
-                    looking for. You can also browse all agencies by clearing your
-                    filters.
+                    {allAgencies.length === 0
+                      ? "No agencies have been listed yet. Check back soon!"
+                      : "Try adjusting your search or filters to find what you're looking for. You can also browse all agencies by clearing your filters."}
                   </p>
-                  <Link
-                    href="/agencies"
-                    className="inline-flex items-center gap-2 mt-6 bg-brand text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
-                  >
-                    View All Agencies
-                  </Link>
+                  {allAgencies.length > 0 && (
+                    <Link
+                      href="/agencies"
+                      className="inline-flex items-center gap-2 mt-6 bg-brand text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
+                    >
+                      View All Agencies
+                    </Link>
+                  )}
                 </div>
               )}
             </div>

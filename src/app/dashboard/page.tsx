@@ -1,89 +1,154 @@
-import { Eye, Users, Star, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Dashboard",
-  description: "Manage your agency profile, reviews, leads, and analytics.",
-};
+import { useState, useEffect } from "react";
+import {
+  Eye,
+  Users,
+  Star,
+  TrendingUp,
+  ArrowUpRight,
+  Loader2,
+  Inbox,
+} from "lucide-react";
 
-const stats = [
-  {
-    label: "Profile Views",
-    value: "1,247",
-    change: "+12.5%",
-    trend: "up" as const,
-    icon: Eye,
-  },
-  {
-    label: "Total Leads",
-    value: "38",
-    change: "+8.2%",
-    trend: "up" as const,
-    icon: Users,
-  },
-  {
-    label: "Average Rating",
-    value: "4.8",
-    change: "+0.2",
-    trend: "up" as const,
-    icon: Star,
-  },
-  {
-    label: "Search Impressions",
-    value: "3,842",
-    change: "-2.1%",
-    trend: "down" as const,
-    icon: TrendingUp,
-  },
-];
+interface AgencyData {
+  id: string;
+  profile_views: number | null;
+  total_leads: number | null;
+  average_rating: number | null;
+  total_reviews: number | null;
+}
 
-const recentLeads = [
-  {
-    company: "TechStart Inc.",
-    service: "SEO",
-    budget: "$5,000 - $10,000",
-    date: "2 hours ago",
-    status: "new",
-  },
-  {
-    company: "Fashion Forward",
-    service: "Social Media",
-    budget: "$2,000 - $5,000",
-    date: "5 hours ago",
-    status: "viewed",
-  },
-  {
-    company: "GreenEnergy Co.",
-    service: "PPC",
-    budget: "$10,000 - $25,000",
-    date: "1 day ago",
-    status: "responded",
-  },
-  {
-    company: "Local Restaurant",
-    service: "Web Design",
-    budget: "$3,000 - $5,000",
-    date: "2 days ago",
-    status: "won",
-  },
-];
+interface Lead {
+  id: string;
+  company_name: string;
+  budget: string | null;
+  status: string;
+  created_at: string;
+}
 
-const recentReviews = [
-  {
-    author: "Sarah M.",
-    rating: 5,
-    text: "Excellent work on our SEO strategy. Organic traffic increased 300% in 6 months.",
-    date: "3 days ago",
-  },
-  {
-    author: "James T.",
-    rating: 4,
-    text: "Great communication and solid results on our PPC campaigns.",
-    date: "1 week ago",
-  },
-];
+interface Review {
+  id: string;
+  user_name: string | null;
+  overall_rating: number;
+  content: string;
+  created_at: string;
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [agency, setAgency] = useState<AgencyData | null>(null);
+  const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
+  const [recentReviews, setRecentReviews] = useState<Review[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch user's agency
+        const agencyRes = await fetch("/api/agencies?limit=1");
+        if (!agencyRes.ok) {
+          setLoading(false);
+          return;
+        }
+        const agencyJson = await agencyRes.json();
+        const agencies = agencyJson.data ?? [];
+
+        if (agencies.length > 0) {
+          const a = agencies[0];
+          const agencyData: AgencyData = {
+            id: a.id,
+            profile_views: a.profile_views ? Number(a.profile_views) : null,
+            total_leads: a.total_leads ? Number(a.total_leads) : null,
+            average_rating: a.average_rating ? Number(a.average_rating) : null,
+            total_reviews: a.total_reviews ? Number(a.total_reviews) : null,
+          };
+          setAgency(agencyData);
+
+          // Fetch recent leads and reviews in parallel
+          const [leadsRes, reviewsRes] = await Promise.all([
+            fetch("/api/leads?limit=4"),
+            fetch(`/api/reviews?agencyId=${agencyData.id}&limit=2`),
+          ]);
+
+          if (leadsRes.ok) {
+            const leadsJson = await leadsRes.json();
+            setRecentLeads(
+              (leadsJson.data ?? []).map((l: Record<string, unknown>) => ({
+                id: l.id as string,
+                company_name: (l.company_name as string) || "Unknown",
+                budget: (l.budget as string) || null,
+                status: (l.status as string) || "new",
+                created_at: (l.created_at as string) || "",
+              }))
+            );
+          }
+
+          if (reviewsRes.ok) {
+            const reviewsJson = await reviewsRes.json();
+            setRecentReviews(
+              (reviewsJson.data ?? []).map((r: Record<string, unknown>) => ({
+                id: r.id as string,
+                user_name: (r.user_name as string) || null,
+                overall_rating: r.overall_rating ? Number(r.overall_rating) : 0,
+                content: (r.content as string) || "",
+                created_at: (r.created_at as string) || "",
+              }))
+            );
+          }
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
+
+  const stats = [
+    {
+      label: "Profile Views",
+      value: agency?.profile_views != null ? String(agency.profile_views) : "0",
+      icon: Eye,
+    },
+    {
+      label: "Total Leads",
+      value: agency?.total_leads != null ? String(agency.total_leads) : "0",
+      icon: Users,
+    },
+    {
+      label: "Average Rating",
+      value: agency?.average_rating != null ? agency.average_rating.toFixed(1) : "0",
+      icon: Star,
+    },
+    {
+      label: "Total Reviews",
+      value: agency?.total_reviews != null ? String(agency.total_reviews) : "0",
+      icon: TrendingUp,
+    },
+  ];
+
   return (
     <div>
       <div className="mb-8">
@@ -106,18 +171,6 @@ export default function DashboardPage() {
                 <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
                   <Icon className="w-5 h-5 text-brand" />
                 </div>
-                <span
-                  className={`flex items-center gap-0.5 text-xs font-medium ${
-                    stat.trend === "up" ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  {stat.trend === "up" ? (
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  ) : (
-                    <ArrowDownRight className="w-3.5 h-3.5" />
-                  )}
-                  {stat.change}
-                </span>
               </div>
               <p className="mt-3 text-2xl font-bold text-navy">{stat.value}</p>
               <p className="text-sm text-gray-500">{stat.label}</p>
@@ -138,34 +191,45 @@ export default function DashboardPage() {
               View all
             </a>
           </div>
-          <div className="divide-y divide-gray-100">
-            {recentLeads.map((lead) => (
-              <div key={lead.company} className="px-5 py-3.5 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm text-navy">{lead.company}</p>
-                  <p className="text-xs text-gray-500">
-                    {lead.service} · {lead.budget}
-                  </p>
+          {recentLeads.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {recentLeads.map((lead) => (
+                <div key={lead.id} className="px-5 py-3.5 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm text-navy">{lead.company_name}</p>
+                    {lead.budget && (
+                      <p className="text-xs text-gray-500">{lead.budget}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span
+                      className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${
+                        lead.status === "new"
+                          ? "bg-blue-50 text-brand"
+                          : lead.status === "viewed"
+                          ? "bg-yellow-50 text-yellow-700"
+                          : lead.status === "responded"
+                          ? "bg-green-50 text-green-700"
+                          : lead.status === "won"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-gray-50 text-gray-600"
+                      }`}
+                    >
+                      {lead.status}
+                    </span>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {lead.created_at ? timeAgo(lead.created_at) : ""}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span
-                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${
-                      lead.status === "new"
-                        ? "bg-blue-50 text-brand"
-                        : lead.status === "viewed"
-                        ? "bg-yellow-50 text-yellow-700"
-                        : lead.status === "responded"
-                        ? "bg-green-50 text-green-700"
-                        : "bg-emerald-50 text-emerald-700"
-                    }`}
-                  >
-                    {lead.status}
-                  </span>
-                  <p className="text-xs text-gray-400 mt-1">{lead.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-center">
+              <Inbox className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No leads yet</p>
+            </div>
+          )}
         </div>
 
         {/* Recent Reviews */}
@@ -179,36 +243,45 @@ export default function DashboardPage() {
               View all
             </a>
           </div>
-          <div className="divide-y divide-gray-100">
-            {recentReviews.map((review) => (
-              <div key={review.author} className="px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                      {review.author[0]}
+          {recentReviews.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {recentReviews.map((review) => (
+                <div key={review.id} className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                        {(review.user_name || "?")[0]}
+                      </div>
+                      <span className="font-medium text-sm text-navy">
+                        {review.user_name || "Anonymous"}
+                      </span>
                     </div>
-                    <span className="font-medium text-sm text-navy">
-                      {review.author}
-                    </span>
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-3.5 h-3.5 ${
+                            i < review.overall_rating
+                              ? "text-yellow-400 fill-yellow-400"
+                              : "text-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex gap-0.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3.5 h-3.5 ${
-                          i < review.rating
-                            ? "text-yellow-400 fill-yellow-400"
-                            : "text-gray-200"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <p className="text-sm text-gray-600 line-clamp-2">{review.content}</p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    {review.created_at ? timeAgo(review.created_at) : ""}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-600">{review.text}</p>
-                <p className="text-xs text-gray-400 mt-2">{review.date}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-center">
+              <Inbox className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No reviews yet</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
