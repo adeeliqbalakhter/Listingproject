@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createAgencySchema, searchParamsSchema } from "@/lib/validations";
 import slugify from "slugify";
-
-// ─── GET /api/agencies ───────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,14 +65,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ─── POST /api/agencies ──────────────────────────────────────────
-
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const authResult = await requireAuth(request);
+    if ("error" in authResult) return authResult.error;
+    const { user } = authResult;
 
     if (!hasDb()) {
       return Response.json({ error: "Database not available" }, { status: 503 });
@@ -98,14 +93,12 @@ export async function POST(request: NextRequest) {
 
     const { serviceIds, industryIds, logo, coverImage, ...rest } = data;
 
-    // Build social_links jsonb from individual social fields
     const socialLinks: Record<string, string> = {};
     if (rest.linkedinUrl) socialLinks.linkedin = rest.linkedinUrl;
     if (rest.twitterUrl) socialLinks.twitter = rest.twitterUrl;
     if (rest.facebookUrl) socialLinks.facebook = rest.facebookUrl;
     if (rest.instagramUrl) socialLinks.instagram = rest.instagramUrl;
 
-    // Insert agency using only columns that exist in the actual DB
     const rows = await db.execute(sql`
       INSERT INTO agencies (
         user_id, name, slug, tagline, description,
@@ -114,7 +107,7 @@ export async function POST(request: NextRequest) {
         latitude, longitude, status, social_links,
         meta_title, meta_description
       ) VALUES (
-        ${session.user.id}, ${rest.name}, ${slug},
+        ${user.id}, ${rest.name}, ${slug},
         ${rest.tagline ?? null}, ${rest.description ?? null},
         ${rest.website ?? null}, ${rest.email ?? null}, ${rest.phone ?? null},
         ${rest.foundedYear ?? null}, ${rest.companySize ?? null},
@@ -135,7 +128,6 @@ export async function POST(request: NextRequest) {
 
     const agencyId = agency.id as string;
 
-    // Update images separately (large base64 strings)
     if (logo) {
       await db.execute(sql`UPDATE agencies SET logo = ${logo} WHERE id = ${agencyId}`);
     }
@@ -143,7 +135,6 @@ export async function POST(request: NextRequest) {
       await db.execute(sql`UPDATE agencies SET cover_image = ${coverImage} WHERE id = ${agencyId}`);
     }
 
-    // Insert service relations (agency_services has no id column)
     if (serviceIds?.length) {
       for (const serviceId of serviceIds) {
         try {
@@ -154,7 +145,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Insert industry relations (agency_industries has no id column)
     if (industryIds?.length) {
       for (const industryId of industryIds) {
         try {
@@ -165,7 +155,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch final row
     const finalRows = await db.execute(sql`SELECT * FROM agencies WHERE id = ${agencyId}`);
     const finalAgency = (finalRows as unknown as Array<Record<string, unknown>>)[0] ?? agency;
 

@@ -5,6 +5,7 @@ export async function runMigrations() {
   if (!hasDb()) throw new Error("DATABASE_URL is not set");
   const db = getDb();
 
+  // ─── Extend user_role enum ───
   await db.execute(sql`
     DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
@@ -13,6 +14,18 @@ export async function runMigrations() {
         BEGIN ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'agency_team_member'; EXCEPTION WHEN duplicate_object THEN NULL; END;
         BEGIN ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'client'; EXCEPTION WHEN duplicate_object THEN NULL; END;
       END IF;
+    END $$;
+  `);
+
+  // ─── Ensure users table has needed columns ───
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
+    EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
   `);
 
@@ -53,6 +66,18 @@ export async function runMigrations() {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       token TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMP NOT NULL,
+      used_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // ─── Password reset tokens ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
       expires_at TIMESTAMP NOT NULL,
       used_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -185,17 +210,16 @@ export async function runMigrations() {
     )
   `);
 
-  // ─── Files / uploads ───
+  // ─── Files / uploads (DB-based storage) ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS files (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       filename VARCHAR(255) NOT NULL,
       original_name VARCHAR(255) NOT NULL,
       mime_type VARCHAR(100) NOT NULL,
       size INTEGER NOT NULL,
-      storage_path TEXT NOT NULL,
-      public_url TEXT,
+      data TEXT NOT NULL,
       entity_type VARCHAR(50),
       entity_id UUID,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -263,29 +287,190 @@ export async function runMigrations() {
     )
   `);
 
-  // ─── Password reset tokens ───
+  // ─── Audit logs (was missing!) ───
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    CREATE TABLE IF NOT EXISTS audit_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at TIMESTAMP NOT NULL,
-      used_at TIMESTAMP,
+      user_id UUID,
+      action VARCHAR(100) NOT NULL,
+      entity_type VARCHAR(50) NOT NULL,
+      entity_id UUID,
+      old_values JSONB,
+      new_values JSONB,
+      ip_address VARCHAR(45),
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)`);
+
+  // ─── Search logs (was missing!) ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS search_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      query TEXT,
+      filters JSONB,
+      results_count INTEGER,
+      user_id UUID,
+      ip_address VARCHAR(45),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
 
-  // ─── Ensure users table has needed columns ───
+  // ─── Ensure review_responses table exists (defined in Drizzle, may not be in DB) ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS review_responses (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // ─── Ensure review_votes table exists ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS review_votes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id),
+      is_helpful BOOLEAN NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // ─── Ensure lead_assignments table exists ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS lead_assignments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      status VARCHAR(50) DEFAULT 'sent' NOT NULL,
+      credits_used INTEGER DEFAULT 1,
+      viewed_at TIMESTAMP,
+      responded_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // ─── Ensure messages table exists ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      lead_assignment_id UUID NOT NULL REFERENCES lead_assignments(id) ON DELETE CASCADE,
+      sender_id UUID NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // ─── Unique constraint for analytics upsert ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS agency_analytics_daily (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      profile_views INTEGER DEFAULT 0,
+      search_impressions INTEGER DEFAULT 0,
+      website_clicks INTEGER DEFAULT 0,
+      phone_clicks INTEGER DEFAULT 0,
+      email_clicks INTEGER DEFAULT 0,
+      lead_requests INTEGER DEFAULT 0,
+      UNIQUE(agency_id, date)
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_analytics_agency_date ON agency_analytics_daily(agency_id, date)`);
+  // If table already existed without the constraint, add it
   await db.execute(sql`
     DO $$ BEGIN
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
-    EXCEPTION WHEN duplicate_column THEN NULL;
+      ALTER TABLE agency_analytics_daily ADD CONSTRAINT uq_analytics_agency_date UNIQUE (agency_id, date);
+    EXCEPTION WHEN duplicate_table THEN NULL;
+    WHEN duplicate_object THEN NULL;
     END $$;
   `);
 
-  return { success: true, message: "Migrations completed" };
+  // ─── Seed RBAC permissions ───
+  await seedPermissions(db);
+
+  return { success: true, message: "All migrations and seeds completed" };
+}
+
+async function seedPermissions(db: ReturnType<typeof getDb>) {
+  const perms = [
+    { name: "users.read", resource: "users", action: "read" },
+    { name: "users.create", resource: "users", action: "create" },
+    { name: "users.update", resource: "users", action: "update" },
+    { name: "users.delete", resource: "users", action: "delete" },
+    { name: "users.manage", resource: "users", action: "manage" },
+    { name: "agencies.read", resource: "agencies", action: "read" },
+    { name: "agencies.create", resource: "agencies", action: "create" },
+    { name: "agencies.update", resource: "agencies", action: "update" },
+    { name: "agencies.delete", resource: "agencies", action: "delete" },
+    { name: "agencies.manage", resource: "agencies", action: "manage" },
+    { name: "agencies.approve", resource: "agencies", action: "approve" },
+    { name: "reviews.read", resource: "reviews", action: "read" },
+    { name: "reviews.create", resource: "reviews", action: "create" },
+    { name: "reviews.update", resource: "reviews", action: "update" },
+    { name: "reviews.delete", resource: "reviews", action: "delete" },
+    { name: "reviews.moderate", resource: "reviews", action: "moderate" },
+    { name: "leads.read", resource: "leads", action: "read" },
+    { name: "leads.create", resource: "leads", action: "create" },
+    { name: "leads.update", resource: "leads", action: "update" },
+    { name: "leads.manage", resource: "leads", action: "manage" },
+    { name: "admin.read", resource: "admin", action: "read" },
+    { name: "admin.manage", resource: "admin", action: "manage" },
+    { name: "analytics.read", resource: "analytics", action: "read" },
+    { name: "files.create", resource: "files", action: "create" },
+    { name: "files.read", resource: "files", action: "read" },
+    { name: "files.delete", resource: "files", action: "delete" },
+    { name: "files.manage", resource: "files", action: "manage" },
+    { name: "notifications.read", resource: "notifications", action: "read" },
+    { name: "notifications.manage", resource: "notifications", action: "manage" },
+    { name: "team_members.manage", resource: "team_members", action: "manage" },
+    { name: "billing.manage", resource: "billing", action: "manage" },
+    { name: "content.manage", resource: "content", action: "manage" },
+    { name: "seo.manage", resource: "seo", action: "manage" },
+  ];
+
+  for (const p of perms) {
+    await db.execute(sql`
+      INSERT INTO permissions (name, resource, action, description)
+      VALUES (${p.name}, ${p.resource}, ${p.action}, ${p.name})
+      ON CONFLICT (name) DO NOTHING
+    `);
+  }
+
+  const rolePermMap: Record<string, string[]> = {
+    super_admin: perms.map((p) => p.name),
+    admin: [
+      "users.read", "users.update", "agencies.read", "agencies.update", "agencies.approve",
+      "reviews.read", "reviews.moderate", "leads.read", "admin.read",
+      "analytics.read", "files.manage", "notifications.manage", "content.manage", "seo.manage",
+    ],
+    agency_owner: [
+      "agencies.create", "agencies.read", "agencies.update", "agencies.delete",
+      "reviews.read", "leads.read", "leads.update", "team_members.manage",
+      "analytics.read", "billing.manage", "notifications.read", "files.create", "files.read", "files.delete",
+    ],
+    agency_team_member: [
+      "agencies.read", "agencies.update", "leads.read", "leads.update",
+      "reviews.read", "analytics.read", "notifications.read", "files.create", "files.read",
+    ],
+    client: [
+      "agencies.read", "reviews.create", "reviews.read", "reviews.update", "reviews.delete",
+      "leads.create", "leads.read", "notifications.read", "files.create", "files.read",
+    ],
+    user: ["agencies.read", "reviews.read", "notifications.read"],
+  };
+
+  for (const [role, permNames] of Object.entries(rolePermMap)) {
+    for (const permName of permNames) {
+      await db.execute(sql`
+        INSERT INTO role_permissions (role, permission_id)
+        SELECT ${role}, id FROM permissions WHERE name = ${permName}
+        ON CONFLICT DO NOTHING
+      `);
+    }
+  }
 }

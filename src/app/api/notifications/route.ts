@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/guards";
-import { success, paginated, error, serverError } from "@/lib/api/response";
+import { success, error, serverError } from "@/lib/api/response";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,15 +19,22 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const unreadOnly = searchParams.get("unread") === "true";
 
-    let condition = `WHERE user_id = '${user.id}'`;
-    if (unreadOnly) condition += " AND is_read = false";
-
-    const countResult = await db.execute(sql.raw(`SELECT count(*) as count FROM notifications ${condition}`));
+    let countResult;
+    let rows;
+    if (unreadOnly) {
+      countResult = await db.execute(sql`SELECT count(*) as count FROM notifications WHERE user_id = ${user.id} AND is_read = false`);
+      rows = await db.execute(sql`
+        SELECT * FROM notifications WHERE user_id = ${user.id} AND is_read = false
+        ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
+      `);
+    } else {
+      countResult = await db.execute(sql`SELECT count(*) as count FROM notifications WHERE user_id = ${user.id}`);
+      rows = await db.execute(sql`
+        SELECT * FROM notifications WHERE user_id = ${user.id}
+        ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
+      `);
+    }
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
-
-    const rows = await db.execute(sql.raw(`
-      SELECT * FROM notifications ${condition} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
-    `));
 
     const unreadCount = await db.execute(sql`
       SELECT count(*) as count FROM notifications WHERE user_id = ${user.id} AND is_read = false

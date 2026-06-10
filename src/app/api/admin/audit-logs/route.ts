@@ -19,21 +19,23 @@ export async function GET(request: NextRequest) {
     const entityType = searchParams.get("entityType") || "";
     const userId = searchParams.get("userId") || "";
 
-    let conditions = "WHERE 1=1";
-    if (entityType) conditions += ` AND al.entity_type = '${entityType.replace(/'/g, "''")}'`;
-    if (userId) conditions += ` AND al.user_id = '${userId.replace(/'/g, "''")}'`;
+    const conditions: ReturnType<typeof sql>[] = [sql`1=1`];
+    if (entityType) conditions.push(sql`al.entity_type = ${entityType}`);
+    if (userId) conditions.push(sql`al.user_id = ${userId}`);
 
-    const countResult = await db.execute(sql.raw(`SELECT count(*) as count FROM audit_logs al ${conditions}`));
+    const where = conditions.reduce((acc, cond, i) => i === 0 ? sql`WHERE ${cond}` : sql`${acc} AND ${cond}`);
+
+    const countResult = await db.execute(sql`SELECT count(*) as count FROM audit_logs al ${where}`);
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
-    const rows = await db.execute(sql.raw(`
+    const rows = await db.execute(sql`
       SELECT al.*, u.name as user_name, u.email as user_email
       FROM audit_logs al
       LEFT JOIN users u ON u.id = al.user_id
-      ${conditions}
+      ${where}
       ORDER BY al.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
-    `));
+    `);
 
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {

@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createReviewSchema } from "@/lib/validations";
-
-// ─── Query Params Schema ─────────────────────────────────────────
 
 const reviewQuerySchema = z.object({
   agencyId: z.string().uuid(),
@@ -13,8 +11,6 @@ const reviewQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   sortBy: z.enum(["newest", "oldest", "highest", "lowest", "helpful"]).optional(),
 });
-
-// ─── GET /api/reviews ────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,7 +38,6 @@ export async function GET(request: NextRequest) {
     const { agencyId, page, limit, sortBy } = params.data;
     const offset = (page - 1) * limit;
 
-    // Determine ORDER BY clause
     let orderClause = "ORDER BY r.created_at DESC";
     if (sortBy === "oldest") orderClause = "ORDER BY r.created_at ASC";
     else if (sortBy === "highest") orderClause = "ORDER BY r.overall_rating DESC";
@@ -72,21 +67,15 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/reviews error:", error);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// ─── POST /api/reviews ───────────────────────────────────────────
-
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const authResult = await requireAuth(request);
+    if ("error" in authResult) return authResult.error;
+    const { user } = authResult;
 
     const body = await request.json();
     const parsed = createReviewSchema.safeParse(body);
@@ -105,7 +94,6 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     const data = parsed.data;
 
-    // Verify the agency exists and is active
     const agencyRows = await db.execute(
       sql`SELECT id FROM agencies WHERE id = ${data.agencyId} AND status = 'active' AND deleted_at IS NULL`
     );
@@ -114,9 +102,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    // Check for duplicate review (one review per user per agency)
     const existingRows = await db.execute(
-      sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND user_id = ${session.user.id} AND deleted_at IS NULL`
+      sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND user_id = ${user.id} AND deleted_at IS NULL`
     );
     const existing = (existingRows as unknown as Array<Record<string, unknown>>)[0];
     if (existing) {
@@ -131,7 +118,7 @@ export async function POST(request: NextRequest) {
         company_name, company_size, status, is_verified, helpful_count
       ) VALUES (
         ${data.agencyId},
-        ${session.user.id},
+        ${user.id},
         ${data.overallRating},
         ${data.qualityRating ?? null},
         ${data.communicationRating ?? null},
@@ -155,9 +142,6 @@ export async function POST(request: NextRequest) {
     return Response.json({ data: review }, { status: 201 });
   } catch (error) {
     console.error("POST /api/reviews error:", error);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }

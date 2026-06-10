@@ -29,7 +29,11 @@ export async function POST(request: NextRequest) {
       sql`SELECT id FROM users WHERE email = ${email} AND deleted_at IS NULL`
     );
     if ((existing as unknown as Array<unknown>).length > 0) {
-      return error("An account with this email already exists", 409);
+      return created({
+        user: { id: "redacted", name, email, role },
+        message: "Registration successful. Please verify your email.",
+        requiresVerification: true,
+      });
     }
 
     const passwordHash = await hashPassword(password);

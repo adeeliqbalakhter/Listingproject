@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/guards";
 
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -8,14 +8,12 @@ const ALLOWED_IMAGE_TYPES = [
   "image/svg+xml",
 ];
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB for base64
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const authResult = await requireAuth(request);
+    if ("error" in authResult) return authResult.error;
 
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.includes("multipart/form-data")) {

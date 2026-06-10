@@ -58,24 +58,21 @@ export async function PATCH(request: NextRequest) {
     if (!parsed.success) return error("Validation failed", 400, parsed.error.format());
 
     const data = parsed.data;
-    const updates: string[] = [];
-    if (data.emailNewLead !== undefined) updates.push(`email_new_lead = ${data.emailNewLead}`);
-    if (data.emailNewReview !== undefined) updates.push(`email_new_review = ${data.emailNewReview}`);
-    if (data.emailLeadResponse !== undefined) updates.push(`email_lead_response = ${data.emailLeadResponse}`);
-    if (data.emailTeamInvite !== undefined) updates.push(`email_team_invite = ${data.emailTeamInvite}`);
-    if (data.emailAgencyApproved !== undefined) updates.push(`email_agency_approved = ${data.emailAgencyApproved}`);
-    if (data.emailWeeklyDigest !== undefined) updates.push(`email_weekly_digest = ${data.emailWeeklyDigest}`);
-    if (data.inAppNewLead !== undefined) updates.push(`in_app_new_lead = ${data.inAppNewLead}`);
-    if (data.inAppNewReview !== undefined) updates.push(`in_app_new_review = ${data.inAppNewReview}`);
-    if (data.inAppLeadResponse !== undefined) updates.push(`in_app_lead_response = ${data.inAppLeadResponse}`);
-    if (data.inAppTeamInvite !== undefined) updates.push(`in_app_team_invite = ${data.inAppTeamInvite}`);
 
-    if (updates.length > 0) {
-      updates.push("updated_at = NOW()");
-      await db.execute(sql.raw(`
-        UPDATE notification_preferences SET ${updates.join(", ")} WHERE user_id = '${user.id}'
-      `));
-    }
+    await db.execute(sql`
+      INSERT INTO notification_preferences (user_id) VALUES (${user.id}) ON CONFLICT (user_id) DO NOTHING
+    `);
+
+    if (data.emailNewLead !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_new_lead = ${data.emailNewLead}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.emailNewReview !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_new_review = ${data.emailNewReview}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.emailLeadResponse !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_lead_response = ${data.emailLeadResponse}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.emailTeamInvite !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_team_invite = ${data.emailTeamInvite}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.emailAgencyApproved !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_agency_approved = ${data.emailAgencyApproved}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.emailWeeklyDigest !== undefined) await db.execute(sql`UPDATE notification_preferences SET email_weekly_digest = ${data.emailWeeklyDigest}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.inAppNewLead !== undefined) await db.execute(sql`UPDATE notification_preferences SET in_app_new_lead = ${data.inAppNewLead}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.inAppNewReview !== undefined) await db.execute(sql`UPDATE notification_preferences SET in_app_new_review = ${data.inAppNewReview}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.inAppLeadResponse !== undefined) await db.execute(sql`UPDATE notification_preferences SET in_app_lead_response = ${data.inAppLeadResponse}, updated_at = NOW() WHERE user_id = ${user.id}`);
+    if (data.inAppTeamInvite !== undefined) await db.execute(sql`UPDATE notification_preferences SET in_app_team_invite = ${data.inAppTeamInvite}, updated_at = NOW() WHERE user_id = ${user.id}`);
 
     const rows = await db.execute(sql`SELECT * FROM notification_preferences WHERE user_id = ${user.id}`);
     return success((rows as unknown as Array<Record<string, unknown>>)[0]);

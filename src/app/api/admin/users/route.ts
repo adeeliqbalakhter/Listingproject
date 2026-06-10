@@ -20,22 +20,27 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get("role") || "";
     const status = searchParams.get("status") || "";
 
-    let whereClause = "WHERE u.deleted_at IS NULL";
-    if (query) whereClause += ` AND (u.name ILIKE '%${query.replace(/'/g, "''")}%' OR u.email ILIKE '%${query.replace(/'/g, "''")}%')`;
-    if (role) whereClause += ` AND u.role = '${role.replace(/'/g, "''")}'`;
-    if (status === "active") whereClause += " AND u.is_active = true";
-    if (status === "inactive") whereClause += " AND u.is_active = false";
+    const conditions: ReturnType<typeof sql>[] = [sql`u.deleted_at IS NULL`];
+    if (query) {
+      const pattern = `%${query}%`;
+      conditions.push(sql`(u.name ILIKE ${pattern} OR u.email ILIKE ${pattern})`);
+    }
+    if (role) conditions.push(sql`u.role = ${role}`);
+    if (status === "active") conditions.push(sql`u.is_active = true`);
+    if (status === "inactive") conditions.push(sql`u.is_active = false`);
 
-    const countResult = await db.execute(sql.raw(`SELECT count(*) as count FROM users u ${whereClause}`));
+    const where = conditions.reduce((acc, cond, i) => i === 0 ? sql`WHERE ${cond}` : sql`${acc} AND ${cond}`);
+
+    const countResult = await db.execute(sql`SELECT count(*) as count FROM users u ${where}`);
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
-    const rows = await db.execute(sql.raw(`
+    const rows = await db.execute(sql`
       SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at
       FROM users u
-      ${whereClause}
+      ${where}
       ORDER BY u.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
-    `));
+    `);
 
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {

@@ -19,22 +19,24 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "";
     const query = searchParams.get("query") || "";
 
-    let conditions = "WHERE a.deleted_at IS NULL";
-    if (status) conditions += ` AND a.status = '${status.replace(/'/g, "''")}'`;
-    if (query) conditions += ` AND a.name ILIKE '%${query.replace(/'/g, "''")}%'`;
+    const conditions: ReturnType<typeof sql>[] = [sql`a.deleted_at IS NULL`];
+    if (status) conditions.push(sql`a.status = ${status}`);
+    if (query) conditions.push(sql`a.name ILIKE ${`%${query}%`}`);
 
-    const countResult = await db.execute(sql.raw(`SELECT count(*) as count FROM agencies a ${conditions}`));
+    const where = conditions.reduce((acc, cond, i) => i === 0 ? sql`WHERE ${cond}` : sql`${acc} AND ${cond}`);
+
+    const countResult = await db.execute(sql`SELECT count(*) as count FROM agencies a ${where}`);
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
-    const rows = await db.execute(sql.raw(`
+    const rows = await db.execute(sql`
       SELECT a.id, a.name, a.slug, a.email, a.status, a.is_verified, a.is_featured, a.is_premium,
              a.average_rating, a.total_reviews, a.created_at, u.name as owner_name, u.email as owner_email
       FROM agencies a
       LEFT JOIN users u ON u.id = a.user_id
-      ${conditions}
+      ${where}
       ORDER BY a.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
-    `));
+    `);
 
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {

@@ -5,11 +5,8 @@ import { requireAuth } from "@/lib/auth/guards";
 import { isAdmin } from "@/lib/auth/rbac";
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "@/lib/services/rate-limit";
 import { success, created, error, serverError } from "@/lib/api/response";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
 import { randomUUID } from "crypto";
 
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml",
@@ -26,6 +23,9 @@ export async function POST(request: NextRequest) {
     if ("error" in authResult) return authResult.error;
     const { user } = authResult;
 
+    if (!hasDb()) return error("Database not available", 503);
+    const db = getDb();
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     if (!file) return error("No file provided", 400);
@@ -38,25 +38,16 @@ export async function POST(request: NextRequest) {
 
     const ext = file.name.split(".").pop() || "bin";
     const filename = `${randomUUID()}.${ext}`;
-    const storagePath = join(UPLOAD_DIR, filename);
 
-    await mkdir(UPLOAD_DIR, { recursive: true });
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(storagePath, buffer);
+    const base64Data = buffer.toString("base64");
 
-    const publicUrl = `/uploads/${filename}`;
-
-    if (hasDb()) {
-      const db = getDb();
-      const rows = await db.execute(sql`
-        INSERT INTO files (user_id, filename, original_name, mime_type, size, storage_path, public_url, entity_type, entity_id)
-        VALUES (${user.id}, ${filename}, ${file.name}, ${file.type}, ${file.size}, ${storagePath}, ${publicUrl}, ${entityType}, ${entityId})
-        RETURNING id, filename, original_name, mime_type, size, public_url, created_at
-      `);
-      return created((rows as unknown as Array<Record<string, unknown>>)[0]);
-    }
-
-    return created({ filename, publicUrl, size: file.size, mimeType: file.type });
+    const rows = await db.execute(sql`
+      INSERT INTO files (user_id, filename, original_name, mime_type, size, data, entity_type, entity_id)
+      VALUES (${user.id}, ${filename}, ${file.name}, ${file.type}, ${file.size}, ${base64Data}, ${entityType}, ${entityId})
+      RETURNING id, filename, original_name, mime_type, size, created_at
+    `);
+    return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
     return serverError(err);
   }
@@ -74,23 +65,34 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const entityType = searchParams.get("entityType");
     const entityId = searchParams.get("entityId");
+    const fileId = searchParams.get("id");
+
+    if (fileId) {
+      const rows = await db.execute(sql`
+        SELECT id, filename, original_name, mime_type, size, data, created_at
+        FROM files WHERE id = ${fileId} AND (user_id = ${user.id} OR ${isAdmin(user.role)})
+      `);
+      const file = (rows as unknown as Array<Record<string, unknown>>)[0];
+      if (!file) return error("File not found", 404);
+      return success(file);
+    }
 
     let rows;
     if (entityType && entityId) {
       rows = await db.execute(sql`
-        SELECT id, filename, original_name, mime_type, size, public_url, created_at
+        SELECT id, filename, original_name, mime_type, size, created_at
         FROM files
         WHERE entity_type = ${entityType} AND entity_id = ${entityId}
         ORDER BY created_at DESC
       `);
     } else if (isAdmin(user.role)) {
       rows = await db.execute(sql`
-        SELECT id, filename, original_name, mime_type, size, public_url, user_id, entity_type, entity_id, created_at
+        SELECT id, filename, original_name, mime_type, size, user_id, entity_type, entity_id, created_at
         FROM files ORDER BY created_at DESC LIMIT 100
       `);
     } else {
       rows = await db.execute(sql`
-        SELECT id, filename, original_name, mime_type, size, public_url, created_at
+        SELECT id, filename, original_name, mime_type, size, created_at
         FROM files WHERE user_id = ${user.id}
         ORDER BY created_at DESC LIMIT 100
       `);

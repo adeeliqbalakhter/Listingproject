@@ -1,9 +1,17 @@
 import { randomBytes, createHash } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.AUTH_SECRET || "dev-secret-change-in-prod"
-);
+let _jwtSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (_jwtSecret) return _jwtSecret;
+  const secret = process.env.JWT_SECRET || process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET or AUTH_SECRET environment variable is required");
+  }
+  _jwtSecret = new TextEncoder().encode(secret);
+  return _jwtSecret;
+}
 
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
@@ -21,7 +29,7 @@ export async function generateAccessToken(payload: Omit<TokenPayload, "type">): 
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(ACCESS_TOKEN_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function generateRefreshToken(): Promise<{ token: string; hash: string; expiresAt: Date }> {
@@ -33,7 +41,7 @@ export async function generateRefreshToken(): Promise<{ token: string; hash: str
 
 export async function verifyAccessToken(token: string): Promise<TokenPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     if (payload.type !== "access") return null;
     return payload as unknown as TokenPayload;
   } catch {

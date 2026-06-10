@@ -1,3 +1,5 @@
+import { createTransport, type Transporter } from "nodemailer";
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -5,17 +7,50 @@ export interface EmailOptions {
   text?: string;
 }
 
+let transporter: Transporter | null = null;
+
+function getTransporter(): Transporter | null {
+  if (transporter) return transporter;
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || "587");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) return null;
+  transporter = createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  return transporter;
+}
+
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const provider = process.env.EMAIL_PROVIDER || "console";
 
-  if (provider === "console" || !process.env.EMAIL_API_KEY) {
-    console.log(`[EMAIL] To: ${options.to}`);
-    console.log(`[EMAIL] Subject: ${options.subject}`);
-    console.log(`[EMAIL] Body: ${options.text || options.html.substring(0, 200)}`);
-    return true;
+  if (provider === "smtp") {
+    const t = getTransporter();
+    if (!t) {
+      console.warn("[EMAIL] SMTP not configured, falling back to console");
+      logEmail(options);
+      return true;
+    }
+    try {
+      await t.sendMail({
+        from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      });
+      return true;
+    } catch (err) {
+      console.error("[EMAIL] SMTP send failed:", err);
+      return false;
+    }
   }
 
-  if (provider === "resend") {
+  if (provider === "resend" && process.env.EMAIL_API_KEY) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -33,7 +68,14 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     return res.ok;
   }
 
-  return false;
+  logEmail(options);
+  return true;
+}
+
+function logEmail(options: EmailOptions) {
+  console.log(`[EMAIL] To: ${options.to}`);
+  console.log(`[EMAIL] Subject: ${options.subject}`);
+  console.log(`[EMAIL] Body: ${options.text || options.html.substring(0, 200)}`);
 }
 
 export function buildVerificationEmail(name: string, token: string): EmailOptions & { to: "" } {

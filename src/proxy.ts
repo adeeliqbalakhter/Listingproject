@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.AUTH_SECRET || "dev-secret-change-in-prod"
-);
+const jwtSecretValue = process.env.JWT_SECRET || process.env.AUTH_SECRET;
+const JWT_SECRET = jwtSecretValue ? new TextEncoder().encode(jwtSecretValue) : null;
 
 const protectedPaths = ["/dashboard", "/admin"];
 const adminPaths = ["/admin"];
@@ -22,21 +21,15 @@ interface ProxyTokenPayload {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check both legacy session token and new JWT access token
   const accessToken = request.cookies.get("access_token")?.value;
-  const legacySessionToken =
-    request.cookies.get("authjs.session-token")?.value ||
-    request.cookies.get("__Secure-authjs.session-token")?.value;
-
-  const hasSession = !!accessToken || !!legacySessionToken;
+  const hasSession = !!accessToken;
 
   let tokenPayload: ProxyTokenPayload | null = null;
-  if (accessToken) {
+  if (accessToken && JWT_SECRET) {
     try {
       const { payload } = await jwtVerify(accessToken, JWT_SECRET);
       tokenPayload = payload as unknown as ProxyTokenPayload;
     } catch {
-      // Expired/invalid token — clear it
       const response = NextResponse.redirect(new URL("/auth/signin", request.url));
       response.cookies.delete("access_token");
       if (protectedPaths.some((p) => pathname.startsWith(p))) {

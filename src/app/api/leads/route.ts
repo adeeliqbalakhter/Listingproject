@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireAuth, authenticateRequest } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createLeadSchema } from "@/lib/validations";
-
-// ─── Query Params Schema ─────────────────────────────────────────
 
 const leadQuerySchema = z.object({
   agencyId: z.string().uuid().optional(),
@@ -16,14 +14,11 @@ const leadQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 
-// ─── GET /api/leads ──────────────────────────────────────────────
-
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const authResult = await requireAuth(request);
+    if ("error" in authResult) return authResult.error;
+    const { user } = authResult;
 
     if (!hasDb()) {
       return Response.json({
@@ -49,20 +44,14 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const db = getDb();
 
-    // Build WHERE conditions
-    const conditions: string[] = [];
-    const values: unknown[] = [];
-
     if (agencyId) {
-      // If agencyId provided, verify user owns it, then get leads assigned to it
       const agencyRows = await db.execute(
-        sql`SELECT id FROM agencies WHERE id = ${agencyId} AND user_id = ${session.user.id} AND deleted_at IS NULL`
+        sql`SELECT id FROM agencies WHERE id = ${agencyId} AND user_id = ${user.id} AND deleted_at IS NULL`
       );
       const agency = (agencyRows as unknown as Array<Record<string, unknown>>)[0];
       if (!agency) {
         return Response.json({ error: "Forbidden" }, { status: 403 });
       }
-      // Get leads via lead_assignments if that table exists, otherwise filter by user_id
       try {
         const leadsQuery = status
           ? sql`SELECT l.*, json_agg(json_build_object('agencyId', la.agency_id, 'status', la.status)) as assignments
@@ -97,39 +86,23 @@ export async function GET(request: NextRequest) {
           pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         });
       } catch {
-        // lead_assignments table may not exist; fall through to user_id filter
+        // lead_assignments table may not exist; fall through
       }
     }
 
-    // Default: get leads created by this user, or assigned to agencies they own
-    const leadsQuery = status
-      ? sql`SELECT l.* FROM leads l
-            WHERE l.user_id = ${session.user.id} AND l.status = ${status}
-            ORDER BY l.created_at DESC
-            LIMIT ${limit} OFFSET ${offset}`
-      : sql`SELECT l.* FROM leads l
-            WHERE l.user_id = ${session.user.id}
-            ORDER BY l.created_at DESC
-            LIMIT ${limit} OFFSET ${offset}`;
-
-    const countQuery = status
-      ? sql`SELECT count(*) as count FROM leads WHERE user_id = ${session.user.id} AND status = ${status}`
-      : sql`SELECT count(*) as count FROM leads WHERE user_id = ${session.user.id}`;
-
-    // Also try to get leads assigned to user's agencies
     try {
       const combinedQuery = status
         ? sql`SELECT DISTINCT l.* FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
-              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+              WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})
                 AND l.status = ${status}
               ORDER BY l.created_at DESC
               LIMIT ${limit} OFFSET ${offset}`
         : sql`SELECT DISTINCT l.* FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
-              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+              WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})
               ORDER BY l.created_at DESC
               LIMIT ${limit} OFFSET ${offset}`;
 
@@ -137,12 +110,12 @@ export async function GET(request: NextRequest) {
         ? sql`SELECT count(DISTINCT l.id) as count FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
-              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})
+              WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})
                 AND l.status = ${status}`
         : sql`SELECT count(DISTINCT l.id) as count FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
-              WHERE (l.user_id = ${session.user.id} OR a.user_id = ${session.user.id})`;
+              WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})`;
 
       const results = await db.execute(combinedQuery);
       const countResult = await db.execute(combinedCountQuery);
@@ -153,7 +126,20 @@ export async function GET(request: NextRequest) {
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       });
     } catch {
-      // lead_assignments may not exist, fall back to simple query
+      const leadsQuery = status
+        ? sql`SELECT l.* FROM leads l
+              WHERE l.user_id = ${user.id} AND l.status = ${status}
+              ORDER BY l.created_at DESC
+              LIMIT ${limit} OFFSET ${offset}`
+        : sql`SELECT l.* FROM leads l
+              WHERE l.user_id = ${user.id}
+              ORDER BY l.created_at DESC
+              LIMIT ${limit} OFFSET ${offset}`;
+
+      const countQuery = status
+        ? sql`SELECT count(*) as count FROM leads WHERE user_id = ${user.id} AND status = ${status}`
+        : sql`SELECT count(*) as count FROM leads WHERE user_id = ${user.id}`;
+
       const results = await db.execute(leadsQuery);
       const countResult = await db.execute(countQuery);
       const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
@@ -165,19 +151,13 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error("GET /api/leads error:", error);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// ─── POST /api/leads ─────────────────────────────────────────────
-
 export async function POST(request: NextRequest) {
   try {
-    // Leads can be created by anonymous users (get-quotes form) or authenticated users
-    const session = await auth();
+    const { user } = await authenticateRequest(request);
 
     const body = await request.json();
     const parsed = createLeadSchema.safeParse(body);
@@ -202,7 +182,7 @@ export async function POST(request: NextRequest) {
         project_description, budget, timeline, service_ids,
         industry_id, country_id, city_id, status
       ) VALUES (
-        ${session?.user?.id ?? null},
+        ${user?.id ?? null},
         ${data.companyName},
         ${data.contactName},
         ${data.contactEmail},
@@ -226,14 +206,12 @@ export async function POST(request: NextRequest) {
 
     const leadId = lead.id as string;
 
-    // If specific agencies were selected, create assignments
     if (data.agencyIds?.length) {
       for (const agencyId of data.agencyIds) {
         try {
           await db.execute(
             sql`INSERT INTO lead_assignments (lead_id, agency_id, status) VALUES (${leadId}, ${agencyId}, 'sent') ON CONFLICT DO NOTHING`
           );
-          // Increment total_leads on the agency
           await db.execute(
             sql`UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agencyId}`
           );
@@ -244,9 +222,6 @@ export async function POST(request: NextRequest) {
     return Response.json({ data: lead }, { status: 201 });
   } catch (error) {
     console.error("POST /api/leads error:", error);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
