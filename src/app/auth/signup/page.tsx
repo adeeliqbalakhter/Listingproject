@@ -80,14 +80,34 @@ export default function SignUpPage() {
     return next;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) return;
     setIsSubmitting(true);
-    // TODO: integrate auth provider
-    setTimeout(() => setIsSubmitting(false), 1500);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: accountType === 'agency' ? 'agency_owner' : 'client',
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setErrors({ email: result.error || 'Registration failed' });
+        return;
+      }
+      window.location.href = '/dashboard';
+    } catch {
+      setErrors({ email: 'Something went wrong. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const passwordStrength = (() => {

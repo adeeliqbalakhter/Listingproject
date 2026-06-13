@@ -38,14 +38,29 @@ export default function SignInPage() {
     return next;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) return;
     setIsSubmitting(true);
-    // TODO: integrate auth provider
-    setTimeout(() => setIsSubmitting(false), 1500);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setErrors({ email: result.error || 'Invalid credentials' });
+        return;
+      }
+      window.location.href = '/dashboard';
+    } catch {
+      setErrors({ email: 'Something went wrong. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

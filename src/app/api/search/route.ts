@@ -2,11 +2,18 @@ import { NextRequest } from "next/server";
 import { searchParamsSchema } from "@/lib/validations";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 
 // ─── GET /api/search ─────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit: 60 requests per minute per IP
+    const rateLimit = checkRateLimit(request, { windowMs: 60_000, maxRequests: 60 }, "search");
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetAt);
+    }
+
     if (!hasDb()) {
       return Response.json(
         { error: "Database not configured" },

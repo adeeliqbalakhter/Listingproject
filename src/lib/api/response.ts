@@ -40,5 +40,8 @@ export function notFound(message = "Not found"): Response {
 export function serverError(err: unknown): Response {
   const message = err instanceof Error ? err.message : "Internal server error";
   console.error("Server error:", err);
-  return Response.json({ error: "Internal server error", details: message }, { status: 500 });
+  const details = process.env.NODE_ENV === "development" ? message : undefined;
+  const body: Record<string, unknown> = { error: "Internal server error" };
+  if (details) body.details = details;
+  return Response.json(body, { status: 500 });
 }

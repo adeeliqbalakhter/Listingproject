@@ -2,6 +2,33 @@ import { NextRequest } from "next/server";
 import { requireAuth, requireAgencyAccess } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
+
+const updateAgencySchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  tagline: z.string().max(500).optional().nullable(),
+  description: z.string().max(5000).optional().nullable(),
+  website: z.string().url().max(500).optional().nullable().or(z.literal("")),
+  email: z.string().email().max(255).optional().nullable().or(z.literal("")),
+  phone: z.string().max(50).optional().nullable(),
+  logo: z.string().max(10000).optional().nullable(),
+  coverImage: z.string().max(10000).optional().nullable(),
+  foundedYear: z.number().int().min(1900).max(2030).optional().nullable(),
+  companySize: z.string().max(50).optional().nullable(),
+  hourlyRate: z.string().max(50).optional().nullable(),
+  minProjectSize: z.number().min(0).optional().nullable(),
+  countryId: z.string().uuid().optional().nullable(),
+  cityId: z.string().uuid().optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  linkedinUrl: z.string().max(500).optional().nullable(),
+  twitterUrl: z.string().max(500).optional().nullable(),
+  facebookUrl: z.string().max(500).optional().nullable(),
+  instagramUrl: z.string().max(500).optional().nullable(),
+  metaTitle: z.string().max(70).optional().nullable(),
+  metaDescription: z.string().max(160).optional().nullable(),
+}).strict();
 
 export async function GET(
   request: NextRequest,
@@ -58,34 +85,43 @@ export async function PATCH(
 
     const body = await request.json();
 
+    const parsed = updateAgencySchema.safeParse(body);
+    if (!parsed.success) {
+      return Response.json(
+        { error: "Validation failed", details: parsed.error.format() },
+        { status: 400 }
+      );
+    }
+    const data = parsed.data;
+
     const socialLinks: Record<string, string> = {};
-    if (body.linkedinUrl) socialLinks.linkedin = body.linkedinUrl;
-    if (body.twitterUrl) socialLinks.twitter = body.twitterUrl;
-    if (body.facebookUrl) socialLinks.facebook = body.facebookUrl;
-    if (body.instagramUrl) socialLinks.instagram = body.instagramUrl;
+    if (data.linkedinUrl) socialLinks.linkedin = data.linkedinUrl;
+    if (data.twitterUrl) socialLinks.twitter = data.twitterUrl;
+    if (data.facebookUrl) socialLinks.facebook = data.facebookUrl;
+    if (data.instagramUrl) socialLinks.instagram = data.instagramUrl;
 
     await db.execute(sql`
       UPDATE agencies SET
-        name = COALESCE(${body.name ?? null}, name),
-        tagline = ${body.tagline ?? null},
-        description = ${body.description ?? null},
-        website = ${body.website ?? null},
-        email = ${body.email ?? null},
-        phone = ${body.phone ?? null},
-        logo = ${body.logo ?? null},
-        cover_image = ${body.coverImage ?? null},
-        founded_year = ${body.foundedYear ?? null},
-        company_size = ${body.companySize ?? null},
-        hourly_rate = ${body.hourlyRate ?? null},
-        min_project_size = ${body.minProjectSize ?? null},
-        country_id = ${body.countryId ?? null},
-        city_id = ${body.cityId ?? null},
-        address = ${body.address ?? null},
-        latitude = ${body.latitude ?? null},
-        longitude = ${body.longitude ?? null},
+        name = COALESCE(${data.name ?? null}, name),
+        tagline = ${data.tagline ?? null},
+        description = ${data.description ?? null},
+        website = ${data.website ?? null},
+        email = ${data.email ?? null},
+        phone = ${data.phone ?? null},
+        logo = ${data.logo ?? null},
+        cover_image = ${data.coverImage ?? null},
+        founded_year = ${data.foundedYear ?? null},
+        company_size = ${data.companySize ?? null},
+        hourly_rate = ${data.hourlyRate ?? null},
+        min_project_size = ${data.minProjectSize ?? null},
+        country_id = ${data.countryId ?? null},
+        city_id = ${data.cityId ?? null},
+        address = ${data.address ?? null},
+        latitude = ${data.latitude ?? null},
+        longitude = ${data.longitude ?? null},
         social_links = ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
-        meta_title = ${body.metaTitle ?? null},
-        meta_description = ${body.metaDescription ?? null},
+        meta_title = ${data.metaTitle ?? null},
+        meta_description = ${data.metaDescription ?? null},
         updated_at = NOW()
       WHERE id = ${id}
     `);

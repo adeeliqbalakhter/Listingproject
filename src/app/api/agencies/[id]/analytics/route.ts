@@ -3,6 +3,7 @@ import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAgencyAccess } from "@/lib/auth/guards";
 import { success, error, serverError } from "@/lib/api/response";
+import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -55,6 +56,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const rateLimit = checkRateLimit(request, { windowMs: 60_000, maxRequests: 30 }, "analytics");
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetAt);
+    }
+
     const { id } = await params;
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();

@@ -38,18 +38,18 @@ export async function GET(request: NextRequest) {
 
     if (query) {
       results = await db.execute(
-        sql`SELECT * FROM agencies WHERE deleted_at IS NULL AND name ILIKE ${`%${query}%`} ${sql.raw(orderClause)} LIMIT ${limit} OFFSET ${offset}`
+        sql`SELECT * FROM agencies WHERE deleted_at IS NULL AND status = 'active' AND name ILIKE ${`%${query}%`} ${sql.raw(orderClause)} LIMIT ${limit} OFFSET ${offset}`
       );
       const countResult = await db.execute(
-        sql`SELECT count(*) as count FROM agencies WHERE deleted_at IS NULL AND name ILIKE ${`%${query}%`}`
+        sql`SELECT count(*) as count FROM agencies WHERE deleted_at IS NULL AND status = 'active' AND name ILIKE ${`%${query}%`}`
       );
       total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
     } else {
       results = await db.execute(
-        sql`SELECT * FROM agencies WHERE deleted_at IS NULL ${sql.raw(orderClause)} LIMIT ${limit} OFFSET ${offset}`
+        sql`SELECT * FROM agencies WHERE deleted_at IS NULL AND status = 'active' ${sql.raw(orderClause)} LIMIT ${limit} OFFSET ${offset}`
       );
       const countResult = await db.execute(
-        sql`SELECT count(*) as count FROM agencies WHERE deleted_at IS NULL`
+        sql`SELECT count(*) as count FROM agencies WHERE deleted_at IS NULL AND status = 'active'`
       );
       total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
     }

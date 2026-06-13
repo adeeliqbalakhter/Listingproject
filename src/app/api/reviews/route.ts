@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth/guards";
+import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createReviewSchema } from "@/lib/validations";
@@ -76,6 +77,11 @@ export async function POST(request: NextRequest) {
     const authResult = await requireAuth(request);
     if ("error" in authResult) return authResult.error;
     const { user } = authResult;
+
+    const rateLimit = checkRateLimit(request, { windowMs: 60_000, maxRequests: 10 }, `review:${user.id}`);
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetAt);
+    }
 
     const body = await request.json();
     const parsed = createReviewSchema.safeParse(body);

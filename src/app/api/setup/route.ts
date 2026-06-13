@@ -1,6 +1,7 @@
 import { hasDb, getDb } from "@/lib/db";
 import { countries, cities, services, industries } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
+import { requireRole } from "@/lib/auth/guards";
 
 const COUNTRIES = [
   { name: "Afghanistan", code: "AF", continent: "Asia" },
@@ -223,8 +224,26 @@ export async function POST(request: Request) {
       return Response.json({ error: "Database not available" }, { status: 503 });
     }
 
-    const db = getDb();
     const url = new URL(request.url);
+    const isInit = url.searchParams.get("init") === "true";
+
+    // Allow unauthenticated access only for first-time setup (no users exist)
+    let skipAuth = false;
+    if (isInit) {
+      const db = getDb();
+      const userCount = await db.execute(sql`SELECT count(*) as count FROM users`);
+      const count = Number((userCount as unknown as Array<{ count: string }>)[0]?.count ?? 1);
+      if (count === 0) {
+        skipAuth = true;
+      }
+    }
+
+    if (!skipAuth) {
+      const authResult = await requireRole(request as unknown as import("next/server").NextRequest, "super_admin");
+      if ("error" in authResult) return authResult.error;
+    }
+
+    const db = getDb();
     const force = url.searchParams.get("force") === "true";
 
     const results: Record<string, string> = {};

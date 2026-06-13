@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/guards";
+import { isAdmin } from "@/lib/auth/rbac";
 import { z } from "zod";
-import { success, created, error, serverError } from "@/lib/api/response";
+import { success, created, error, notFound, serverError } from "@/lib/api/response";
 
 const messageSchema = z.object({
   assignmentId: z.string().uuid(),
@@ -14,10 +15,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const authResult = await requireAuth(request);
     if ("error" in authResult) return authResult.error;
+    const { user } = authResult;
 
     const { id } = await params;
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+
+    // Verify lead exists and check access
+    const leadRows = await db.execute(sql`SELECT * FROM leads WHERE id = ${id}`);
+    const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
+    if (!lead) return notFound("Lead not found");
+
+    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+      const assignment = await db.execute(sql`
+        SELECT la.id FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.lead_id = ${id} AND (a.user_id = ${user.id}
+          OR EXISTS (SELECT 1 FROM agency_team_members atm WHERE atm.agency_id = a.id AND atm.user_id = ${user.id} AND atm.status = 'active'))
+      `);
+      if ((assignment as unknown as Array<unknown>).length === 0) {
+        return error("Access denied", 403);
+      }
+    }
 
     const { searchParams } = request.nextUrl;
     const assignmentId = searchParams.get("assignmentId");
@@ -46,6 +65,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+
+    // Verify lead exists and check access
+    const leadRows = await db.execute(sql`SELECT * FROM leads WHERE id = ${id}`);
+    const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
+    if (!lead) return notFound("Lead not found");
+
+    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+      const assignment = await db.execute(sql`
+        SELECT la.id FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.lead_id = ${id} AND (a.user_id = ${user.id}
+          OR EXISTS (SELECT 1 FROM agency_team_members atm WHERE atm.agency_id = a.id AND atm.user_id = ${user.id} AND atm.status = 'active'))
+      `);
+      if ((assignment as unknown as Array<unknown>).length === 0) {
+        return error("Access denied", 403);
+      }
+    }
 
     const body = await request.json();
     const parsed = messageSchema.safeParse(body);

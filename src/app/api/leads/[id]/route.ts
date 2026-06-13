@@ -59,6 +59,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
+    // Verify the lead exists
+    const leadRows = await db.execute(sql`SELECT * FROM leads WHERE id = ${id}`);
+    const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
+    if (!lead) return notFound("Lead not found");
+
+    // Authorization: must be lead creator, assigned agency, or admin
+    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+      const assignment = await db.execute(sql`
+        SELECT la.id FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.lead_id = ${id} AND (a.user_id = ${user.id}
+          OR EXISTS (SELECT 1 FROM agency_team_members atm WHERE atm.agency_id = a.id AND atm.user_id = ${user.id} AND atm.status = 'active'))
+      `);
+      if ((assignment as unknown as Array<unknown>).length === 0) {
+        return error("Access denied", 403);
+      }
+    }
+
     const body = await request.json();
     const { status } = body as { status: string };
 

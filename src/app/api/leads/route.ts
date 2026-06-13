@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAuth, authenticateRequest } from "@/lib/auth/guards";
+import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createLeadSchema } from "@/lib/validations";
@@ -157,6 +158,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimit = checkRateLimit(request, { windowMs: 60_000, maxRequests: 5 }, "lead-create");
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetAt);
+    }
+
     const { user } = await authenticateRequest(request);
 
     const body = await request.json();
