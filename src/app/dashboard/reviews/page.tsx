@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Star,
   MessageSquare,
@@ -8,133 +8,130 @@ import {
   TrendingUp,
   Send,
   X,
-  Loader2,
-  Inbox,
+  ChevronDown,
 } from "lucide-react";
 
-interface Review {
-  id: string;
-  user_name: string | null;
-  user_image: string | null;
-  overall_rating: number;
-  title: string | null;
-  content: string;
-  company_name: string | null;
-  created_at: string;
-  status: string;
-  response?: string | null;
-}
+const mockReviews = [
+  {
+    id: 1,
+    author: "Sarah Mitchell",
+    company: "TechStart Inc.",
+    avatar: "SM",
+    rating: 5,
+    text: "Excellent work on our SEO strategy. Organic traffic increased 300% in 6 months. The team was professional, communicative, and always available when we needed them.",
+    date: "Dec 1, 2025",
+    status: "pending" as const,
+    response: null,
+  },
+  {
+    id: 2,
+    author: "James Thompson",
+    company: "Fashion Forward",
+    avatar: "JT",
+    rating: 4,
+    text: "Great communication and solid results on our PPC campaigns. Would have liked a bit more creativity in the ad copy, but overall very satisfied with the ROI.",
+    date: "Nov 28, 2025",
+    status: "responded" as const,
+    response:
+      "Thank you James! We appreciate the feedback and will focus on enhancing creative for your next campaign cycle.",
+  },
+  {
+    id: 3,
+    author: "Maria Garcia",
+    company: "GreenEnergy Co.",
+    avatar: "MG",
+    rating: 5,
+    text: "Transformed our social media presence completely. Engagement rates are up 250% and we've gained over 10,000 new followers in just 3 months.",
+    date: "Nov 20, 2025",
+    status: "responded" as const,
+    response:
+      "Thank you Maria! It's been a pleasure working with the GreenEnergy team. Looking forward to continuing the momentum!",
+  },
+  {
+    id: 4,
+    author: "David Chen",
+    company: "FoodieApp",
+    avatar: "DC",
+    rating: 3,
+    text: "The work was decent but there were some delays in delivery. The final results were acceptable but I expected a bit more given the budget.",
+    date: "Nov 15, 2025",
+    status: "pending" as const,
+    response: null,
+  },
+  {
+    id: 5,
+    author: "Emma Wilson",
+    company: "StyleHouse",
+    avatar: "EW",
+    rating: 5,
+    text: "Outstanding branding work! They completely reimagined our brand identity and the results have been incredible. Highly recommend.",
+    date: "Nov 10, 2025",
+    status: "pending" as const,
+    response: null,
+  },
+  {
+    id: 6,
+    author: "Robert Kim",
+    company: "FinanceHub",
+    avatar: "RK",
+    rating: 4,
+    text: "Very professional team with deep knowledge of content marketing in the finance space. Helped us establish thought leadership through high-quality blog posts.",
+    date: "Nov 5, 2025",
+    status: "responded" as const,
+    response:
+      "Thanks Robert! Finance content is one of our specialties and we enjoyed collaborating with your team.",
+  },
+];
+
+const stats = [
+  {
+    label: "Total Reviews",
+    value: "24",
+    icon: Star,
+    color: "text-yellow-500",
+    bg: "bg-yellow-50",
+  },
+  {
+    label: "Average Rating",
+    value: "4.6",
+    icon: TrendingUp,
+    color: "text-green-600",
+    bg: "bg-green-50",
+  },
+  {
+    label: "Pending Responses",
+    value: "3",
+    icon: Clock,
+    color: "text-orange-500",
+    bg: "bg-orange-50",
+  },
+  {
+    label: "Response Rate",
+    value: "87%",
+    icon: MessageSquare,
+    color: "text-brand",
+    bg: "bg-blue-50",
+  },
+];
 
 type FilterTab = "all" | "pending" | "responded";
 
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 export default function ReviewsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
-  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [respondingTo, setRespondingTo] = useState<number | null>(null);
   const [responseText, setResponseText] = useState("");
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [agencyId, setAgencyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // First get user's agency
-        const agencyRes = await fetch("/api/agencies?limit=1");
-        if (!agencyRes.ok) {
-          setLoading(false);
-          return;
-        }
-        const agencyJson = await agencyRes.json();
-        const agencies = agencyJson.data ?? [];
-        if (agencies.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const myAgencyId = agencies[0].id;
-        setAgencyId(myAgencyId);
-
-        // Fetch reviews for this agency
-        const reviewsRes = await fetch(`/api/reviews?agencyId=${myAgencyId}&limit=50`);
-        if (reviewsRes.ok) {
-          const reviewsJson = await reviewsRes.json();
-          setReviews(reviewsJson.data ?? []);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  // Derive status: if review has a response, treat as "responded", otherwise "pending"
-  const getReviewStatus = (r: Review): "pending" | "responded" => {
-    return r.response ? "responded" : "pending";
-  };
+  const [reviews, setReviews] = useState(mockReviews);
 
   const filteredReviews = reviews.filter((r) => {
     if (activeTab === "all") return true;
-    return getReviewStatus(r) === activeTab;
+    return r.status === activeTab;
   });
 
-  const totalReviews = reviews.length;
-  const avgRating = totalReviews > 0
-    ? (reviews.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / totalReviews).toFixed(1)
-    : "0";
-  const pendingCount = reviews.filter((r) => getReviewStatus(r) === "pending").length;
-  const respondedCount = reviews.filter((r) => getReviewStatus(r) === "responded").length;
-  const responseRate = totalReviews > 0 ? Math.round((respondedCount / totalReviews) * 100) : 0;
-
-  const stats = [
-    {
-      label: "Total Reviews",
-      value: String(totalReviews),
-      icon: Star,
-      color: "text-yellow-500",
-      bg: "bg-yellow-50",
-    },
-    {
-      label: "Average Rating",
-      value: avgRating,
-      icon: TrendingUp,
-      color: "text-green-600",
-      bg: "bg-green-50",
-    },
-    {
-      label: "Pending Responses",
-      value: String(pendingCount),
-      icon: Clock,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-    },
-    {
-      label: "Response Rate",
-      value: `${responseRate}%`,
-      icon: MessageSquare,
-      color: "text-brand",
-      bg: "bg-blue-50",
-    },
-  ];
-
-  const handleSubmitResponse = (reviewId: string) => {
+  const handleSubmitResponse = (reviewId: number) => {
     setReviews((prev) =>
       prev.map((r) =>
         r.id === reviewId
-          ? { ...r, response: responseText }
+          ? { ...r, status: "responded" as const, response: responseText }
           : r
       )
     );
@@ -147,22 +144,14 @@ export default function ReviewsPage() {
     {
       key: "pending",
       label: "Pending",
-      count: pendingCount,
+      count: reviews.filter((r) => r.status === "pending").length,
     },
     {
       key: "responded",
       label: "Responded",
-      count: respondedCount,
+      count: reviews.filter((r) => r.status === "responded").length,
     },
   ];
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -224,142 +213,115 @@ export default function ReviewsPage() {
 
       {/* Reviews List */}
       <div className="space-y-4">
-        {filteredReviews.map((review) => {
-          const reviewStatus = getReviewStatus(review);
-          const initials = (review.user_name || "?")
-            .split(" ")
-            .map((w) => w[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-
-          return (
-            <div
-              key={review.id}
-              className="bg-white rounded-xl border border-gray-200 p-5"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-semibold text-gray-600 flex-shrink-0">
-                    {initials}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm text-navy">
-                        {review.user_name || "Anonymous"}
-                      </p>
-                      {review.company_name && (
-                        <span className="text-xs text-gray-400">{review.company_name}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < (review.overall_rating || 0)
-                                ? "text-yellow-400 fill-yellow-400"
-                                : "text-gray-200"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-xs text-gray-400">
-                        {review.created_at ? formatDate(review.created_at) : ""}
-                      </span>
-                    </div>
-                  </div>
+        {filteredReviews.map((review) => (
+          <div
+            key={review.id}
+            className="bg-white rounded-xl border border-gray-200 p-5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-semibold text-gray-600 flex-shrink-0">
+                  {review.avatar}
                 </div>
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
-                    reviewStatus === "pending"
-                      ? "bg-orange-50 text-orange-600"
-                      : "bg-green-50 text-green-600"
-                  }`}
-                >
-                  {reviewStatus === "pending" ? "Needs Response" : "Responded"}
-                </span>
-              </div>
-
-              {review.title && (
-                <p className="text-sm font-medium text-navy mt-3">{review.title}</p>
-              )}
-              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                {review.content}
-              </p>
-
-              {/* Existing Response */}
-              {review.response && (
-                <div className="mt-4 bg-gray-50 rounded-lg p-4 border-l-4 border-brand">
-                  <p className="text-xs font-medium text-navy mb-1">
-                    Your Response
-                  </p>
-                  <p className="text-sm text-gray-600">{review.response}</p>
-                </div>
-              )}
-
-              {/* Respond Button / Inline Form */}
-              {reviewStatus === "pending" && respondingTo !== review.id && (
-                <button
-                  onClick={() => setRespondingTo(review.id)}
-                  className="mt-4 flex items-center gap-1.5 text-sm text-brand font-medium hover:text-brand-dark transition-colors"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Respond
-                </button>
-              )}
-
-              {respondingTo === review.id && (
-                <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-navy">
-                      Write your response
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm text-navy">
+                      {review.author}
                     </p>
-                    <button
-                      onClick={() => {
-                        setRespondingTo(null);
-                        setResponseText("");
-                      }}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <span className="text-xs text-gray-400">{review.company}</span>
                   </div>
-                  <textarea
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    placeholder="Thank the reviewer and address their feedback..."
-                    rows={3}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors resize-none"
-                  />
-                  <div className="flex justify-end mt-3">
-                    <button
-                      onClick={() => handleSubmitResponse(review.id)}
-                      disabled={!responseText.trim()}
-                      className="flex items-center gap-1.5 bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      Submit Response
-                    </button>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-3.5 h-3.5 ${
+                            i < review.rating
+                              ? "text-yellow-400 fill-yellow-400"
+                              : "text-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">{review.date}</span>
                   </div>
                 </div>
-              )}
+              </div>
+              <span
+                className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${
+                  review.status === "pending"
+                    ? "bg-orange-50 text-orange-600"
+                    : "bg-green-50 text-green-600"
+                }`}
+              >
+                {review.status === "pending" ? "Needs Response" : "Responded"}
+              </span>
             </div>
-          );
-        })}
 
-        {reviews.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-navy mb-1">No reviews yet</p>
-            <p className="text-gray-500 text-sm">
-              Reviews from your clients will appear here once they are approved.
+            <p className="text-sm text-gray-600 mt-3 leading-relaxed">
+              {review.text}
             </p>
-          </div>
-        )}
 
-        {reviews.length > 0 && filteredReviews.length === 0 && (
+            {/* Existing Response */}
+            {review.response && (
+              <div className="mt-4 bg-gray-50 rounded-lg p-4 border-l-4 border-brand">
+                <p className="text-xs font-medium text-navy mb-1">
+                  Your Response
+                </p>
+                <p className="text-sm text-gray-600">{review.response}</p>
+              </div>
+            )}
+
+            {/* Respond Button / Inline Form */}
+            {review.status === "pending" && respondingTo !== review.id && (
+              <button
+                onClick={() => setRespondingTo(review.id)}
+                className="mt-4 flex items-center gap-1.5 text-sm text-brand font-medium hover:text-brand-dark transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Respond
+              </button>
+            )}
+
+            {respondingTo === review.id && (
+              <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-navy">
+                    Write your response
+                  </p>
+                  <button
+                    onClick={() => {
+                      setRespondingTo(null);
+                      setResponseText("");
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={responseText}
+                  onChange={(e) => setResponseText(e.target.value)}
+                  placeholder="Thank the reviewer and address their feedback..."
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors resize-none"
+                />
+                <div className="flex justify-end mt-3">
+                  <button
+                    onClick={() => handleSubmitResponse(review.id)}
+                    disabled={!responseText.trim()}
+                    className="flex items-center gap-1.5 bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Submit Response
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {filteredReviews.length === 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <MessageSquare className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 text-sm">

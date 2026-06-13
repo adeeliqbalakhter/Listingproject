@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Users,
   Sparkles,
@@ -18,25 +18,117 @@ import {
   Mail,
   Phone,
   FileText,
-  Loader2,
-  Inbox,
 } from "lucide-react";
 
 type LeadStatus = "new" | "viewed" | "responded" | "won" | "lost";
 
 interface Lead {
-  id: string;
-  company_name: string;
-  contact_name: string;
-  contact_email: string;
-  contact_phone: string;
-  project_description: string;
+  id: number;
+  company: string;
+  contact: string;
+  email: string;
+  phone: string;
+  service: string;
   budget: string;
   timeline: string;
-  service_ids: string[] | null;
   status: LeadStatus;
-  created_at: string;
+  date: string;
+  description: string;
 }
+
+const mockLeads: Lead[] = [
+  {
+    id: 1,
+    company: "TechStart Inc.",
+    contact: "John Peterson",
+    email: "john@techstart.com",
+    phone: "+1 (555) 234-5678",
+    service: "SEO",
+    budget: "$5,000 - $10,000",
+    timeline: "1-3 months",
+    status: "new",
+    date: "2 hours ago",
+    description:
+      "We need a comprehensive SEO audit and strategy for our SaaS platform. We've been struggling with organic traffic and want to rank for key industry terms. Looking for an agency that can handle both technical SEO and content strategy.",
+  },
+  {
+    id: 2,
+    company: "Fashion Forward",
+    contact: "Lisa Chen",
+    email: "lisa@fashionforward.com",
+    phone: "+1 (555) 345-6789",
+    service: "Social Media Marketing",
+    budget: "$2,000 - $5,000/mo",
+    timeline: "Ongoing",
+    status: "viewed",
+    date: "5 hours ago",
+    description:
+      "Looking for social media management across Instagram, TikTok, and Pinterest. We're a fashion brand targeting 18-35 year olds and need creative content that drives engagement and sales.",
+  },
+  {
+    id: 3,
+    company: "GreenEnergy Co.",
+    contact: "Mark Anderson",
+    email: "mark@greenenergy.com",
+    phone: "+1 (555) 456-7890",
+    service: "PPC",
+    budget: "$10,000 - $25,000/mo",
+    timeline: "6+ months",
+    status: "responded",
+    date: "1 day ago",
+    description:
+      "We need Google Ads and LinkedIn Ads management for our B2B solar energy solutions. Currently spending $8k/mo but want to scale while maintaining ROAS above 4x.",
+  },
+  {
+    id: 4,
+    company: "Local Restaurant Group",
+    contact: "Maria Santos",
+    email: "maria@localrg.com",
+    phone: "+1 (555) 567-8901",
+    service: "Web Design",
+    budget: "$3,000 - $5,000",
+    timeline: "1-2 months",
+    status: "won",
+    date: "2 days ago",
+    description:
+      "Need a website redesign for our chain of 5 restaurants. Must include online ordering integration, menu management, and location pages with Google Maps.",
+  },
+  {
+    id: 5,
+    company: "HealthPlus Clinic",
+    contact: "Dr. Sarah Williams",
+    email: "sarah@healthplus.com",
+    phone: "+1 (555) 678-9012",
+    service: "Content Marketing",
+    budget: "$3,000 - $5,000/mo",
+    timeline: "Ongoing",
+    status: "new",
+    date: "3 days ago",
+    description:
+      "Looking for a healthcare content marketing agency to create educational blog posts, patient guides, and email newsletters. Must have experience with HIPAA compliance in marketing.",
+  },
+  {
+    id: 6,
+    company: "AutoDrive Motors",
+    contact: "Tom Blake",
+    email: "tom@autodrive.com",
+    phone: "+1 (555) 789-0123",
+    service: "Video Production",
+    budget: "$15,000 - $25,000",
+    timeline: "2-3 months",
+    status: "lost",
+    date: "5 days ago",
+    description:
+      "Need a series of promotional videos for our new electric vehicle lineup. 3-5 videos for social media, website, and YouTube advertising.",
+  },
+];
+
+const stats = [
+  { label: "Total Leads", value: "38", icon: Users, color: "text-brand", bg: "bg-blue-50" },
+  { label: "New Leads", value: "5", icon: Sparkles, color: "text-green-600", bg: "bg-green-50" },
+  { label: "Conversion Rate", value: "24%", icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
+  { label: "Credits Remaining", value: "12", icon: Coins, color: "text-orange-500", bg: "bg-orange-50" },
+];
 
 const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
   new: { label: "New", classes: "bg-blue-50 text-brand" },
@@ -46,72 +138,21 @@ const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
   lost: { label: "Lost", classes: "bg-red-50 text-red-600" },
 };
 
-function timeAgo(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedLead, setExpandedLead] = useState<string | null>(null);
+  const [leads, setLeads] = useState(mockLeads);
+  const [expandedLead, setExpandedLead] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
-
-  useEffect(() => {
-    async function fetchLeads() {
-      try {
-        const res = await fetch("/api/leads?limit=50");
-        if (res.ok) {
-          const json = await res.json();
-          setLeads(json.data ?? []);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchLeads();
-  }, []);
 
   const filteredLeads = leads.filter((l) => {
     if (filter === "all") return true;
     return l.status === filter;
   });
 
-  const totalLeads = leads.length;
-  const newLeads = leads.filter((l) => l.status === "new").length;
-  const wonLeads = leads.filter((l) => l.status === "won").length;
-  const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
-
-  const stats = [
-    { label: "Total Leads", value: String(totalLeads), icon: Users, color: "text-brand", bg: "bg-blue-50" },
-    { label: "New Leads", value: String(newLeads), icon: Sparkles, color: "text-green-600", bg: "bg-green-50" },
-    { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
-    { label: "Won Leads", value: String(wonLeads), icon: Coins, color: "text-orange-500", bg: "bg-orange-50" },
-  ];
-
-  const updateStatus = (id: string, status: LeadStatus) => {
+  const updateStatus = (id: number, status: LeadStatus) => {
     setLeads((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status } : l))
     );
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -163,7 +204,6 @@ export default function LeadsPage() {
       <div className="space-y-4">
         {filteredLeads.map((lead) => {
           const isExpanded = expandedLead === lead.id;
-          const leadStatus = (lead.status || "new") as LeadStatus;
           return (
             <div
               key={lead.id}
@@ -184,36 +224,32 @@ export default function LeadsPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-sm text-navy">
-                          {lead.company_name || "Unknown Company"}
+                          {lead.company}
                         </p>
-                        {statusConfig[leadStatus] && (
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig[leadStatus].classes}`}
-                          >
-                            {statusConfig[leadStatus].label}
-                          </span>
-                        )}
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig[lead.status].classes}`}
+                        >
+                          {statusConfig[lead.status].label}
+                        </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
-                        {lead.budget && (
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="w-3 h-3" />
-                            {lead.budget}
-                          </span>
-                        )}
-                        {lead.timeline && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {lead.timeline}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          {lead.service}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="w-3 h-3" />
+                          {lead.budget}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {lead.timeline}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-xs text-gray-400">
-                      {lead.created_at ? timeAgo(lead.created_at) : ""}
-                    </span>
+                    <span className="text-xs text-gray-400">{lead.date}</span>
                     {isExpanded ? (
                       <ChevronUp className="w-4 h-4 text-gray-400" />
                     ) : (
@@ -232,7 +268,7 @@ export default function LeadsPage() {
                         Project Description
                       </h4>
                       <p className="text-sm text-gray-600 leading-relaxed">
-                        {lead.project_description || "No description provided."}
+                        {lead.description}
                       </p>
                     </div>
                     <div>
@@ -242,25 +278,23 @@ export default function LeadsPage() {
                       <div className="space-y-2">
                         <p className="text-sm text-gray-600 flex items-center gap-2">
                           <Users className="w-4 h-4 text-gray-400" />
-                          {lead.contact_name || "N/A"}
+                          {lead.contact}
                         </p>
                         <p className="text-sm text-gray-600 flex items-center gap-2">
                           <Mail className="w-4 h-4 text-gray-400" />
-                          {lead.contact_email || "N/A"}
+                          {lead.email}
                         </p>
-                        {lead.contact_phone && (
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-gray-400" />
-                            {lead.contact_phone}
-                          </p>
-                        )}
+                        <p className="text-sm text-gray-600 flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          {lead.phone}
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200 flex-wrap">
-                    {leadStatus === "new" && (
+                    {lead.status === "new" && (
                       <button
                         onClick={() => updateStatus(lead.id, "viewed")}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
@@ -269,7 +303,7 @@ export default function LeadsPage() {
                         Mark as Viewed
                       </button>
                     )}
-                    {(leadStatus === "new" || leadStatus === "viewed") && (
+                    {(lead.status === "new" || lead.status === "viewed") && (
                       <button
                         onClick={() => updateStatus(lead.id, "responded")}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors"
@@ -278,7 +312,7 @@ export default function LeadsPage() {
                         Respond
                       </button>
                     )}
-                    {leadStatus !== "won" && leadStatus !== "lost" && (
+                    {lead.status !== "won" && lead.status !== "lost" && (
                       <>
                         <button
                           onClick={() => updateStatus(lead.id, "won")}
@@ -303,17 +337,7 @@ export default function LeadsPage() {
           );
         })}
 
-        {!loading && leads.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-navy mb-1">No leads yet</p>
-            <p className="text-gray-500 text-sm">
-              Your leads will appear here when clients submit inquiries.
-            </p>
-          </div>
-        )}
-
-        {leads.length > 0 && filteredLeads.length === 0 && (
+        {filteredLeads.length === 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 text-sm">No leads found for this filter.</p>
