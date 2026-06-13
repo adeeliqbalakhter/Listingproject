@@ -28,6 +28,8 @@ const updateAgencySchema = z.object({
   instagramUrl: z.string().max(500).optional().nullable(),
   metaTitle: z.string().max(70).optional().nullable(),
   metaDescription: z.string().max(160).optional().nullable(),
+  serviceIds: z.array(z.string().uuid()).optional(),
+  industryIds: z.array(z.string().uuid()).optional(),
 }).strict();
 
 export async function GET(
@@ -100,31 +102,69 @@ export async function PATCH(
     if (data.facebookUrl) socialLinks.facebook = data.facebookUrl;
     if (data.instagramUrl) socialLinks.instagram = data.instagramUrl;
 
+    const { serviceIds, industryIds, ...updateFields } = data;
+
     await db.execute(sql`
       UPDATE agencies SET
-        name = COALESCE(${data.name ?? null}, name),
-        tagline = ${data.tagline ?? null},
-        description = ${data.description ?? null},
-        website = ${data.website ?? null},
-        email = ${data.email ?? null},
-        phone = ${data.phone ?? null},
-        logo = ${data.logo ?? null},
-        cover_image = ${data.coverImage ?? null},
-        founded_year = ${data.foundedYear ?? null},
-        company_size = ${data.companySize ?? null},
-        hourly_rate = ${data.hourlyRate ?? null},
-        min_project_size = ${data.minProjectSize ?? null},
-        country_id = ${data.countryId ?? null},
-        city_id = ${data.cityId ?? null},
-        address = ${data.address ?? null},
-        latitude = ${data.latitude ?? null},
-        longitude = ${data.longitude ?? null},
+        name = COALESCE(${updateFields.name ?? null}, name),
+        tagline = ${updateFields.tagline ?? null},
+        description = ${updateFields.description ?? null},
+        website = ${updateFields.website ?? null},
+        email = ${updateFields.email ?? null},
+        phone = ${updateFields.phone ?? null},
+        logo = ${updateFields.logo ?? null},
+        cover_image = ${updateFields.coverImage ?? null},
+        founded_year = ${updateFields.foundedYear ?? null},
+        company_size = ${updateFields.companySize ?? null},
+        hourly_rate = ${updateFields.hourlyRate ?? null},
+        min_project_size = ${updateFields.minProjectSize ?? null},
+        country_id = ${updateFields.countryId ?? null},
+        city_id = ${updateFields.cityId ?? null},
+        address = ${updateFields.address ?? null},
+        latitude = ${updateFields.latitude ?? null},
+        longitude = ${updateFields.longitude ?? null},
         social_links = ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
-        meta_title = ${data.metaTitle ?? null},
-        meta_description = ${data.metaDescription ?? null},
+        meta_title = ${updateFields.metaTitle ?? null},
+        meta_description = ${updateFields.metaDescription ?? null},
         updated_at = NOW()
       WHERE id = ${id}
     `);
+
+    // Update agency services if provided
+    if (serviceIds) {
+      try {
+        await db.execute(
+          sql`DELETE FROM agency_services WHERE agency_id = ${id}`
+        );
+        for (const serviceId of serviceIds) {
+          try {
+            await db.execute(
+              sql`INSERT INTO agency_services (agency_id, service_id) VALUES (${id}, ${serviceId}) ON CONFLICT DO NOTHING`
+            );
+          } catch { /* skip invalid service */ }
+        }
+      } catch (e) {
+        console.error("Failed to update agency_services:", e);
+      }
+    }
+
+    // Update agency industries if provided
+    if (industryIds) {
+      try {
+        await db.execute(
+          sql`DELETE FROM agency_industries WHERE agency_id = ${id}`
+        );
+        for (const industryId of industryIds) {
+          try {
+            await db.execute(
+              sql`INSERT INTO agency_industries (agency_id, industry_id) VALUES (${id}, ${industryId}) ON CONFLICT DO NOTHING`
+            );
+          } catch { /* skip invalid industry */ }
+        }
+      } catch (e) {
+        console.error("Failed to update agency_industries:", e);
+      }
+    }
 
     const updatedRows = await db.execute(
       sql`SELECT * FROM agencies WHERE id = ${id}`

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Eye,
   Search,
@@ -11,64 +11,176 @@ import {
   TrendingUp,
   BarChart3,
   PieChart,
-  ExternalLink,
+  Loader2,
+  Inbox,
 } from "lucide-react";
 
+interface DailyStats {
+  date: string;
+  profile_views: number;
+  search_impressions: number;
+  website_clicks: number;
+  phone_clicks: number;
+  email_clicks: number;
+  lead_requests: number;
+}
+
+interface LeadByStatus {
+  status: string;
+  count: number;
+}
+
+interface ReviewStats {
+  total: number;
+  avg_rating: number | null;
+  approved: number;
+  pending: number;
+}
+
+interface AnalyticsData {
+  overview: {
+    profile_views: number | null;
+    total_reviews: number | null;
+    total_leads: number | null;
+    average_rating: number | null;
+  };
+  dailyStats: DailyStats[];
+  leadsByStatus: LeadByStatus[];
+  reviewStats: ReviewStats;
+}
+
 const dateRanges = [
-  { key: "7d", label: "7 days" },
-  { key: "30d", label: "30 days" },
-  { key: "90d", label: "90 days" },
+  { key: "7d", label: "7 days", days: 7 },
+  { key: "30d", label: "30 days", days: 30 },
+  { key: "90d", label: "90 days", days: 90 },
 ] as const;
 
-const statCards = [
-  {
-    label: "Profile Views",
-    value: "1,247",
-    change: "+12.5%",
-    trend: "up" as const,
-    icon: Eye,
-    color: "text-brand",
-    bg: "bg-blue-50",
-  },
-  {
-    label: "Search Impressions",
-    value: "3,842",
-    change: "+8.3%",
-    trend: "up" as const,
-    icon: Search,
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-  },
-  {
-    label: "Website Clicks",
-    value: "284",
-    change: "-2.1%",
-    trend: "down" as const,
-    icon: MousePointerClick,
-    color: "text-green-600",
-    bg: "bg-green-50",
-  },
-  {
-    label: "Lead Requests",
-    value: "38",
-    change: "+15.7%",
-    trend: "up" as const,
-    icon: Users,
-    color: "text-orange-500",
-    bg: "bg-orange-50",
-  },
-];
+function sumDaily(stats: DailyStats[], key: keyof Omit<DailyStats, "date">): number {
+  return stats.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
+}
 
-const topPages = [
-  { page: "/agencies/demo-agency", views: 847, clicks: 124, ctr: "14.6%" },
-  { page: "/agencies/demo-agency/reviews", views: 312, clicks: 67, ctr: "21.5%" },
-  { page: "/agencies/demo-agency/portfolio", views: 189, clicks: 43, ctr: "22.8%" },
-  { page: "/agencies/demo-agency/services", views: 156, clicks: 31, ctr: "19.9%" },
-  { page: "/agencies/demo-agency/contact", views: 98, clicks: 19, ctr: "19.4%" },
-];
+function formatNumber(n: number): string {
+  return n.toLocaleString();
+}
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
+
+  // Fetch agency ID on mount
+  useEffect(() => {
+    async function fetchAgency() {
+      try {
+        const res = await fetch("/api/agencies?limit=1");
+        if (!res.ok) {
+          setError("Failed to load agency data.");
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        const agencies = json.data ?? [];
+        if (agencies.length === 0) {
+          setError("No agency found. Create an agency to view analytics.");
+          setLoading(false);
+          return;
+        }
+        setAgencyId(agencies[0].id);
+      } catch {
+        setError("Failed to load agency data.");
+        setLoading(false);
+      }
+    }
+    fetchAgency();
+  }, []);
+
+  // Fetch analytics when agencyId or range changes
+  useEffect(() => {
+    if (!agencyId) return;
+
+    async function fetchAnalytics() {
+      setLoading(true);
+      setError(null);
+      try {
+        const days = dateRanges.find((d) => d.key === range)?.days ?? 30;
+        const res = await fetch(`/api/agencies/${agencyId}/analytics?days=${days}`);
+        if (!res.ok) {
+          setError("Failed to load analytics.");
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        setAnalytics(json.data ?? null);
+      } catch {
+        setError("Failed to load analytics.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAnalytics();
+  }, [agencyId, range]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <Inbox className="w-10 h-10 text-gray-300 mb-3" />
+        <p className="text-gray-500">{error}</p>
+      </div>
+    );
+  }
+
+  const daily = analytics?.dailyStats ?? [];
+  const overview = analytics?.overview;
+  const leadsByStatus = analytics?.leadsByStatus ?? [];
+  const reviewStats = analytics?.reviewStats;
+
+  const totalViews = sumDaily(daily, "profile_views");
+  const totalImpressions = sumDaily(daily, "search_impressions");
+  const totalWebsiteClicks = sumDaily(daily, "website_clicks");
+  const totalLeadRequests = sumDaily(daily, "lead_requests");
+
+  const statCards = [
+    {
+      label: "Profile Views",
+      value: formatNumber(totalViews),
+      icon: Eye,
+      color: "text-brand",
+      bg: "bg-blue-50",
+    },
+    {
+      label: "Search Impressions",
+      value: formatNumber(totalImpressions),
+      icon: Search,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+    },
+    {
+      label: "Website Clicks",
+      value: formatNumber(totalWebsiteClicks),
+      icon: MousePointerClick,
+      color: "text-green-600",
+      bg: "bg-green-50",
+    },
+    {
+      label: "Lead Requests",
+      value: formatNumber(totalLeadRequests),
+      icon: Users,
+      color: "text-orange-500",
+      bg: "bg-orange-50",
+    },
+  ];
+
+  const totalLeadCount = leadsByStatus.reduce((sum, l) => sum + (Number(l.count) || 0), 0);
 
   return (
     <div>
@@ -111,18 +223,6 @@ export default function AnalyticsPage() {
                 >
                   <Icon className={`w-5 h-5 ${stat.color}`} />
                 </div>
-                <span
-                  className={`flex items-center gap-0.5 text-xs font-medium ${
-                    stat.trend === "up" ? "text-green-600" : "text-red-500"
-                  }`}
-                >
-                  {stat.trend === "up" ? (
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  ) : (
-                    <ArrowDownRight className="w-3.5 h-3.5" />
-                  )}
-                  {stat.change}
-                </span>
               </div>
               <p className="text-2xl font-bold text-navy">{stat.value}</p>
               <p className="text-sm text-gray-500">{stat.label}</p>
@@ -131,7 +231,7 @@ export default function AnalyticsPage() {
         })}
       </div>
 
-      {/* Chart Placeholders */}
+      {/* Chart Sections */}
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Views Over Time */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 lg:col-span-2">
@@ -144,109 +244,124 @@ export default function AnalyticsPage() {
             </div>
             <TrendingUp className="w-5 h-5 text-gray-300" />
           </div>
-          <div className="h-64 bg-gradient-to-b from-blue-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
-            <div className="text-center">
-              <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 font-medium">
-                Views Over Time Chart
-              </p>
-              <p className="text-xs text-gray-300 mt-1">
-                Integrate your preferred charting library
-              </p>
+          {daily.length > 0 ? (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {daily.map((day) => {
+                const views = Number(day.profile_views) || 0;
+                const maxViews = Math.max(...daily.map((d) => Number(d.profile_views) || 0), 1);
+                const pct = Math.round((views / maxViews) * 100);
+                return (
+                  <div key={day.date} className="flex items-center gap-3 text-sm">
+                    <span className="text-gray-500 w-24 shrink-0 text-xs">
+                      {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                      <div
+                        className="bg-brand/70 h-full rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-navy font-medium w-12 text-right text-xs">
+                      {formatNumber(views)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          ) : (
+            <div className="h-64 bg-gradient-to-b from-blue-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
+              <div className="text-center">
+                <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400 font-medium">No data yet</p>
+                <p className="text-xs text-gray-300 mt-1">
+                  Views will appear here as your profile gets traffic
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Top Search Terms */}
+        {/* Daily Impressions */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-navy">Top Search Terms</h3>
+              <h3 className="font-semibold text-navy">Daily Impressions</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Keywords driving impressions
+                Search impressions by day
               </p>
             </div>
             <Search className="w-5 h-5 text-gray-300" />
           </div>
-          <div className="h-56 bg-gradient-to-b from-purple-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
-            <div className="text-center">
-              <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 font-medium">
-                Top Search Terms Chart
-              </p>
-              <p className="text-xs text-gray-300 mt-1">
-                Horizontal bar chart placeholder
-              </p>
+          {daily.length > 0 ? (
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {daily.map((day) => {
+                const impressions = Number(day.search_impressions) || 0;
+                return (
+                  <div key={day.date} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate mr-4">
+                      {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <span className="text-navy font-medium whitespace-nowrap">
+                      {formatNumber(impressions)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          {/* Mock data below chart */}
-          <div className="mt-4 space-y-2">
-            {[
-              { term: "SEO agency New York", impressions: 842 },
-              { term: "digital marketing agency", impressions: 631 },
-              { term: "PPC management services", impressions: 428 },
-              { term: "content marketing agency", impressions: 315 },
-              { term: "social media agency NYC", impressions: 219 },
-            ].map((item) => (
-              <div key={item.term} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600 truncate mr-4">{item.term}</span>
-                <span className="text-navy font-medium whitespace-nowrap">
-                  {item.impressions.toLocaleString()}
-                </span>
+          ) : (
+            <div className="h-56 bg-gradient-to-b from-purple-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
+              <div className="text-center">
+                <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400 font-medium">No data yet</p>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Lead Sources */}
+        {/* Lead Status Breakdown */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-navy">Lead Sources</h3>
+              <h3 className="font-semibold text-navy">Lead Status Breakdown</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Where your leads come from
+                Distribution of leads by status
               </p>
             </div>
             <PieChart className="w-5 h-5 text-gray-300" />
           </div>
-          <div className="h-56 bg-gradient-to-b from-green-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
-            <div className="text-center">
-              <PieChart className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 font-medium">
-                Lead Sources Chart
-              </p>
-              <p className="text-xs text-gray-300 mt-1">
-                Pie/donut chart placeholder
-              </p>
+          {leadsByStatus.length > 0 ? (
+            <div className="space-y-2">
+              {leadsByStatus.map((item) => {
+                const count = Number(item.count) || 0;
+                const pct = totalLeadCount > 0 ? Math.round((count / totalLeadCount) * 100) : 0;
+                return (
+                  <div key={item.status} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 capitalize">{item.status}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-navy font-medium">{count}</span>
+                      <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          {/* Mock data below chart */}
-          <div className="mt-4 space-y-2">
-            {[
-              { source: "Organic Search", leads: 15, pct: "39%" },
-              { source: "Directory Listing", leads: 10, pct: "26%" },
-              { source: "Referral", leads: 7, pct: "18%" },
-              { source: "Direct", leads: 4, pct: "11%" },
-              { source: "Social Media", leads: 2, pct: "5%" },
-            ].map((item) => (
-              <div key={item.source} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{item.source}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-navy font-medium">{item.leads}</span>
-                  <span className="text-xs text-gray-400 w-8 text-right">{item.pct}</span>
-                </div>
+          ) : (
+            <div className="h-56 bg-gradient-to-b from-green-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
+              <div className="text-center">
+                <PieChart className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400 font-medium">No leads yet</p>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Top Performing Pages Table */}
+      {/* Review Stats & Overview Table */}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-navy">Top Performing Pages</h3>
+          <h3 className="font-semibold text-navy">Overview</h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            Pages with the most views and engagement
+            Aggregate agency stats
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -254,42 +369,54 @@ export default function AnalyticsPage() {
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">
-                  Page
+                  Metric
                 </th>
                 <th className="text-right text-xs font-medium text-gray-500 px-6 py-3">
-                  Views
-                </th>
-                <th className="text-right text-xs font-medium text-gray-500 px-6 py-3">
-                  Clicks
-                </th>
-                <th className="text-right text-xs font-medium text-gray-500 px-6 py-3">
-                  CTR
+                  Value
                 </th>
               </tr>
             </thead>
             <tbody>
-              {topPages.map((page) => (
-                <tr
-                  key={page.page}
-                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50"
-                >
-                  <td className="px-6 py-3.5">
-                    <span className="text-sm text-brand font-medium flex items-center gap-1">
-                      {page.page}
-                      <ExternalLink className="w-3 h-3 opacity-50" />
-                    </span>
-                  </td>
-                  <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
-                    {page.views.toLocaleString()}
-                  </td>
-                  <td className="text-right px-6 py-3.5 text-sm text-gray-600">
-                    {page.clicks}
-                  </td>
-                  <td className="text-right px-6 py-3.5 text-sm text-gray-600">
-                    {page.ctr}
-                  </td>
-                </tr>
-              ))}
+              <tr className="border-b border-gray-50">
+                <td className="px-6 py-3.5 text-sm text-gray-600">All-time Profile Views</td>
+                <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                  {formatNumber(Number(overview?.profile_views) || 0)}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-50">
+                <td className="px-6 py-3.5 text-sm text-gray-600">Total Leads</td>
+                <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                  {formatNumber(Number(overview?.total_leads) || 0)}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-50">
+                <td className="px-6 py-3.5 text-sm text-gray-600">Average Rating</td>
+                <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                  {overview?.average_rating != null ? Number(overview.average_rating).toFixed(1) : "N/A"}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-50">
+                <td className="px-6 py-3.5 text-sm text-gray-600">Total Reviews</td>
+                <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                  {formatNumber(Number(overview?.total_reviews) || 0)}
+                </td>
+              </tr>
+              {reviewStats && (
+                <>
+                  <tr className="border-b border-gray-50">
+                    <td className="px-6 py-3.5 text-sm text-gray-600">Approved Reviews</td>
+                    <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                      {formatNumber(Number(reviewStats.approved) || 0)}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-50 last:border-0">
+                    <td className="px-6 py-3.5 text-sm text-gray-600">Pending Reviews</td>
+                    <td className="text-right px-6 py-3.5 text-sm text-navy font-medium">
+                      {formatNumber(Number(reviewStats.pending) || 0)}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </div>

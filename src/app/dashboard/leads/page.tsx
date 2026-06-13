@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Users,
   Sparkles,
@@ -18,12 +18,13 @@ import {
   Mail,
   Phone,
   FileText,
+  Loader2,
 } from "lucide-react";
 
 type LeadStatus = "new" | "viewed" | "responded" | "won" | "lost";
 
 interface Lead {
-  id: number;
+  id: string;
   company: string;
   contact: string;
   email: string;
@@ -36,99 +37,50 @@ interface Lead {
   description: string;
 }
 
-const mockLeads: Lead[] = [
-  {
-    id: 1,
-    company: "TechStart Inc.",
-    contact: "John Peterson",
-    email: "john@techstart.com",
-    phone: "+1 (555) 234-5678",
-    service: "SEO",
-    budget: "$5,000 - $10,000",
-    timeline: "1-3 months",
-    status: "new",
-    date: "2 hours ago",
-    description:
-      "We need a comprehensive SEO audit and strategy for our SaaS platform. We've been struggling with organic traffic and want to rank for key industry terms. Looking for an agency that can handle both technical SEO and content strategy.",
-  },
-  {
-    id: 2,
-    company: "Fashion Forward",
-    contact: "Lisa Chen",
-    email: "lisa@fashionforward.com",
-    phone: "+1 (555) 345-6789",
-    service: "Social Media Marketing",
-    budget: "$2,000 - $5,000/mo",
-    timeline: "Ongoing",
-    status: "viewed",
-    date: "5 hours ago",
-    description:
-      "Looking for social media management across Instagram, TikTok, and Pinterest. We're a fashion brand targeting 18-35 year olds and need creative content that drives engagement and sales.",
-  },
-  {
-    id: 3,
-    company: "GreenEnergy Co.",
-    contact: "Mark Anderson",
-    email: "mark@greenenergy.com",
-    phone: "+1 (555) 456-7890",
-    service: "PPC",
-    budget: "$10,000 - $25,000/mo",
-    timeline: "6+ months",
-    status: "responded",
-    date: "1 day ago",
-    description:
-      "We need Google Ads and LinkedIn Ads management for our B2B solar energy solutions. Currently spending $8k/mo but want to scale while maintaining ROAS above 4x.",
-  },
-  {
-    id: 4,
-    company: "Local Restaurant Group",
-    contact: "Maria Santos",
-    email: "maria@localrg.com",
-    phone: "+1 (555) 567-8901",
-    service: "Web Design",
-    budget: "$3,000 - $5,000",
-    timeline: "1-2 months",
-    status: "won",
-    date: "2 days ago",
-    description:
-      "Need a website redesign for our chain of 5 restaurants. Must include online ordering integration, menu management, and location pages with Google Maps.",
-  },
-  {
-    id: 5,
-    company: "HealthPlus Clinic",
-    contact: "Dr. Sarah Williams",
-    email: "sarah@healthplus.com",
-    phone: "+1 (555) 678-9012",
-    service: "Content Marketing",
-    budget: "$3,000 - $5,000/mo",
-    timeline: "Ongoing",
-    status: "new",
-    date: "3 days ago",
-    description:
-      "Looking for a healthcare content marketing agency to create educational blog posts, patient guides, and email newsletters. Must have experience with HIPAA compliance in marketing.",
-  },
-  {
-    id: 6,
-    company: "AutoDrive Motors",
-    contact: "Tom Blake",
-    email: "tom@autodrive.com",
-    phone: "+1 (555) 789-0123",
-    service: "Video Production",
-    budget: "$15,000 - $25,000",
-    timeline: "2-3 months",
-    status: "lost",
-    date: "5 days ago",
-    description:
-      "Need a series of promotional videos for our new electric vehicle lineup. 3-5 videos for social media, website, and YouTube advertising.",
-  },
-];
+interface ApiLead {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  project_description: string;
+  budget: string | null;
+  timeline: string | null;
+  status: string;
+  created_at: string;
+  service_ids?: string[] | null;
+}
 
-const stats = [
-  { label: "Total Leads", value: "38", icon: Users, color: "text-brand", bg: "bg-blue-50" },
-  { label: "New Leads", value: "5", icon: Sparkles, color: "text-green-600", bg: "bg-green-50" },
-  { label: "Conversion Rate", value: "24%", icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
-  { label: "Credits Remaining", value: "12", icon: Coins, color: "text-orange-500", bg: "bg-orange-50" },
-];
+function timeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function mapApiLead(l: ApiLead): Lead {
+  return {
+    id: l.id,
+    company: l.company_name || "Unknown",
+    contact: l.contact_name || "Unknown",
+    email: l.contact_email || "",
+    phone: l.contact_phone || "",
+    service: "",
+    budget: l.budget || "",
+    timeline: l.timeline || "",
+    status: (["new", "viewed", "responded", "won", "lost"].includes(l.status)
+      ? l.status
+      : "new") as LeadStatus,
+    date: l.created_at ? timeAgo(l.created_at) : "",
+    description: l.project_description || "",
+  };
+}
 
 const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
   new: { label: "New", classes: "bg-blue-50 text-brand" },
@@ -139,20 +91,93 @@ const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
 };
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState(mockLeads);
-  const [expandedLead, setExpandedLead] = useState<number | null>(null);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
+  const [pagination, setPagination] = useState({
+    total: 0,
+    totalPages: 0,
+    page: 1,
+  });
+
+  useEffect(() => {
+    async function fetchLeads() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch("/api/leads?limit=50");
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          throw new Error(json?.error || `Failed to fetch leads (${res.status})`);
+        }
+        const json = await res.json();
+        const apiLeads: ApiLead[] = json.data ?? [];
+        setLeads(apiLeads.map(mapApiLead));
+        if (json.pagination) {
+          setPagination({
+            total: json.pagination.total ?? 0,
+            totalPages: json.pagination.totalPages ?? 0,
+            page: json.pagination.page ?? 1,
+          });
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load leads");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLeads();
+  }, []);
 
   const filteredLeads = leads.filter((l) => {
     if (filter === "all") return true;
     return l.status === filter;
   });
 
-  const updateStatus = (id: number, status: LeadStatus) => {
+  const updateStatus = (id: string, status: LeadStatus) => {
     setLeads((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status } : l))
     );
   };
+
+  const statusCounts = leads.reduce(
+    (acc, l) => {
+      acc[l.status] = (acc[l.status] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  const stats = [
+    { label: "Total Leads", value: String(pagination.total || leads.length), icon: Users, color: "text-brand", bg: "bg-blue-50" },
+    { label: "New Leads", value: String(statusCounts["new"] || 0), icon: Sparkles, color: "text-green-600", bg: "bg-green-50" },
+    { label: "Responded", value: String(statusCounts["responded"] || 0), icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
+    { label: "Won", value: String(statusCounts["won"] || 0), icon: Coins, color: "text-orange-500", bg: "bg-orange-50" },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <p className="text-red-600 text-sm mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -233,18 +258,24 @@ export default function LeadsPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-3 h-3" />
-                          {lead.service}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="w-3 h-3" />
-                          {lead.budget}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {lead.timeline}
-                        </span>
+                        {lead.service && (
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            {lead.service}
+                          </span>
+                        )}
+                        {lead.budget && (
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="w-3 h-3" />
+                            {lead.budget}
+                          </span>
+                        )}
+                        {lead.timeline && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {lead.timeline}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -268,7 +299,7 @@ export default function LeadsPage() {
                         Project Description
                       </h4>
                       <p className="text-sm text-gray-600 leading-relaxed">
-                        {lead.description}
+                        {lead.description || "No description provided."}
                       </p>
                     </div>
                     <div>
@@ -280,14 +311,18 @@ export default function LeadsPage() {
                           <Users className="w-4 h-4 text-gray-400" />
                           {lead.contact}
                         </p>
-                        <p className="text-sm text-gray-600 flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          {lead.email}
-                        </p>
-                        <p className="text-sm text-gray-600 flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          {lead.phone}
-                        </p>
+                        {lead.email && (
+                          <p className="text-sm text-gray-600 flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            {lead.email}
+                          </p>
+                        )}
+                        {lead.phone && (
+                          <p className="text-sm text-gray-600 flex items-center gap-2">
+                            <Phone className="w-4 h-4 text-gray-400" />
+                            {lead.phone}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

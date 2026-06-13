@@ -172,17 +172,60 @@ export default function GetQuotesPage() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  const [submitError, setSubmitError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const v = validateStep(step);
     setErrors(v);
     if (Object.keys(v).length > 0) return;
     setIsSubmitting(true);
-    // TODO: integrate API
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setSubmitError("");
+
+    // Build a rich project description that includes selected services and industry
+    const selectedServiceLabels = form.services
+      .map((id) => SERVICES.find((s) => s.id === id)?.label)
+      .filter(Boolean);
+    const descriptionParts = [form.description];
+    if (selectedServiceLabels.length > 0) {
+      descriptionParts.push(
+        `\nServices needed: ${selectedServiceLabels.join(", ")}`
+      );
+    }
+    if (form.industry) {
+      descriptionParts.push(`\nIndustry: ${form.industry}`);
+    }
+
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: form.company,
+          contactName: form.name,
+          contactEmail: form.email,
+          contactPhone: form.phone || undefined,
+          projectDescription: descriptionParts.join(""),
+          budget: form.budget || undefined,
+          timeline: form.timeline || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          body?.error ?? `Request failed (${res.status})`
+        );
+      }
+
       setSubmitted(true);
-    }, 1500);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -544,6 +587,13 @@ export default function GetQuotesPage() {
                   className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-navy placeholder:text-gray-400 shadow-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Submission error */}
+          {submitError && (
+            <div className="mt-6 rounded-lg border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+              {submitError}
             </div>
           )}
 

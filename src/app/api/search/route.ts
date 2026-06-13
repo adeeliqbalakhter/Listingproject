@@ -3,6 +3,7 @@ import { searchParamsSchema } from "@/lib/validations";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
+import { authenticateRequest } from "@/lib/auth/guards";
 
 // ─── GET /api/search ─────────────────────────────────────────────
 
@@ -281,6 +282,33 @@ export async function GET(request: NextRequest) {
         count: r.count,
       })),
     };
+
+    // Fire-and-forget: log search query without blocking the response
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      ?? request.headers.get("x-real-ip")
+      ?? null;
+    let userId: string | null = null;
+    try {
+      const { user } = await authenticateRequest(request);
+      userId = user?.id ?? null;
+    } catch {
+      // auth extraction failed — proceed without user
+    }
+    const filters = {
+      services: services ?? null,
+      industries: industries ?? null,
+      country: country ?? null,
+      city: city ?? null,
+      minRating: minRating ?? null,
+      companySize: companySize ?? null,
+      minBudget: minBudget ?? null,
+      maxBudget: maxBudget ?? null,
+      sortBy: sortBy ?? null,
+    };
+    db.execute(sql`
+      INSERT INTO search_logs (query, filters, results_count, user_id, ip_address)
+      VALUES (${query ?? null}, ${JSON.stringify(filters)}::jsonb, ${total}, ${userId}, ${ip})
+    `).catch(() => {});
 
     return Response.json({
       data,
