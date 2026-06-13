@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import {
   Building2,
   Globe,
@@ -36,7 +35,7 @@ const SOCIAL_PLATFORMS = [
 type SocialLink = { platform: string; url: string };
 
 export default function ProfilePage() {
-  const { data: session } = useSession();
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -80,12 +79,18 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    const userId = session?.user?.id;
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(me => {
+      if (!me?.data?.id) {
+        setLoading(false);
+        return;
+      }
+      const userId = me.data.id;
+      setCurrentUser({ id: userId, email: me.data.email, role: me.data.role });
+      return loadProfile(userId);
+    }).catch(() => setLoading(false));
+  }, []);
 
+  const loadProfile = useCallback((userId: string) => {
     Promise.all([
       fetch("/api/locations").then((r) => r.json()),
       fetch("/api/services").then((r) => r.json()),
@@ -157,7 +162,7 @@ export default function ProfilePage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [session?.user?.id]);
+  }, []);
 
   const loadCities = useCallback((countryId: string) => {
     if (!countryId) {
