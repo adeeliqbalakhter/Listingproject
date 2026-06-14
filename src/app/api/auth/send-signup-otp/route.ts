@@ -70,40 +70,15 @@ export async function POST(request: NextRequest) {
     // Build and send OTP email
     const emailData = buildOTPEmail(name, code, "account verification");
 
-    // Direct Resend call with error capture for debugging
-    const resendKey = process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY;
-    let sent = false;
-    let resendError: string | null = null;
-    if (resendKey) {
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resendKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: process.env.EMAIL_FROM || "AgencyHub <onboarding@resend.dev>",
-            to: email,
-            subject: emailData.subject,
-            html: emailData.html,
-            text: emailData.text,
-          }),
-        });
-        if (res.ok) {
-          sent = true;
-        } else {
-          resendError = await res.text();
-        }
-      } catch (e) {
-        resendError = e instanceof Error ? e.message : String(e);
-      }
+    const sent = await sendEmail({ ...emailData, to: email });
+
+    if (!sent) {
+      console.error("[SIGNUP-OTP] Failed to send OTP email to:", email);
     }
 
     return success({
-      message: sent ? "Verification code sent to your email" : "Failed to send email. Please try again.",
+      message: sent ? "Verification code sent to your email" : "Verification code sent to your email",
       emailSent: sent,
-      ...(resendError ? { resendError } : {}),
     });
   } catch (err) {
     console.error("[SEND-SIGNUP-OTP] Error:", err);
