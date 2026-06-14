@@ -8,7 +8,9 @@ import { success, error, serverError } from "@/lib/api/response";
 async function needsMigration(): Promise<boolean> {
   if (!hasDb()) return true;
   try {
-    await getDb().execute(sql`SELECT 1 FROM otp_tokens LIMIT 1`);
+    const db = getDb();
+    await db.execute(sql`SELECT 1 FROM otp_tokens LIMIT 1`);
+    await db.execute(sql`SELECT 1 FROM signup_otps LIMIT 1`);
     return false;
   } catch {
     return true;
