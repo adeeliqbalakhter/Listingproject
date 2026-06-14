@@ -80,31 +80,58 @@ function VerifyEmailContent() {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // Auto-submit prefilled OTP
+  // Auto-request OTP on mount when no code is prefilled
+  const hasRequested = useRef(false);
   useEffect(() => {
-    if (prefilledCode && prefilledCode.length === 6 && email && state === "otp-entry" && !hasVerified.current) {
-      hasVerified.current = true;
-      setIsSubmitting(true);
-      fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: prefilledCode, type: "email_verification" }),
+    if (state !== "otp-entry" || !email || hasRequested.current) return;
+    if (prefilledCode && prefilledCode.length === 6) return;
+    hasRequested.current = true;
+    fetch("/api/auth/request-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, type: "email_verification" }),
+    })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.data?.otp) {
+          const digits = result.data.otp.split("");
+          setOtp(digits);
+          setShowCodeHint(true);
+        }
       })
-        .then((res) => res.json())
-        .then((result) => {
-          if (result.error) {
-            setErrorMessage(result.error);
-            setOtp(["", "", "", "", "", ""]);
-            setShowCodeHint(false);
-          } else {
-            window.location.href = "/dashboard";
-            return;
-          }
-        })
-        .catch(() => setErrorMessage("Something went wrong. Please try again."))
-        .finally(() => setIsSubmitting(false));
-    }
-  }, [prefilledCode, email, state]);
+      .catch(() => {});
+  }, [state, email, prefilledCode]);
+
+  // Auto-submit prefilled OTP (from URL or auto-request)
+  const hasAutoSubmitted = useRef(false);
+  useEffect(() => {
+    const code = otp.join("");
+    if (code.length !== 6 || !email || state !== "otp-entry" || hasAutoSubmitted.current || isSubmitting) return;
+    if (!prefilledCode && !showCodeHint) return;
+    hasAutoSubmitted.current = true;
+    setIsSubmitting(true);
+    fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code, type: "email_verification" }),
+    })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.error) {
+          setErrorMessage(result.error);
+          setOtp(["", "", "", "", "", ""]);
+          setShowCodeHint(false);
+          hasAutoSubmitted.current = false;
+        } else {
+          window.location.href = "/dashboard";
+        }
+      })
+      .catch(() => {
+        setErrorMessage("Something went wrong. Please try again.");
+        hasAutoSubmitted.current = false;
+      })
+      .finally(() => setIsSubmitting(false));
+  }, [otp, email, state, prefilledCode, showCodeHint, isSubmitting]);
 
   // No token or email provided
   useEffect(() => {
