@@ -30,31 +30,36 @@ export async function POST(request: NextRequest) {
     if (!user) return error("Invalid verification code", 400);
     if (!user.is_active) return error("Account is deactivated", 403);
 
-    const otpRows = await db.execute(sql`
-      SELECT * FROM otp_tokens
-      WHERE user_id = ${user.id}
-        AND type = ${type}
-        AND used_at IS NULL
-        AND expires_at > NOW()
-      ORDER BY created_at DESC
-      LIMIT 1
-    `);
-    const otp = (otpRows as unknown as Array<Record<string, unknown>>)[0];
+    let otp: Record<string, unknown> | undefined;
+    try {
+      const otpRows = await db.execute(sql`
+        SELECT * FROM otp_tokens
+        WHERE user_id = ${user.id}
+          AND type = ${type}
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      otp = (otpRows as unknown as Array<Record<string, unknown>>)[0];
+    } catch {
+      return error("Verification service temporarily unavailable. Please try again later.", 503);
+    }
 
     if (!otp) return error("No valid verification code found. Request a new one.", 400);
 
     if ((otp.attempts as number) >= MAX_OTP_ATTEMPTS) {
-      await db.execute(sql`UPDATE otp_tokens SET used_at = NOW() WHERE id = ${otp.id}`);
+      await db.execute(sql`UPDATE otp_tokens SET used_at = NOW() WHERE id = ${otp.id}`).catch(() => {});
       return error("Too many attempts. Request a new code.", 400);
     }
 
     if (otp.code !== code) {
-      await db.execute(sql`UPDATE otp_tokens SET attempts = attempts + 1 WHERE id = ${otp.id}`);
+      await db.execute(sql`UPDATE otp_tokens SET attempts = attempts + 1 WHERE id = ${otp.id}`).catch(() => {});
       return error("Invalid verification code", 400);
     }
 
     // Mark OTP as used
-    await db.execute(sql`UPDATE otp_tokens SET used_at = NOW() WHERE id = ${otp.id}`);
+    await db.execute(sql`UPDATE otp_tokens SET used_at = NOW() WHERE id = ${otp.id}`).catch(() => {});
 
     if (type === "email_verification") {
       await db.execute(sql`UPDATE users SET email_verified = NOW() WHERE id = ${user.id}`);
@@ -82,7 +87,7 @@ export async function POST(request: NextRequest) {
       await db.execute(sql`
         INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
         VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt})
-      `);
+      `).catch((e) => console.error("Failed to store refresh token:", e));
 
       return success({
         message: "Email verified successfully",

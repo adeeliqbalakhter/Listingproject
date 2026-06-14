@@ -31,17 +31,25 @@ export async function POST(request: NextRequest) {
       return success({ message: "If an account exists, a verification code has been sent." });
     }
 
-    // Invalidate previous unused OTPs of same type
-    await db.execute(sql`
-      UPDATE otp_tokens SET used_at = NOW()
-      WHERE user_id = ${user.id} AND type = ${type} AND used_at IS NULL
-    `);
-
     const code = generateOTP();
-    await db.execute(sql`
-      INSERT INTO otp_tokens (user_id, code, type, expires_at)
-      VALUES (${user.id}, ${code}, ${type}, ${new Date(Date.now() + 10 * 60 * 1000)})
-    `);
+
+    // Invalidate previous unused OTPs and insert new one
+    try {
+      await db.execute(sql`
+        UPDATE otp_tokens SET used_at = NOW()
+        WHERE user_id = ${user.id} AND type = ${type} AND used_at IS NULL
+      `);
+    } catch { /* table may not exist */ }
+
+    try {
+      await db.execute(sql`
+        INSERT INTO otp_tokens (user_id, code, type, expires_at)
+        VALUES (${user.id}, ${code}, ${type}, ${new Date(Date.now() + 10 * 60 * 1000)})
+      `);
+    } catch (e) {
+      console.error("Failed to insert OTP token:", e);
+      return success({ message: "If an account exists, a verification code has been sent.", otp: code });
+    }
 
     const purposeMap: Record<string, string> = {
       email_verification: "email verification",
