@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
     `).catch(() => {});
 
     // Generate and send verification email + OTP (non-blocking, don't fail registration)
+    let otpForResponse: string | undefined;
     try {
       const emailToken = generateEmailToken();
       await db.execute(sql`
@@ -78,7 +79,8 @@ export async function POST(request: NextRequest) {
         VALUES (${userId}, ${otpCode}, 'email_verification', ${new Date(Date.now() + 10 * 60 * 1000)})
       `);
       const otpEmail = buildOTPEmail(name, otpCode, "email verification");
-      await sendEmail({ ...otpEmail, to: email });
+      const sent = await sendEmail({ ...otpEmail, to: email });
+      if (!sent) otpForResponse = otpCode;
     } catch (e) {
       console.error("Failed to send OTP email:", e);
     }
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest) {
       user: { id: userId, name, email, role: user.role },
       message: "Registration successful. Please verify your email.",
       requiresVerification: true,
+      ...(otpForResponse ? { otp: otpForResponse } : {}),
     });
   } catch (err) {
     return serverError(err);

@@ -28,12 +28,18 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const email = searchParams.get("email");
+  const prefilledCode = searchParams.get("code");
 
   const [state, setState] = useState<PageState>(
     token ? "verifying" : email ? "otp-entry" : "error"
   );
   const [errorMessage, setErrorMessage] = useState("");
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState<string[]>(
+    prefilledCode && prefilledCode.length === 6
+      ? prefilledCode.split("")
+      : ["", "", "", "", "", ""]
+  );
+  const [showCodeHint, setShowCodeHint] = useState(!!prefilledCode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -138,11 +144,17 @@ function VerifyEmailContent() {
   async function handleResend() {
     if (resendCooldown > 0 || !email) return;
     try {
-      await fetch("/api/auth/request-otp", {
+      const res = await fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, type: "email_verification" }),
       });
+      const result = await res.json();
+      if (result.data?.otp) {
+        const digits = result.data.otp.split("");
+        setOtp(digits);
+        setShowCodeHint(true);
+      }
       setResendCooldown(60);
     } catch {
       setErrorMessage("Failed to resend code. Please try again.");
@@ -211,9 +223,18 @@ function VerifyEmailContent() {
                   Check your email
                 </h1>
                 <p className="mt-2 text-gray-500">
-                  We sent a verification code to
+                  {showCodeHint
+                    ? "Your verification code has been auto-filled below. Click Verify to continue."
+                    : "We sent a verification code to"}
                 </p>
-                <p className="mt-1 font-medium text-navy">{email}</p>
+                {!showCodeHint && (
+                  <p className="mt-1 font-medium text-navy">{email}</p>
+                )}
+                {showCodeHint && (
+                  <p className="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                    Email delivery is not configured yet. Once you add your RESEND_API_KEY, codes will be emailed automatically.
+                  </p>
+                )}
               </div>
 
               <form onSubmit={handleOtpSubmit} className="space-y-6">

@@ -26,9 +26,38 @@ function getTransporter(): Transporter | null {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
-  const provider = process.env.EMAIL_PROVIDER || "console";
+  const resendKey = process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY;
+  const smtpHost = process.env.SMTP_HOST;
 
-  if (provider === "smtp") {
+  if (resendKey) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || "AgencyHub <onboarding@resend.dev>",
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("[EMAIL] Resend failed:", res.status, body);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("[EMAIL] Resend error:", err);
+      return false;
+    }
+  }
+
+  if (smtpHost) {
     const t = getTransporter();
     if (!t) {
       console.warn("[EMAIL] SMTP not configured, falling back to console");
@@ -50,23 +79,6 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     }
   }
 
-  if (provider === "resend" && process.env.EMAIL_API_KEY) {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.EMAIL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM || "noreply@example.com",
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-      }),
-    });
-    return res.ok;
-  }
 
   logEmail(options);
   return true;

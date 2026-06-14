@@ -54,9 +54,12 @@ export async function POST(request: NextRequest) {
       code,
       purposeMap[type] || type
     );
-    await sendEmail({ ...emailData, to: email });
+    const sent = await sendEmail({ ...emailData, to: email });
 
-    return success({ message: "If an account exists, a verification code has been sent." });
+    return success({
+      message: "If an account exists, a verification code has been sent.",
+      ...(sent ? {} : { otp: code }),
+    });
   } catch (err) {
     return serverError(err);
   }
