@@ -81,7 +81,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
 
   logEmail(options);
-  return true;
+  return false;
 }
 
 function logEmail(options: EmailOptions) {

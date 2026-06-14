@@ -80,6 +80,32 @@ function VerifyEmailContent() {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
+  // Auto-submit prefilled OTP
+  useEffect(() => {
+    if (prefilledCode && prefilledCode.length === 6 && email && state === "otp-entry" && !hasVerified.current) {
+      hasVerified.current = true;
+      setIsSubmitting(true);
+      fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: prefilledCode, type: "email_verification" }),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.error) {
+            setErrorMessage(result.error);
+            setOtp(["", "", "", "", "", ""]);
+            setShowCodeHint(false);
+          } else {
+            window.location.href = "/dashboard";
+            return;
+          }
+        })
+        .catch(() => setErrorMessage("Something went wrong. Please try again."))
+        .finally(() => setIsSubmitting(false));
+    }
+  }, [prefilledCode, email, state]);
+
   // No token or email provided
   useEffect(() => {
     if (!token && !email) {
