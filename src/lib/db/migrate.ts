@@ -17,6 +17,179 @@ export async function runMigrations() {
     END $$;
   `);
 
+  // ─── Core tables ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255),
+      email VARCHAR(255) NOT NULL UNIQUE,
+      email_verified TIMESTAMPTZ,
+      image TEXT,
+      password_hash TEXT,
+      role user_role NOT NULL DEFAULT 'user',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      phone VARCHAR(50),
+      last_login_at TIMESTAMPTZ,
+      login_count INTEGER DEFAULT 0,
+      failed_login_attempts INTEGER DEFAULT 0,
+      locked_until TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS countries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
+      code VARCHAR(3) NOT NULL UNIQUE,
+      continent VARCHAR(50),
+      agency_count INTEGER DEFAULT 0
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS cities (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
+      country_id UUID NOT NULL REFERENCES countries(id),
+      state_province VARCHAR(255),
+      agency_count INTEGER DEFAULT 0,
+      latitude DECIMAL(10,7),
+      longitude DECIMAL(10,7)
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS services (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
+      description TEXT,
+      icon VARCHAR(50),
+      parent_id UUID,
+      agency_count INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS industries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
+      description TEXT,
+      icon VARCHAR(50),
+      agency_count INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS agencies (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
+      tagline VARCHAR(500),
+      description TEXT,
+      logo TEXT,
+      cover_image TEXT,
+      website VARCHAR(500),
+      email VARCHAR(255),
+      phone VARCHAR(50),
+      founded_year INTEGER,
+      company_size VARCHAR(50),
+      hourly_rate VARCHAR(50),
+      min_project_size INTEGER,
+      status VARCHAR(20) NOT NULL DEFAULT 'draft',
+      is_verified BOOLEAN NOT NULL DEFAULT false,
+      is_featured BOOLEAN NOT NULL DEFAULT false,
+      is_premium BOOLEAN NOT NULL DEFAULT false,
+      country_id UUID REFERENCES countries(id),
+      city_id UUID REFERENCES cities(id),
+      address TEXT,
+      latitude DECIMAL(10,7),
+      longitude DECIMAL(10,7),
+      social_links JSONB,
+      meta_title VARCHAR(70),
+      meta_description VARCHAR(160),
+      average_rating DECIMAL(3,2) DEFAULT 0,
+      total_reviews INTEGER DEFAULT 0,
+      total_leads INTEGER DEFAULT 0,
+      profile_views INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS agency_services (
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+      PRIMARY KEY (agency_id, service_id)
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS agency_industries (
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      industry_id UUID NOT NULL REFERENCES industries(id) ON DELETE CASCADE,
+      PRIMARY KEY (agency_id, industry_id)
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS leads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id),
+      company_name VARCHAR(255) NOT NULL,
+      contact_name VARCHAR(255) NOT NULL,
+      contact_email VARCHAR(255) NOT NULL,
+      contact_phone VARCHAR(50),
+      project_description TEXT NOT NULL,
+      budget VARCHAR(100),
+      timeline VARCHAR(100),
+      service_ids JSONB,
+      industry_id UUID,
+      country_id UUID,
+      city_id UUID,
+      status VARCHAR(20) NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      overall_rating DECIMAL(3,2) NOT NULL,
+      quality_rating DECIMAL(3,2),
+      communication_rating DECIMAL(3,2),
+      value_rating DECIMAL(3,2),
+      timeliness_rating DECIMAL(3,2),
+      title VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      project_type VARCHAR(255),
+      project_budget VARCHAR(100),
+      project_duration VARCHAR(100),
+      company_name VARCHAR(255),
+      company_size VARCHAR(50),
+      is_verified BOOLEAN NOT NULL DEFAULT false,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      helpful_count INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+
   // ─── Ensure users table has needed columns ───
   await db.execute(sql`
     DO $$ BEGIN

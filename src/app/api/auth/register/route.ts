@@ -58,35 +58,39 @@ export async function POST(request: NextRequest) {
       INSERT INTO notification_preferences (user_id) VALUES (${userId})
     `).catch(() => {});
 
-    // Generate email verification token
-    const emailToken = generateEmailToken();
-    await db.execute(sql`
-      INSERT INTO email_verification_tokens (user_id, token, expires_at)
-      VALUES (${userId}, ${emailToken}, ${new Date(Date.now() + 24 * 60 * 60 * 1000)})
-    `);
+    // Generate and send verification email + OTP (non-blocking, don't fail registration)
+    try {
+      const emailToken = generateEmailToken();
+      await db.execute(sql`
+        INSERT INTO email_verification_tokens (user_id, token, expires_at)
+        VALUES (${userId}, ${emailToken}, ${new Date(Date.now() + 24 * 60 * 60 * 1000)})
+      `);
+      const verificationEmail = buildVerificationEmail(name, emailToken);
+      await sendEmail({ ...verificationEmail, to: email });
+    } catch (e) {
+      console.error("Failed to send verification email:", e);
+    }
 
-    // Generate OTP for email verification
-    const otpCode = generateOTP();
-    await db.execute(sql`
-      INSERT INTO otp_tokens (user_id, code, type, expires_at)
-      VALUES (${userId}, ${otpCode}, 'email_verification', ${new Date(Date.now() + 10 * 60 * 1000)})
-    `);
+    try {
+      const otpCode = generateOTP();
+      await db.execute(sql`
+        INSERT INTO otp_tokens (user_id, code, type, expires_at)
+        VALUES (${userId}, ${otpCode}, 'email_verification', ${new Date(Date.now() + 10 * 60 * 1000)})
+      `);
+      const otpEmail = buildOTPEmail(name, otpCode, "email verification");
+      await sendEmail({ ...otpEmail, to: email });
+    } catch (e) {
+      console.error("Failed to send OTP email:", e);
+    }
 
-    // Send verification email with link and OTP
-    const verificationEmail = buildVerificationEmail(name, emailToken);
-    await sendEmail({ ...verificationEmail, to: email });
-
-    const otpEmail = buildOTPEmail(name, otpCode, "email verification");
-    await sendEmail({ ...otpEmail, to: email });
-
-    await createAuditLog({
+    createAuditLog({
       userId,
       action: "register",
       entityType: "user",
       entityId: userId,
       newValues: { email, role },
       ipAddress: getClientIp(request),
-    });
+    }).catch(() => {});
 
     return created({
       user: { id: userId, name, email, role: user.role },
