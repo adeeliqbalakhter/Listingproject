@@ -8,7 +8,7 @@ const JWT_SECRET = jwtSecretValue ? new TextEncoder().encode(jwtSecretValue) : n
 const protectedPaths = ["/dashboard", "/admin"];
 const adminPaths = ["/admin"];
 const authPaths = ["/auth/signin", "/auth/signup"];
-const verifyPath = "/auth/verify-email";
+const verifyPaths = ["/auth/verify-email", "/auth/verify-otp"];
 
 const adminRoles = ["super_admin", "admin"];
 
@@ -41,7 +41,7 @@ export async function proxy(request: NextRequest) {
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
   const isAdminPath = adminPaths.some((p) => pathname.startsWith(p));
   const isAuthPath = authPaths.some((p) => pathname.startsWith(p));
-  const isVerifyPage = pathname.startsWith(verifyPath);
+  const isVerifyPage = verifyPaths.some((p) => pathname.startsWith(p));
 
   // Redirect unauthenticated users from protected pages
   if (isProtected && !hasSession) {
@@ -60,8 +60,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthPath && hasSession) {
+  // Redirect authenticated users away from auth pages (but allow verify pages)
+  if (isAuthPath && hasSession && !isVerifyPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

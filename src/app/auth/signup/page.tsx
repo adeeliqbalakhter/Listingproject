@@ -66,8 +66,16 @@ export default function SignUpPage() {
     }
     if (!form.password) {
       next.password = "Password is required";
-    } else if (form.password.length < 8) {
-      next.password = "Password must be at least 8 characters";
+    } else {
+      const missing: string[] = [];
+      if (form.password.length < 8) missing.push("at least 8 characters");
+      if (!/[A-Z]/.test(form.password)) missing.push("one uppercase letter");
+      if (!/[a-z]/.test(form.password)) missing.push("one lowercase letter");
+      if (!/[0-9]/.test(form.password)) missing.push("one number");
+      if (!/[^A-Za-z0-9]/.test(form.password)) missing.push("one special character");
+      if (missing.length > 0) {
+        next.password = `Password must contain: ${missing.join(", ")}`;
+      }
     }
     if (!form.confirmPassword) {
       next.confirmPassword = "Please confirm your password";
@@ -99,10 +107,32 @@ export default function SignUpPage() {
       });
       const result = await res.json();
       if (!res.ok) {
-        setErrors({ email: result.error || 'Registration failed' });
+        let errorMessage = result.error || 'Registration failed';
+        if (result.details) {
+          const fieldErrors: FormErrors = {};
+          for (const [field, value] of Object.entries(result.details)) {
+            const errs = (value as { _errors?: string[] })?._errors;
+            if (errs && errs.length > 0) {
+              if (field in fieldErrors || ['name', 'email', 'password', 'confirmPassword'].includes(field)) {
+                fieldErrors[field as keyof FormErrors] = errs[0];
+              } else {
+                errorMessage = errs[0];
+              }
+            }
+          }
+          if (Object.keys(fieldErrors).length > 0) {
+            setErrors(fieldErrors);
+            return;
+          }
+        }
+        setErrors({ email: errorMessage });
         return;
       }
-      window.location.href = '/dashboard';
+      if (result.data?.requiresVerification || result.requiresVerification) {
+        window.location.href = `/auth/verify-email?email=${encodeURIComponent(form.email)}`;
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch {
       setErrors({ email: 'Something went wrong. Please try again.' });
     } finally {
@@ -116,13 +146,16 @@ export default function SignUpPage() {
     let score = 0;
     if (p.length >= 8) score++;
     if (/[A-Z]/.test(p)) score++;
+    if (/[a-z]/.test(p)) score++;
     if (/[0-9]/.test(p)) score++;
     if (/[^A-Za-z0-9]/.test(p)) score++;
-    if (score <= 1) return { label: "Weak", width: "w-1/4", color: "bg-danger" };
+    if (score <= 1) return { label: "Weak", width: "w-1/5", color: "bg-danger" };
     if (score === 2)
-      return { label: "Fair", width: "w-1/2", color: "bg-warning" };
+      return { label: "Fair", width: "w-2/5", color: "bg-warning" };
     if (score === 3)
-      return { label: "Good", width: "w-3/4", color: "bg-brand" };
+      return { label: "Fair", width: "w-3/5", color: "bg-warning" };
+    if (score === 4)
+      return { label: "Good", width: "w-4/5", color: "bg-brand" };
     return { label: "Strong", width: "w-full", color: "bg-success" };
   })();
 
