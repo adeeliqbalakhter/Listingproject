@@ -390,6 +390,63 @@ export async function runMigrations() {
     END $$;
   `);
 
+  // ─── Plans (billing / monetization) ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS plans (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      tier VARCHAR(20) NOT NULL CHECK (tier IN ('free', 'premium', 'pro', 'enterprise')),
+      monthly_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      yearly_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      monthly_lead_credits INTEGER NOT NULL DEFAULT 0,
+      max_portfolio_items INTEGER NOT NULL DEFAULT 5,
+      max_team_members INTEGER NOT NULL DEFAULT 1,
+      features JSONB DEFAULT '{}',
+      is_active BOOLEAN DEFAULT true,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ─── Subscriptions ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      plan_id UUID NOT NULL REFERENCES plans(id),
+      status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'canceled', 'past_due', 'trialing', 'expired')),
+      billing_cycle VARCHAR(10) DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly', 'yearly')),
+      current_period_start TIMESTAMPTZ DEFAULT NOW(),
+      current_period_end TIMESTAMPTZ,
+      canceled_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(agency_id)
+    )
+  `);
+
+  // ─── Lead credit transactions ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS lead_credit_transactions (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      amount INTEGER NOT NULL,
+      type VARCHAR(30) NOT NULL CHECK (type IN ('grant', 'consume', 'refund', 'reset')),
+      description TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ─── Seed default plans ───
+  await db.execute(sql`
+    INSERT INTO plans (name, tier, monthly_price, yearly_price, monthly_lead_credits, max_portfolio_items, max_team_members, features, sort_order) VALUES
+      ('Free', 'free', 0, 0, 1, 5, 1, '{"basicProfile":true,"reviews":true,"basicAnalytics":true}', 1),
+      ('Premium', 'premium', 49, 470, 10, 20, 5, '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true}', 2),
+      ('Pro', 'pro', 149, 1430, 30, -1, -1, '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"featuredPlacement":true,"apiAccess":true,"advancedAnalytics":true}', 3),
+      ('Enterprise', 'enterprise', 499, 4790, -1, -1, -1, '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"featuredPlacement":true,"apiAccess":true,"advancedAnalytics":true,"dedicatedManager":true,"sla":true,"customBranding":true}', 4)
+    ON CONFLICT DO NOTHING
+  `);
+
   // ─── Seed RBAC permissions ───
   await seedPermissions(db);
 

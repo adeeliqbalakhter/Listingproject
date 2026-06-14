@@ -5,6 +5,7 @@ import { requireAgencyAccess } from "@/lib/auth/guards";
 import { z } from "zod";
 import { createAuditLog, getClientIp } from "@/lib/services/audit";
 import { success, created, error, serverError } from "@/lib/api/response";
+import { checkTeamLimit } from "@/lib/subscriptions/gates";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const authResult = await requireAgencyAccess(request, id);
     if ("error" in authResult) return authResult.error;
     const { user } = authResult;
+
+    const teamCheck = await checkTeamLimit(id);
+    if (!teamCheck.allowed) {
+      return Response.json({ error: "Team member limit reached for your plan", limit: teamCheck.limit }, { status: 403 });
+    }
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();

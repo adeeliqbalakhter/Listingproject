@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { requireAgencyAccess } from "@/lib/auth/guards";
 import { z } from "zod";
 import { success, created, error, serverError } from "@/lib/api/response";
+import { checkPortfolioLimit } from "@/lib/subscriptions/gates";
 
 const portfolioSchema = z.object({
   title: z.string().min(2).max(255),
@@ -35,6 +36,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const authResult = await requireAgencyAccess(request, id);
     if ("error" in authResult) return authResult.error;
+
+    const portfolioCheck = await checkPortfolioLimit(id);
+    if (!portfolioCheck.allowed) {
+      return Response.json({ error: "Portfolio item limit reached for your plan", limit: portfolioCheck.limit }, { status: 403 });
+    }
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
