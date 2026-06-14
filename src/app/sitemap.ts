@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com";
 
   const staticPages = [
@@ -26,7 +28,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/digital-marketing-agencies",
   ];
 
-  return [
+  const staticEntries: MetadataRoute.Sitemap = [
     ...staticPages.map((path) => ({
       url: `${baseUrl}${path}`,
       lastModified: new Date(),
@@ -40,4 +42,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     })),
   ];
+
+  let agencyEntries: MetadataRoute.Sitemap = [];
+
+  try {
+    if (hasDb()) {
+      const db = getDb();
+      const rows = await db.execute(
+        sql`SELECT slug, updated_at FROM agencies WHERE status = 'active' AND deleted_at IS NULL`
+      );
+      const agencies = rows as unknown as Array<{ slug: string; updated_at: string | null }>;
+
+      agencyEntries = agencies.map((agency) => ({
+        url: `${baseUrl}/agencies/${agency.slug}`,
+        lastModified: agency.updated_at ? new Date(agency.updated_at) : new Date(),
+        changeFrequency: "weekly" as const,
+        priority: 0.7,
+      }));
+    }
+  } catch {
+    // DB unavailable — return static + service URLs only
+  }
+
+  return [...staticEntries, ...agencyEntries];
 }

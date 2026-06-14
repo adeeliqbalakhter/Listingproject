@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: "Blog - Marketing Agency Insights & Industry News",
   description:
     "Expert insights on hiring marketing agencies, industry trends, case studies, and tips for growing your business with the right agency partner.",
+  alternates: {
+    canonical: "/blog",
+  },
 };
 
 const featuredPost = {

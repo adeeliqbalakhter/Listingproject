@@ -79,9 +79,41 @@ const forAgencies = [
   },
 ];
 
+const howToStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to Find a Marketing Agency on AgencyHub",
+  step: [
+    {
+      "@type": "HowToStep",
+      name: "Submit Your Project",
+      text: "Tell us what services you need, your budget, timeline, and goals. It takes less than 2 minutes.",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Get Matched",
+      text: "We match you with agencies that specialize in your needs, industry, and budget range.",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Receive Proposals",
+      text: "Qualified agencies send you tailored proposals. Compare approaches, timelines, and pricing.",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Hire with Confidence",
+      text: "Choose your ideal agency partner backed by verified reviews and detailed profiles.",
+    },
+  ],
+};
+
 export default function HowItWorksPage() {
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToStructuredData) }}
+      />
       <section className="bg-navy py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-white">

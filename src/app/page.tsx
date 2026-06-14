@@ -50,8 +50,36 @@ const howItWorks = [
 ];
 
 export default function HomePage() {
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "AgencyHub",
+      url: "https://www.agencyhub.com",
+      description:
+        "Find the perfect marketing agency for your business. Compare top-rated agencies worldwide with verified reviews and free quotes.",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: "https://www.agencyhub.com/agencies?search={search_term_string}",
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "AgencyHub",
+      url: "https://www.agencyhub.com",
+      description:
+        "AgencyHub is the leading marketing agency directory. Browse verified agencies, read reviews, and get free quotes.",
+    },
+  ];
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Hero Section */}
       <section className="relative bg-navy overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-navy via-navy-light to-navy opacity-90" />

@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: "About Us",
   description:
     "AgencyHub is the world's largest marketing agency directory. We help businesses find and hire the perfect marketing agency for their needs.",
+  alternates: {
+    canonical: "/about",
+  },
 };
 
 const values = [

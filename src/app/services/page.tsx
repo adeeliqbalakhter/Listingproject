@@ -19,6 +19,32 @@ export const metadata: Metadata = {
   title: "Marketing Services - Find Agencies by Specialty",
   description:
     "Browse marketing agencies by service category. Find specialists in SEO, PPC, social media, web design, content marketing, email, branding, and more.",
+  keywords: [
+    "marketing services",
+    "SEO agencies",
+    "PPC agencies",
+    "social media marketing",
+    "web design agencies",
+    "content marketing",
+    "email marketing",
+    "branding agencies",
+    "digital marketing services",
+  ],
+  openGraph: {
+    title: "Marketing Services - Find Agencies by Specialty | AgencyHub",
+    description:
+      "Browse marketing agencies by service category. Find specialists in SEO, PPC, social media, web design, content marketing, email, branding, and more.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Marketing Services - Find Agencies by Specialty | AgencyHub",
+    description:
+      "Browse marketing agencies by service category. Find specialists in SEO, PPC, social media, web design, content marketing, email, branding, and more.",
+  },
+  alternates: {
+    canonical: "/services",
+  },
 };
 
 const services = [

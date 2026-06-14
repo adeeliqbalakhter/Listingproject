@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: "Pricing",
   description:
     "Choose the perfect plan for your agency. Free to list, with premium options for more visibility, leads, and features.",
+  alternates: {
+    canonical: "/pricing",
+  },
 };
 
 const plans = [
@@ -87,9 +90,60 @@ const plans = [
   },
 ];
 
+const faqStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "Can I start for free?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes! Create your agency profile completely free. The Free plan includes a basic profile, portfolio showcase, reviews, and 1 lead credit per month.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What are lead credits?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Lead credits allow you to respond to business inquiries. When a potential client submits a project request matching your services, you use 1 credit to view their contact details and respond.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I cancel anytime?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Absolutely. All paid plans are month-to-month with no long-term commitment. Cancel anytime from your dashboard and you'll keep access until the end of your billing period.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Do you offer refunds?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "We offer a 14-day money-back guarantee on all paid plans. If you're not satisfied, contact us within 14 days for a full refund.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What payment methods do you accept?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "We accept all major credit cards, debit cards, and PayPal through our secure payment processor, Stripe.",
+      },
+    },
+  ],
+};
+
 export default function PricingPage() {
   return (
     <div className="bg-gray-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
+      />
       {/* Header */}
       <section className="bg-navy py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

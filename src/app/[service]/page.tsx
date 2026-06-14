@@ -222,8 +222,49 @@ export default async function ServicePage({ params }: { params: Params }) {
 
   const agencies = await fetchAgenciesForService(service.serviceSlug);
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com";
+
+  const collectionJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: service.title,
+      description: service.description,
+      url: `${baseUrl}/${serviceSlug}`,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListElement: agencies.map((agency, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: agency.name,
+        url: `${baseUrl}/agencies/${agency.slug}`,
+      })),
+    },
+  ];
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: baseUrl },
+      { "@type": "ListItem", position: 2, name: "Services", item: `${baseUrl}/services` },
+      { "@type": "ListItem", position: 3, name: service.name },
+    ],
+  };
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }}
+      />
+
       {/* Hero */}
       <section className="bg-navy py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

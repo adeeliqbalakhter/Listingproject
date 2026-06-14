@@ -193,6 +193,29 @@ export async function generateMetadata({
 }
 
 // ---------------------------------------------------------------------------
+// Static generation
+// ---------------------------------------------------------------------------
+
+export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  try {
+    const { hasDb, getDb } = await import("@/lib/db");
+    const { sql } = await import("drizzle-orm");
+    if (!hasDb()) return [];
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT slug FROM agencies WHERE status = 'active' AND deleted_at IS NULL LIMIT 500`
+    );
+    return (rows as unknown as Array<{ slug: string }>).map((row) => ({
+      slug: row.slug,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helper components
 // ---------------------------------------------------------------------------
 
@@ -297,6 +320,18 @@ export default async function AgencyProfilePage({
     agency.logo ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(agency.name)}&size=128&background=2563EB&color=fff&bold=true&format=svg`;
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com";
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: baseUrl },
+      { "@type": "ListItem", position: 2, name: "Agencies", item: `${baseUrl}/agencies` },
+      { "@type": "ListItem", position: 3, name: agency.name },
+    ],
+  };
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -332,6 +367,12 @@ export default async function AgencyProfilePage({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      {isActive && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
       )}
 

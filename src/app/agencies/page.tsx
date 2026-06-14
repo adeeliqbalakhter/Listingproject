@@ -34,6 +34,9 @@ export const metadata: Metadata = {
     description:
       "Explore top-rated marketing agencies worldwide. Filter by service, location, budget, and company size.",
   },
+  alternates: {
+    canonical: "/agencies",
+  },
 };
 
 interface Agency {
@@ -288,8 +291,21 @@ export default async function AgenciesPage({
 
   const activeFilterCount = [service, location, size, budget].filter(Boolean).length;
 
+  const agenciesJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Marketing Agency Directory",
+    description:
+      "Explore top-rated marketing agencies worldwide. Filter by service, location, budget, and company size. Read verified reviews and get free quotes.",
+    url: "https://www.agencyhub.com/agencies",
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(agenciesJsonLd) }}
+      />
       {/* Page header */}
       <section className="bg-navy">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
