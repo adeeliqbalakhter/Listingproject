@@ -47,12 +47,20 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       });
       if (!res.ok) {
         const body = await res.text();
-        console.error("[EMAIL] Resend failed:", res.status, body);
+        console.error("[EMAIL] Resend API failed:", res.status, res.statusText);
+        console.error("[EMAIL] Resend response body:", body);
+        console.error("[EMAIL] Resend request details:", {
+          from: process.env.EMAIL_FROM || "AgencyHub <onboarding@resend.dev>",
+          to: options.to,
+          subject: options.subject,
+        });
         return false;
       }
+      const responseBody = await res.json();
+      console.log("[EMAIL] Resend success:", JSON.stringify(responseBody));
       return true;
     } catch (err) {
-      console.error("[EMAIL] Resend error:", err);
+      console.error("[EMAIL] Resend network/fetch error:", err);
       return false;
     }
   }

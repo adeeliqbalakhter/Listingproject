@@ -42,6 +42,8 @@ function VerifyEmailContent() {
   const [showCodeHint, setShowCodeHint] = useState(!!prefilledCode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [autoRequesting, setAutoRequesting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const hasVerified = useRef(false);
 
@@ -86,6 +88,8 @@ function VerifyEmailContent() {
     if (state !== "otp-entry" || !email || hasRequested.current) return;
     if (prefilledCode && prefilledCode.length === 6) return;
     hasRequested.current = true;
+    setAutoRequesting(true);
+    setStatusMessage("Requesting verification code...");
     fetch("/api/auth/request-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -97,9 +101,16 @@ function VerifyEmailContent() {
           const digits = result.data.otp.split("");
           setOtp(digits);
           setShowCodeHint(true);
+          setStatusMessage("Code received, verifying...");
+        } else {
+          setStatusMessage("Code sent to your email");
+          setAutoRequesting(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setStatusMessage("");
+        setAutoRequesting(false);
+      });
   }, [state, email, prefilledCode]);
 
   // Auto-submit prefilled OTP (from URL or auto-request)
@@ -110,6 +121,7 @@ function VerifyEmailContent() {
     if (!prefilledCode && !showCodeHint) return;
     hasAutoSubmitted.current = true;
     setIsSubmitting(true);
+    setStatusMessage("Verifying code...");
     fetch("/api/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,13 +134,18 @@ function VerifyEmailContent() {
           setOtp(["", "", "", "", "", ""]);
           setShowCodeHint(false);
           hasAutoSubmitted.current = false;
+          setStatusMessage("");
+          setAutoRequesting(false);
         } else {
+          setStatusMessage("Verified! Redirecting...");
           window.location.href = "/dashboard";
         }
       })
       .catch(() => {
         setErrorMessage("Something went wrong. Please try again.");
         hasAutoSubmitted.current = false;
+        setStatusMessage("");
+        setAutoRequesting(false);
       })
       .finally(() => setIsSubmitting(false));
   }, [otp, email, state, prefilledCode, showCodeHint, isSubmitting]);
@@ -196,6 +213,8 @@ function VerifyEmailContent() {
 
   async function handleResend() {
     if (resendCooldown > 0 || !email) return;
+    setStatusMessage("Requesting verification code...");
+    setErrorMessage("");
     try {
       const res = await fetch("/api/auth/request-otp", {
         method: "POST",
@@ -205,12 +224,17 @@ function VerifyEmailContent() {
       const result = await res.json();
       if (result.data?.otp) {
         const digits = result.data.otp.split("");
+        hasAutoSubmitted.current = false;
         setOtp(digits);
         setShowCodeHint(true);
+        setStatusMessage("Code received, verifying...");
+      } else {
+        setStatusMessage("Code sent to your email");
       }
       setResendCooldown(60);
     } catch {
       setErrorMessage("Failed to resend code. Please try again.");
+      setStatusMessage("");
     }
   }
 
@@ -268,22 +292,31 @@ function VerifyEmailContent() {
             <div className="space-y-8">
               <div className="text-center">
                 <div className="flex justify-center mb-6">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
-                    <Mail className="h-8 w-8 text-brand" />
-                  </div>
+                  {autoRequesting ? (
+                    <span className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-brand border-t-transparent" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
+                      <Mail className="h-8 w-8 text-brand" />
+                    </div>
+                  )}
                 </div>
                 <h1 className="text-3xl font-bold text-navy">
-                  Check your email
+                  {autoRequesting ? "Verifying your email" : "Check your email"}
                 </h1>
-                <p className="mt-2 text-gray-500">
-                  {showCodeHint
-                    ? "Your verification code has been auto-filled below. Click Verify to continue."
-                    : "We sent a verification code to"}
-                </p>
-                {!showCodeHint && (
+                {statusMessage && (
+                  <p className="mt-2 text-sm font-medium text-brand">{statusMessage}</p>
+                )}
+                {!autoRequesting && (
+                  <p className="mt-2 text-gray-500">
+                    {showCodeHint
+                      ? "Your verification code has been auto-filled below. Click Verify to continue."
+                      : "We sent a verification code to"}
+                  </p>
+                )}
+                {!showCodeHint && !autoRequesting && (
                   <p className="mt-1 font-medium text-navy">{email}</p>
                 )}
-                {showCodeHint && (
+                {showCodeHint && !autoRequesting && (
                   <p className="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
                     Email delivery is not configured yet. Once you add your RESEND_API_KEY, codes will be emailed automatically.
                   </p>
