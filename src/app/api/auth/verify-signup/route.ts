@@ -1,0 +1,147 @@
+import { NextRequest, NextResponse } from "next/server";
+import { hasDb, getDb } from "@/lib/db";
+import { sql } from "drizzle-orm";
+import { generateAccessToken, generateRefreshToken } from "@/lib/auth/tokens";
+import { getClientIp } from "@/lib/services/audit";
+import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "@/lib/services/rate-limit";
+import { error, serverError } from "@/lib/api/response";
+import { z } from "zod";
+
+const verifySignupSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const rl = checkRateLimit(request, RATE_LIMITS.otp, "verify-signup");
+    if (!rl.allowed) return rateLimitResponse(rl.resetAt);
+
+    if (!hasDb()) return error("Database not available", 503);
+    const db = getDb();
+
+    const body = await request.json();
+    const parsed = verifySignupSchema.safeParse(body);
+    if (!parsed.success) {
+      return error("Invalid input", 400);
+    }
+
+    const { email, code } = parsed.data;
+
+    // Look up latest valid signup OTP
+    const otpRows = await db.execute(
+      sql`SELECT * FROM signup_otps
+          WHERE email = ${email} AND used_at IS NULL AND expires_at > NOW()
+          ORDER BY created_at DESC LIMIT 1`
+    );
+    const otpRecord = (otpRows as unknown as Array<Record<string, unknown>>)[0];
+
+    if (!otpRecord) {
+      return error("Invalid or expired code. Please request a new one.", 400);
+    }
+
+    // Check max attempts
+    if ((otpRecord.attempts as number) >= 5) {
+      await db.execute(
+        sql`UPDATE signup_otps SET used_at = NOW() WHERE id = ${otpRecord.id}`
+      );
+      return error("Too many attempts. Please request a new code.", 400);
+    }
+
+    // Check code match
+    if (otpRecord.code !== code) {
+      await db.execute(
+        sql`UPDATE signup_otps SET attempts = attempts + 1 WHERE id = ${otpRecord.id}`
+      );
+      return error("Invalid verification code", 400);
+    }
+
+    // Mark OTP as used
+    await db.execute(
+      sql`UPDATE signup_otps SET used_at = NOW() WHERE id = ${otpRecord.id}`
+    );
+
+    // Race condition check: email might have been taken between OTP request and verification
+    const existingRows = await db.execute(
+      sql`SELECT id FROM users WHERE email = ${email} AND deleted_at IS NULL`
+    );
+    const existing = (existingRows as unknown as Array<Record<string, unknown>>);
+    if (existing.length > 0) {
+      return error("Email already registered", 409);
+    }
+
+    // Create user with email_verified = NOW()
+    const userRows = await db.execute(
+      sql`INSERT INTO users (name, email, password_hash, role, is_active, email_verified)
+          VALUES (${otpRecord.name}, ${email}, ${otpRecord.password_hash}, ${otpRecord.role}, true, NOW())
+          RETURNING id, name, email, role`
+    );
+    const user = (userRows as unknown as Array<Record<string, unknown>>)[0];
+
+    // Create user_profiles
+    try {
+      await db.execute(sql`INSERT INTO user_profiles (user_id) VALUES (${user.id})`);
+    } catch (e) {
+      console.error("[VERIFY-SIGNUP] Failed to create user_profiles:", e);
+    }
+
+    // Create notification_preferences
+    try {
+      await db.execute(sql`INSERT INTO notification_preferences (user_id) VALUES (${user.id})`);
+    } catch (e) {
+      console.error("[VERIFY-SIGNUP] Failed to create notification_preferences:", e);
+    }
+
+    // Generate tokens
+    const accessToken = await generateAccessToken({
+      sub: user.id as string,
+      email: user.email as string,
+      role: user.role as string,
+      emailVerified: true,
+    });
+
+    const refresh = await generateRefreshToken();
+    const ip = getClientIp(request);
+    const ua = request.headers.get("user-agent") || "";
+
+    // Store refresh token
+    await db.execute(sql`
+      INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
+      VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt})
+    `);
+
+    // Build response with cookies (matching login route pattern)
+    const response = NextResponse.json({
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          emailVerified: true,
+        },
+        message: "Account created and verified successfully",
+      },
+    });
+
+    const secureCookie = process.env.NODE_ENV === "production";
+    response.cookies.set("access_token", accessToken, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+    response.cookies.set("refresh_token", refresh.token, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+
+    return response;
+  } catch (err) {
+    return serverError(err);
+  }
+}

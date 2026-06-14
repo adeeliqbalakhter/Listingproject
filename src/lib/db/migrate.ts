@@ -202,6 +202,23 @@ export async function runMigrations() {
     END $$;
   `);
 
+  // ─── Signup OTPs (pre-registration verification) ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS signup_otps (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email VARCHAR(255) NOT NULL,
+      code VARCHAR(6) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      password_hash TEXT NOT NULL,
+      role VARCHAR(50) NOT NULL DEFAULT 'user',
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_signup_otps_email ON signup_otps(email)`);
+
   // ─── Refresh tokens ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS refresh_tokens (

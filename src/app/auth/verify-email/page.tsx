@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  Mail,
   CheckCircle,
   AlertCircle,
   ArrowRight,
@@ -14,7 +13,7 @@ import {
   Shield,
 } from "lucide-react";
 
-type PageState = "verifying" | "verified" | "otp-entry" | "error";
+type PageState = "verifying" | "verified" | "error";
 
 export default function VerifyEmailPage() {
   return (
@@ -27,19 +26,14 @@ export default function VerifyEmailPage() {
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const email = searchParams.get("email");
 
   const [state, setState] = useState<PageState>(
-    token ? "verifying" : email ? "otp-entry" : "error"
+    token ? "verifying" : "error"
   );
-  const [errorMessage, setErrorMessage] = useState("");
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [codeSent, setCodeSent] = useState(false);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [errorMessage, setErrorMessage] = useState(
+    token ? "" : "Invalid verification link. Please sign in to request a new verification email."
+  );
   const hasVerified = useRef(false);
-  const hasRequestedOtp = useRef(false);
 
   // Auto-verify token on mount
   const verifyToken = useCallback(async () => {
@@ -68,107 +62,6 @@ function VerifyEmailContent() {
   useEffect(() => {
     verifyToken();
   }, [verifyToken]);
-
-  // Auto-send OTP email on mount
-  useEffect(() => {
-    if (state !== "otp-entry" || !email || hasRequestedOtp.current) return;
-    hasRequestedOtp.current = true;
-    fetch("/api/auth/request-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, type: "email_verification" }),
-    })
-      .then(() => {
-        setCodeSent(true);
-        inputRefs.current[0]?.focus();
-      })
-      .catch(() => {});
-  }, [state, email]);
-
-  // Resend cooldown timer
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
-
-  // No token or email provided
-  useEffect(() => {
-    if (!token && !email) {
-      setErrorMessage("Invalid verification link. Please check your email and try again.");
-    }
-  }, [token, email]);
-
-  function handleOtpChange(index: number, value: string) {
-    if (!/^\d*$/.test(value)) return;
-    const newOtp = [...otp];
-    if (value.length > 1) {
-      const digits = value.slice(0, 6).split("");
-      digits.forEach((d, i) => {
-        if (i + index < 6) newOtp[i + index] = d;
-      });
-      setOtp(newOtp);
-      const nextIndex = Math.min(index + digits.length, 5);
-      inputRefs.current[nextIndex]?.focus();
-      return;
-    }
-    newOtp[index] = value;
-    setOtp(newOtp);
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  }
-
-  async function handleOtpSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const code = otp.join("");
-    if (code.length !== 6) return;
-    setIsSubmitting(true);
-    setErrorMessage("");
-    try {
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, type: "email_verification" }),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        setErrorMessage(result.error || "Invalid code. Please try again.");
-        setOtp(["", "", "", "", "", ""]);
-        inputRefs.current[0]?.focus();
-        return;
-      }
-      setState("verified");
-    } catch {
-      setErrorMessage("Something went wrong. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleResend() {
-    if (resendCooldown > 0 || !email) return;
-    setErrorMessage("");
-    try {
-      await fetch("/api/auth/request-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, type: "email_verification" }),
-      });
-      setCodeSent(true);
-      setResendCooldown(60);
-      setOtp(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
-    } catch {
-      setErrorMessage("Failed to resend code. Please try again.");
-    }
-  }
 
   return (
     <div className="min-h-[calc(100vh-160px)] flex">
@@ -216,106 +109,6 @@ function VerifyEmailContent() {
                 Continue to Dashboard
                 <ArrowRight className="h-4 w-4" />
               </Link>
-            </div>
-          )}
-
-          {/* OTP entry state */}
-          {state === "otp-entry" && (
-            <div className="space-y-8">
-              <div className="text-center">
-                <div className="flex justify-center mb-6">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
-                    <Mail className="h-8 w-8 text-brand" />
-                  </div>
-                </div>
-                <h1 className="text-3xl font-bold text-navy">
-                  Check your email
-                </h1>
-                <p className="mt-2 text-gray-500">
-                  {codeSent
-                    ? "We sent a 6-digit verification code to"
-                    : "Sending verification code to"}
-                </p>
-                <p className="mt-1 font-medium text-navy">{email}</p>
-                {codeSent && (
-                  <p className="mt-2 text-xs text-gray-400">
-                    Check your inbox and spam folder. The code expires in 10 minutes.
-                  </p>
-                )}
-              </div>
-
-              <form onSubmit={handleOtpSubmit} className="space-y-6">
-                {/* OTP inputs */}
-                <div>
-                  <label className="block text-sm font-medium text-navy text-center mb-3">
-                    Enter verification code
-                  </label>
-                  <div className="flex justify-center gap-3">
-                    {otp.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={(el) => { inputRefs.current[i] = el; }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(i, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                        onPaste={(e) => {
-                          e.preventDefault();
-                          const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
-                          if (pasted) handleOtpChange(i, pasted);
-                        }}
-                        className="h-14 w-12 rounded-lg border border-gray-200 bg-white text-center text-xl font-semibold text-navy shadow-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand"
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {errorMessage && (
-                  <div className="flex items-center gap-2 rounded-lg bg-danger/5 border border-danger/20 px-4 py-3">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
-                    <p className="text-sm text-danger">{errorMessage}</p>
-                  </div>
-                )}
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting || otp.join("").length !== 6}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? (
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <>
-                      Verify
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Resend */}
-              <div className="text-center">
-                <p className="text-sm text-gray-500">
-                  Didn&apos;t receive the code?{" "}
-                  {resendCooldown > 0 ? (
-                    <span className="text-gray-400">
-                      Resend in {resendCooldown}s
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      className="inline-flex items-center gap-1 font-semibold text-brand hover:text-brand-dark transition"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Resend Code
-                    </button>
-                  )}
-                </p>
-              </div>
             </div>
           )}
 
