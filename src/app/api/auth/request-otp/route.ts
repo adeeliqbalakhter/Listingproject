@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       `);
     } catch (e) {
       console.error("Failed to insert OTP token:", e);
-      return success({ message: "If an account exists, a verification code has been sent.", otp: code });
+      return success({ message: "If an account exists, a verification code has been sent." });
     }
 
     const purposeMap: Record<string, string> = {
