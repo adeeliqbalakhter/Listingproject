@@ -14,6 +14,7 @@ import {
   MessageSquare,
   LogOut,
 } from "lucide-react";
+import { useAuth } from "@/components/providers/SessionProvider";
 
 const sidebarLinks = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -32,6 +33,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { logout, user } = useAuth();
   const [agencyName, setAgencyName] = useState<string | null>(null);
   const [agencyInitials, setAgencyInitials] = useState("--");
   const [loadingAgency, setLoadingAgency] = useState(true);
@@ -113,7 +115,7 @@ export default function DashboardLayout({
           })}
         </nav>
         <div className="p-4 border-t border-gray-100">
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 w-full transition-colors">
+          <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 w-full transition-colors">
             <LogOut className="w-5 h-5" />
             Sign Out
           </button>

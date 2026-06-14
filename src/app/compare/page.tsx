@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Star,
@@ -13,74 +13,64 @@ import {
   Search,
   CheckCircle,
   XCircle,
+  Loader2,
 } from "lucide-react";
 
-const availableAgencies = [
-  {
-    id: "1",
-    name: "GrowthPulse Digital",
-    slug: "growthpulse-digital",
-    rating: 4.9,
-    reviews: 127,
-    location: "New York, US",
-    size: "51-200",
-    hourlyRate: "$150 - $199",
-    minProject: 10000,
-    founded: 2015,
-    services: ["SEO", "PPC", "Content Marketing", "Social Media"],
-    industries: ["SaaS", "E-commerce", "Healthcare"],
-    verified: true,
-    featured: true,
-  },
-  {
-    id: "2",
-    name: "ClickBoost Agency",
-    slug: "clickboost-agency",
-    rating: 4.8,
-    reviews: 94,
-    location: "London, UK",
-    size: "11-50",
-    hourlyRate: "$100 - $149",
-    minProject: 5000,
-    founded: 2018,
-    services: ["PPC", "SEO", "Email Marketing"],
-    industries: ["Finance", "E-commerce", "Real Estate"],
-    verified: true,
-    featured: false,
-  },
-  {
-    id: "3",
-    name: "NexGen Marketing",
-    slug: "nexgen-marketing",
-    rating: 4.8,
-    reviews: 83,
-    location: "Toronto, CA",
-    size: "11-50",
-    hourlyRate: "$100 - $149",
-    minProject: 3000,
-    founded: 2019,
-    services: ["Social Media", "Content Marketing", "Branding"],
-    industries: ["Fashion", "Food & Beverage", "Travel"],
-    verified: true,
-    featured: false,
-  },
-  {
-    id: "4",
-    name: "Digital Spark Co",
-    slug: "digital-spark-co",
-    rating: 4.7,
-    reviews: 156,
-    location: "Sydney, AU",
-    size: "51-200",
-    hourlyRate: "$150 - $199",
-    minProject: 15000,
-    founded: 2012,
-    services: ["Web Design", "SEO", "PPC", "Branding"],
-    industries: ["Technology", "Healthcare", "Education"],
-    verified: true,
-    featured: true,
-  },
-];
+interface Agency {
+  id: string;
+  name: string;
+  slug: string;
+  rating: number;
+  reviews: number;
+  location: string;
+  size: string;
+  hourlyRate: string;
+  minProject: number | null;
+  founded: string;
+  services: string[];
+  industries: string[];
+  verified: boolean;
+  featured: boolean;
+}
+
+function mapApiAgency(raw: Record<string, unknown>): Agency {
+  const cityName = raw.city
+    ? (raw.city as { name?: string }).name
+    : null;
+  const countryName = raw.country
+    ? (raw.country as { name?: string }).name
+    : null;
+  const locationParts = [cityName, countryName].filter(Boolean);
+
+  const services = Array.isArray(raw.services)
+    ? (raw.services as { name?: string }[]).map((s) => s.name ?? "")
+    : [];
+  const industries = Array.isArray(raw.industries)
+    ? (raw.industries as { name?: string }[]).map((i) => i.name ?? "")
+    : [];
+
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? ""),
+    slug: String(raw.slug ?? ""),
+    rating: Number(raw.averageRating ?? raw.average_rating ?? 0),
+    reviews: Number(raw.totalReviews ?? raw.total_reviews ?? 0),
+    location: locationParts.length > 0 ? locationParts.join(", ") : "-",
+    size: String(raw.companySize ?? raw.company_size ?? "-"),
+    hourlyRate: String(raw.hourlyRate ?? raw.hourly_rate ?? "-"),
+    minProject:
+      raw.minProjectSize != null
+        ? Number(raw.minProjectSize)
+        : raw.min_project_size != null
+          ? Number(raw.min_project_size)
+          : null,
+    founded: String(raw.foundedYear ?? raw.founded_year ?? "-"),
+    services,
+    industries,
+    verified: Boolean(raw.isVerified ?? raw.is_verified ?? false),
+    featured: Boolean(raw.isFeatured ?? raw.is_featured ?? false),
+  };
+}
 
 const comparisonFields = [
   { key: "rating", label: "Rating", icon: Star },
@@ -92,17 +82,93 @@ const comparisonFields = [
   { key: "founded", label: "Founded", icon: Calendar },
 ] as const;
 
-type Agency = (typeof availableAgencies)[number];
-
 export default function ComparePage() {
   const [selected, setSelected] = useState<Agency[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [availableAgencies, setAvailableAgencies] = useState<Agency[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load agencies on mount
+  useEffect(() => {
+    async function fetchAgencies() {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/search?limit=20");
+        if (!res.ok) throw new Error("Failed to fetch agencies");
+        const json = await res.json();
+        const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
+          mapApiAgency(a)
+        );
+        setAvailableAgencies(agencies);
+      } catch (err) {
+        console.error("Error loading agencies:", err);
+        setAvailableAgencies([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAgencies();
+  }, []);
+
+  // Search agencies with debounce
+  const searchAgencies = useCallback(async (term: string) => {
+    if (!term.trim()) {
+      // Reset to default list
+      try {
+        setSearching(true);
+        const res = await fetch("/api/search?limit=20");
+        if (!res.ok) throw new Error("Failed to fetch agencies");
+        const json = await res.json();
+        const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
+          mapApiAgency(a)
+        );
+        setAvailableAgencies(agencies);
+      } catch (err) {
+        console.error("Error loading agencies:", err);
+      } finally {
+        setSearching(false);
+      }
+      return;
+    }
+
+    try {
+      setSearching(true);
+      const res = await fetch(
+        `/api/search?query=${encodeURIComponent(term)}&limit=20`
+      );
+      if (!res.ok) throw new Error("Search failed");
+      const json = await res.json();
+      const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
+        mapApiAgency(a)
+      );
+      setAvailableAgencies(agencies);
+    } catch (err) {
+      console.error("Error searching agencies:", err);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  // Debounced search on query change
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      searchAgencies(searchQuery);
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, searchAgencies]);
 
   const filtered = availableAgencies.filter(
-    (a) =>
-      !selected.find((s) => s.id === a.id) &&
-      a.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (a) => !selected.find((s) => s.id === a.id)
   );
 
   const addAgency = (agency: Agency) => {
@@ -171,7 +237,12 @@ export default function ComparePage() {
                       </div>
                     </div>
                     <div className="max-h-48 overflow-y-auto p-2">
-                      {filtered.length === 0 ? (
+                      {loading || searching ? (
+                        <div className="flex items-center justify-center py-4 gap-2">
+                          <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                          <p className="text-sm text-gray-400">Loading agencies...</p>
+                        </div>
+                      ) : filtered.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-4">
                           No agencies found
                         </p>
@@ -237,7 +308,13 @@ export default function ComparePage() {
                         </div>
                       </td>
                       {selected.map((agency) => {
-                        const value = agency[field.key];
+                        const value = agency[field.key as keyof Agency];
+                        const isEmpty =
+                          value === null ||
+                          value === undefined ||
+                          value === "" ||
+                          value === "-" ||
+                          value === 0;
                         return (
                           <td
                             key={agency.id}
@@ -246,10 +323,16 @@ export default function ComparePage() {
                             {field.key === "rating" ? (
                               <div className="flex items-center justify-center gap-1">
                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                                <span className="font-medium">{value}</span>
+                                <span className="font-medium">
+                                  {isEmpty ? "N/A" : value}
+                                </span>
                               </div>
                             ) : field.key === "minProject" ? (
-                              `$${(value as number).toLocaleString()}`
+                              isEmpty
+                                ? "N/A"
+                                : `$${(value as number).toLocaleString()}`
+                            ) : isEmpty ? (
+                              <span className="text-gray-400">N/A</span>
                             ) : (
                               String(value)
                             )}

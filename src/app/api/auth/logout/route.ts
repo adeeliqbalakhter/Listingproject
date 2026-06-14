@@ -1,9 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { hashToken } from "@/lib/auth/tokens";
 import { authenticateRequest } from "@/lib/auth/guards";
-import { success, error, serverError } from "@/lib/api/response";
+import { error, serverError } from "@/lib/api/response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +31,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return success({ message: "Logged out successfully" });
+    const response = NextResponse.json({ data: { message: "Logged out successfully" } });
+
+    const secureCookie = process.env.NODE_ENV === "production";
+    response.cookies.set("access_token", "", {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    response.cookies.set("refresh_token", "", {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+
+    return response;
   } catch (err) {
     return serverError(err);
   }

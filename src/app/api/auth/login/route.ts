@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { verifyPassword } from "@/lib/auth/password";
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     await logLoginAttempt(user.id as string, request, "success");
 
-    const response = Response.json({
+    const response = NextResponse.json({
       data: {
         user: {
           id: user.id,
@@ -101,6 +101,22 @@ export async function POST(request: NextRequest) {
         refreshToken: refresh.token,
         requiresVerification: !emailVerified,
       },
+    });
+
+    const secureCookie = process.env.NODE_ENV === "production";
+    response.cookies.set("access_token", accessToken, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+    response.cookies.set("refresh_token", refresh.token, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
     return response;

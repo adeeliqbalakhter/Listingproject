@@ -1,10 +1,10 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { hashToken, generateAccessToken, generateRefreshToken } from "@/lib/auth/tokens";
 import { checkRateLimit, RATE_LIMITS, rateLimitResponse } from "@/lib/services/rate-limit";
 import { getClientIp } from "@/lib/services/audit";
-import { success, error, serverError } from "@/lib/api/response";
+import { error, serverError } from "@/lib/api/response";
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,17 +57,37 @@ export async function POST(request: NextRequest) {
       VALUES (${row.uid}, ${newRefresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${newRefresh.expiresAt})
     `);
 
-    return success({
-      accessToken,
-      refreshToken: newRefresh.token,
-      user: {
-        id: row.uid,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        emailVerified,
+    const response = NextResponse.json({
+      data: {
+        accessToken,
+        refreshToken: newRefresh.token,
+        user: {
+          id: row.uid,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          emailVerified,
+        },
       },
     });
+
+    const secureCookie = process.env.NODE_ENV === "production";
+    response.cookies.set("access_token", accessToken, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+    response.cookies.set("refresh_token", newRefresh.token, {
+      httpOnly: true,
+      secure: secureCookie,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    });
+
+    return response;
   } catch (err) {
     return serverError(err);
   }

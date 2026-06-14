@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   User,
   Mail,
@@ -13,17 +13,32 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
+import { useAuth } from "@/components/providers/SessionProvider";
 
 export default function SettingsPage() {
+  const { user, refresh: refreshAuth } = useAuth();
+
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
+  const [profileMessage, setProfileMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
   const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john@demoagency.com",
+    name: "",
+    email: "",
   });
 
   const [passwords, setPasswords] = useState({
@@ -33,17 +48,134 @@ export default function SettingsPage() {
   });
 
   const [notifications, setNotifications] = useState({
-    newLeads: true,
-    newReviews: true,
-    weeklyDigest: false,
-    promotions: false,
-    securityAlerts: true,
+    emailNewLead: true,
+    emailNewReview: true,
+    emailWeeklyDigest: false,
+    emailAgencyApproved: false,
+    inAppNewLead: true,
   });
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
 
-  const handleSave = async () => {
+  // Populate profile from auth user
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.name || "",
+        email: user.email || "",
+      });
+    }
+  }, [user]);
+
+  // Fetch notification preferences on mount
+  const fetchNotificationPrefs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications/preferences");
+      if (res.ok) {
+        const data = await res.json();
+        const prefs = data.data ?? data;
+        setNotifications({
+          emailNewLead: prefs.email_new_lead ?? prefs.emailNewLead ?? true,
+          emailNewReview: prefs.email_new_review ?? prefs.emailNewReview ?? true,
+          emailWeeklyDigest:
+            prefs.email_weekly_digest ?? prefs.emailWeeklyDigest ?? false,
+          emailAgencyApproved:
+            prefs.email_agency_approved ?? prefs.emailAgencyApproved ?? false,
+          inAppNewLead: prefs.in_app_new_lead ?? prefs.inAppNewLead ?? true,
+        });
+        setNotificationsLoaded(true);
+      }
+    } catch {
+      // silently fall back to defaults
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotificationPrefs();
+  }, [fetchNotificationPrefs]);
+
+  // Save profile
+  const handleSaveProfile = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setSaving(false);
+    setProfileMessage(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: profile.name }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfileMessage({ type: "success", text: "Profile updated successfully." });
+        await refreshAuth();
+      } else {
+        setProfileMessage({
+          type: "error",
+          text: data.error || "Failed to update profile.",
+        });
+      }
+    } catch {
+      setProfileMessage({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Change password
+  const handleChangePassword = async () => {
+    setChangingPassword(true);
+    setPasswordMessage(null);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwords.current,
+          newPassword: passwords.new,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPasswordMessage({
+          type: "success",
+          text: data.data?.message || "Password changed successfully.",
+        });
+        setPasswords({ current: "", new: "", confirm: "" });
+      } else {
+        setPasswordMessage({
+          type: "error",
+          text: data.error || "Failed to change password.",
+        });
+      }
+    } catch {
+      setPasswordMessage({
+        type: "error",
+        text: "Network error. Please try again.",
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // Toggle a notification preference
+  const handleToggleNotification = async (
+    key: keyof typeof notifications,
+    value: boolean
+  ) => {
+    // Optimistic update
+    setNotifications((prev) => ({ ...prev, [key]: value }));
+    try {
+      const res = await fetch("/api/notifications/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: value }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setNotifications((prev) => ({ ...prev, [key]: !value }));
+      }
+    } catch {
+      setNotifications((prev) => ({ ...prev, [key]: !value }));
+    }
   };
 
   return (
@@ -64,7 +196,7 @@ export default function SettingsPage() {
         <div className="flex items-start gap-6 mb-6">
           <div className="relative">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-2xl font-bold text-gray-400">
-              {profile.name
+              {(profile.name || "?")
                 .split(" ")
                 .map((n) => n[0])
                 .join("")}
@@ -94,17 +226,35 @@ export default function SettingsPage() {
               <input
                 type="email"
                 value={profile.email}
-                onChange={(e) =>
-                  setProfile({ ...profile, email: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
+                disabled
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm bg-gray-50 text-gray-500 outline-none cursor-not-allowed"
               />
+              <p className="text-xs text-gray-400 mt-1">
+                Email cannot be changed. Contact support if you need to update
+                it.
+              </p>
             </div>
           </div>
         </div>
+        {profileMessage && (
+          <div
+            className={`flex items-center gap-2 mb-4 text-sm ${
+              profileMessage.type === "success"
+                ? "text-green-600"
+                : "text-red-600"
+            }`}
+          >
+            {profileMessage.type === "success" ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <XCircle className="w-4 h-4" />
+            )}
+            {profileMessage.text}
+          </div>
+        )}
         <div className="flex justify-end">
           <button
-            onClick={handleSave}
+            onClick={handleSaveProfile}
             disabled={saving}
             className="flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-60"
           >
@@ -189,18 +339,37 @@ export default function SettingsPage() {
             />
           </div>
         </div>
+        {passwordMessage && (
+          <div
+            className={`flex items-center gap-2 mt-4 text-sm ${
+              passwordMessage.type === "success"
+                ? "text-green-600"
+                : "text-red-600"
+            }`}
+          >
+            {passwordMessage.type === "success" ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <XCircle className="w-4 h-4" />
+            )}
+            {passwordMessage.text}
+          </div>
+        )}
         <div className="flex justify-end mt-5">
           <button
-            onClick={handleSave}
+            onClick={handleChangePassword}
             disabled={
-              saving ||
+              changingPassword ||
               !passwords.current ||
               !passwords.new ||
               passwords.new !== passwords.confirm
             }
             className="flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50"
           >
-            Update Password
+            {changingPassword && (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            )}
+            {changingPassword ? "Updating..." : "Update Password"}
           </button>
         </div>
       </section>
@@ -214,27 +383,27 @@ export default function SettingsPage() {
         <div className="space-y-4">
           {[
             {
-              key: "newLeads" as const,
+              key: "emailNewLead" as const,
               label: "New Lead Notifications",
               desc: "Get notified when a new lead matches your profile",
             },
             {
-              key: "newReviews" as const,
+              key: "emailNewReview" as const,
               label: "New Review Notifications",
               desc: "Get notified when a client leaves a review",
             },
             {
-              key: "weeklyDigest" as const,
+              key: "emailWeeklyDigest" as const,
               label: "Weekly Digest",
               desc: "Receive a weekly summary of your analytics and activity",
             },
             {
-              key: "promotions" as const,
+              key: "emailAgencyApproved" as const,
               label: "Promotional Emails",
               desc: "Tips, feature updates, and special offers",
             },
             {
-              key: "securityAlerts" as const,
+              key: "inAppNewLead" as const,
               label: "Security Alerts",
               desc: "Important notifications about your account security",
             },
@@ -249,11 +418,9 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={() =>
-                  setNotifications({
-                    ...notifications,
-                    [item.key]: !notifications[item.key],
-                  })
+                  handleToggleNotification(item.key, !notifications[item.key])
                 }
+                disabled={!notificationsLoaded}
                 className={`relative w-11 h-6 rounded-full transition-colors ${
                   notifications[item.key] ? "bg-brand" : "bg-gray-300"
                 }`}
@@ -291,7 +458,15 @@ export default function SettingsPage() {
         ) : (
           <div className="bg-red-50 rounded-lg p-4 border border-red-200">
             <p className="text-sm font-medium text-red-700 mb-3">
-              Are you absolutely sure? This action cannot be undone.
+              To delete your account, please contact our support team at{" "}
+              <a
+                href="mailto:support@listingproject.com"
+                className="underline font-semibold"
+              >
+                support@listingproject.com
+              </a>
+              . Account deletion requires manual verification for security
+              purposes.
             </p>
             <div className="flex gap-3">
               <button
@@ -299,9 +474,6 @@ export default function SettingsPage() {
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 Cancel
-              </button>
-              <button className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">
-                Yes, Delete My Account
               </button>
             </div>
           </div>

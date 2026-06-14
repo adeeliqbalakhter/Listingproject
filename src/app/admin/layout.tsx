@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/components/providers/SessionProvider";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -31,6 +32,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -71,7 +73,7 @@ export default function AdminLayout({
           })}
         </nav>
         <div className="p-4 border-t border-navy-light">
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-navy-light w-full transition-colors">
+          <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-navy-light w-full transition-colors">
             <LogOut className="w-5 h-5" />
             Sign Out
           </button>
@@ -133,7 +135,7 @@ export default function AdminLayout({
           })}
         </nav>
         <div className="p-4 border-t border-navy-light">
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-navy-light w-full transition-colors">
+          <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-navy-light w-full transition-colors">
             <LogOut className="w-5 h-5" />
             Sign Out
           </button>

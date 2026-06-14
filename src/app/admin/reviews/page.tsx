@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Star,
   CheckCircle2,
@@ -9,6 +9,10 @@ import {
   Search,
   Clock,
   MessageSquare,
+  Loader2,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 type ReviewStatus = "pending" | "approved" | "rejected" | "flagged";
@@ -16,7 +20,6 @@ type ReviewStatus = "pending" | "approved" | "rejected" | "flagged";
 interface Review {
   id: number;
   reviewer: string;
-  reviewerEmail: string;
   agency: string;
   rating: number;
   title: string;
@@ -26,120 +29,12 @@ interface Review {
   flagReason?: string;
 }
 
-const allReviews: Review[] = [
-  {
-    id: 4821,
-    reviewer: "Tom Henderson",
-    reviewerEmail: "tom.h@gmail.com",
-    agency: "DigitalFirst Co.",
-    rating: 2,
-    title: "Disappointing results",
-    content: "Very disappointing experience with their SEO services. After 3 months, we saw almost no improvement in our rankings. Communication was poor and deliverables were often late. Would not recommend.",
-    date: "Jun 5, 2026",
-    status: "flagged",
-    flagReason: "Potential competitor review",
-  },
-  {
-    id: 4820,
-    reviewer: "Lisa Kruger",
-    reviewerEmail: "lisa.k@techcorp.com",
-    agency: "SEO Masters Inc.",
-    rating: 5,
-    title: "Phenomenal results",
-    content: "Absolutely phenomenal results! Our organic traffic increased by 280% in just 6 months. The team was responsive, professional, and truly understood our industry. Worth every penny.",
-    date: "Jun 5, 2026",
-    status: "pending",
-  },
-  {
-    id: 4819,
-    reviewer: "Mark Davis",
-    reviewerEmail: "mark.d@startup.io",
-    agency: "AdPro Agency",
-    rating: 1,
-    title: "Complete waste of money",
-    content: "Complete waste of money. They promised top 3 rankings within 2 months but delivered nothing. Their so-called 'experts' used outdated techniques. Stay away from this agency.",
-    date: "Jun 4, 2026",
-    status: "pending",
-  },
-  {
-    id: 4818,
-    reviewer: "Sarah Mitchell",
-    reviewerEmail: "sarah.m@boutique.com",
-    agency: "WebWizards Agency",
-    rating: 4,
-    title: "Great social media management",
-    content: "Great social media management service. They revamped our Instagram strategy and we gained 5,000 new followers in the first month. Only giving 4 stars because reporting could be more detailed.",
-    date: "Jun 3, 2026",
-    status: "approved",
-  },
-  {
-    id: 4817,
-    reviewer: "Alex Rivera",
-    reviewerEmail: "alex.r@ecommerce.co",
-    agency: "MediaHouse Pro",
-    rating: 5,
-    title: "Exceptional PPC management",
-    content: "Exceptional PPC management. Our ROAS improved from 2x to 7x under their management. They proactively suggested optimizations and kept us informed every step of the way.",
-    date: "Jun 2, 2026",
-    status: "approved",
-  },
-  {
-    id: 4816,
-    reviewer: "Jennifer Cole",
-    reviewerEmail: "jen@fakeemail.xyz",
-    agency: "CreativeEdge Studio",
-    rating: 5,
-    title: "Best agency ever!!!",
-    content: "Best agency ever!!! They are amazing amazing amazing. Everyone should use them. 5 stars. Best best best. I love their work so much. Hire them now!!!!",
-    date: "Jun 1, 2026",
-    status: "flagged",
-    flagReason: "Suspected fake review (repetitive language)",
-  },
-  {
-    id: 4815,
-    reviewer: "Robert Kim",
-    reviewerEmail: "robert.kim@corp.com",
-    agency: "DataDriven Marketing",
-    rating: 3,
-    title: "Average experience",
-    content: "Average experience. The initial audit was thorough, but implementation was slow. Results were okay but not outstanding for the price we paid.",
-    date: "May 31, 2026",
-    status: "approved",
-  },
-  {
-    id: 4814,
-    reviewer: "Nancy White",
-    reviewerEmail: "nancy@business.com",
-    agency: "BrightSpark Digital",
-    rating: 4,
-    title: "Solid content marketing",
-    content: "Solid content marketing strategy. Blog traffic is up 150% and leads from content have doubled. The team is creative and responsive. Renewed for another 6 months.",
-    date: "May 30, 2026",
-    status: "approved",
-  },
-  {
-    id: 4813,
-    reviewer: "Spam Bot",
-    reviewerEmail: "buy-followers@spam.net",
-    agency: "WebWizards Agency",
-    rating: 1,
-    title: "Buy followers cheap",
-    content: "Buy followers cheap at www.spam-link.com. Best prices for Instagram followers and YouTube subscribers. Visit now for 50% discount!!!!",
-    date: "May 29, 2026",
-    status: "rejected",
-  },
-  {
-    id: 4812,
-    reviewer: "Paul Anderson",
-    reviewerEmail: "paul.a@startup.com",
-    agency: "SEO Masters Inc.",
-    rating: 4,
-    title: "Good ROI on our investment",
-    content: "Good ROI on our investment. Keyword rankings improved significantly and organic leads increased by 40%. Only minor complaint is the onboarding process was a bit slow.",
-    date: "May 28, 2026",
-    status: "approved",
-  },
-];
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 const statusTabs = [
   { label: "Pending", value: "pending", icon: Clock },
@@ -148,24 +43,117 @@ const statusTabs = [
   { label: "Flagged", value: "flagged", icon: Flag },
 ];
 
+function mapApiReview(raw: Record<string, unknown>): Review {
+  return {
+    id: raw.id as number,
+    reviewer: (raw.user_name as string) || "Unknown User",
+    agency: (raw.agency_name as string) || "Unknown Agency",
+    rating: raw.overall_rating as number,
+    title: (raw.title as string) || "",
+    content: (raw.content as string) || "",
+    date: new Date(raw.created_at as string).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    status: raw.status as ReviewStatus,
+    flagReason: undefined,
+  };
+}
+
 export default function AdminReviewsPage() {
   const [statusFilter, setStatusFilter] = useState<ReviewStatus>("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [rejectionId, setRejectionId] = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const filtered = allReviews.filter((review) => {
-    const matchesStatus = review.status === statusFilter;
-    const matchesSearch =
-      !searchQuery ||
-      review.reviewer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      review.agency.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      review.content.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesSearch;
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [moderating, setModerating] = useState<number | null>(null);
 
-  const getStatusCount = (status: ReviewStatus) =>
-    allReviews.filter((r) => r.status === status).length;
+  const fetchReviews = useCallback(async (status: ReviewStatus, page: number, limit: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        status,
+        page: String(page),
+        limit: String(limit),
+      });
+      const res = await fetch(`/api/admin/reviews?${params}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch reviews (${res.status})`);
+      }
+      const json = await res.json();
+      setReviews((json.data || []).map(mapApiReview));
+      setPagination(json.pagination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReviews(statusFilter, pagination.page, pagination.limit);
+    // Only re-fetch when filter or page changes, not when pagination object updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, pagination.page, fetchReviews]);
+
+  const handleStatusChange = (status: ReviewStatus) => {
+    setStatusFilter(status);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setSearchQuery("");
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPagination((prev) => ({ ...prev, page: newPage }));
+  };
+
+  const handleModerate = async (
+    reviewId: number,
+    action: "approve" | "reject" | "flag",
+    reason?: string
+  ) => {
+    setModerating(reviewId);
+    try {
+      const res = await fetch(`/api/admin/reviews/${reviewId}/moderate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),
+      });
+      if (!res.ok) {
+        throw new Error(`Moderation failed (${res.status})`);
+      }
+      setRejectionId(null);
+      setRejectionReason("");
+      // Re-fetch current view to reflect changes
+      await fetchReviews(statusFilter, pagination.page, pagination.limit);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Moderation action failed");
+    } finally {
+      setModerating(null);
+    }
+  };
+
+  // Client-side search filter on already-fetched reviews
+  const filtered = reviews.filter((review) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      review.reviewer.toLowerCase().includes(q) ||
+      review.agency.toLowerCase().includes(q) ||
+      review.content.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div>
@@ -180,28 +168,24 @@ export default function AdminReviewsPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         {statusTabs.map((tab) => {
           const Icon = tab.icon;
-          const count = getStatusCount(tab.value as ReviewStatus);
+          const isActive = statusFilter === tab.value;
           return (
             <button
               key={tab.value}
-              onClick={() => setStatusFilter(tab.value as ReviewStatus)}
+              onClick={() => handleStatusChange(tab.value as ReviewStatus)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                statusFilter === tab.value
+                isActive
                   ? "bg-brand text-white border-brand"
                   : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
               }`}
             >
               <Icon className="w-4 h-4" />
               {tab.label}
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  statusFilter === tab.value
-                    ? "bg-white/20 text-white"
-                    : "bg-gray-100 text-gray-500"
-                }`}
-              >
-                {count}
-              </span>
+              {isActive && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/20 text-white">
+                  {pagination.total}
+                </span>
+              )}
             </button>
           );
         })}
@@ -221,188 +205,271 @@ export default function AdminReviewsPage() {
         </div>
       </div>
 
-      {/* Review Cards */}
-      <div className="space-y-4">
-        {filtered.map((review) => (
-          <div
-            key={review.id}
-            className="bg-white rounded-xl border border-gray-200 p-5"
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+          <button
+            onClick={() => fetchReviews(statusFilter, pagination.page, pagination.limit)}
+            className="ml-auto text-sm font-medium text-red-600 hover:text-red-800 underline"
           >
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                {/* Header */}
-                <div className="flex flex-wrap items-center gap-3 mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                      <span className="text-xs font-bold text-gray-500">
-                        {review.reviewer
-                          .split(" ")
-                          .map((w) => w[0])
-                          .join("")}
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 text-brand animate-spin" />
+          <span className="ml-2 text-sm text-gray-500">Loading reviews...</span>
+        </div>
+      )}
+
+      {/* Review Cards */}
+      {!loading && (
+        <div className="space-y-4">
+          {filtered.map((review) => (
+            <div
+              key={review.id}
+              className="bg-white rounded-xl border border-gray-200 p-5"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  {/* Header */}
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-500">
+                          {review.reviewer
+                            .split(" ")
+                            .map((w) => w[0])
+                            .join("")}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-navy">
+                          {review.reviewer}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-300">|</span>
+                    <p className="text-sm text-gray-500">
+                      on{" "}
+                      <span className="font-medium text-navy">
+                        {review.agency}
                       </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm text-navy">
-                        {review.reviewer}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {review.reviewerEmail}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-300">|</span>
-                  <p className="text-sm text-gray-500">
-                    on{" "}
-                    <span className="font-medium text-navy">
-                      {review.agency}
-                    </span>
-                  </p>
-                  <span className="text-xs text-gray-300">|</span>
-                  <p className="text-xs text-gray-400">{review.date}</p>
-                </div>
-
-                {/* Rating */}
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex gap-0.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < review.rating
-                            ? "text-amber-400 fill-amber-400"
-                            : "text-gray-200"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-sm font-medium text-navy">
-                    {review.rating}.0
-                  </span>
-                </div>
-
-                {/* Content */}
-                <h3 className="font-semibold text-navy text-sm mb-1">
-                  {review.title}
-                </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {review.content}
-                </p>
-
-                {/* Flag reason */}
-                {review.flagReason && (
-                  <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg">
-                    <Flag className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <p className="text-xs text-red-700">
-                      <span className="font-medium">Flag reason:</span>{" "}
-                      {review.flagReason}
                     </p>
+                    <span className="text-xs text-gray-300">|</span>
+                    <p className="text-xs text-gray-400">{review.date}</p>
                   </div>
-                )}
 
-                {/* Rejection reason input */}
-                {rejectionId === review.id && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Rejection reason
-                    </label>
-                    <textarea
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                      placeholder="Enter reason for rejection..."
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
-                      rows={2}
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button className="text-xs font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors">
-                        Confirm Rejection
+                  {/* Rating */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < review.rating
+                              ? "text-amber-400 fill-amber-400"
+                              : "text-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm font-medium text-navy">
+                      {review.rating}.0
+                    </span>
+                  </div>
+
+                  {/* Content */}
+                  <h3 className="font-semibold text-navy text-sm mb-1">
+                    {review.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {review.content}
+                  </p>
+
+                  {/* Flag reason */}
+                  {review.flagReason && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg">
+                      <Flag className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-xs text-red-700">
+                        <span className="font-medium">Flag reason:</span>{" "}
+                        {review.flagReason}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Rejection reason input */}
+                  {rejectionId === review.id && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Rejection reason
+                      </label>
+                      <textarea
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        placeholder="Enter reason for rejection..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
+                        rows={2}
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          disabled={moderating === review.id}
+                          onClick={() =>
+                            handleModerate(review.id, "reject", rejectionReason)
+                          }
+                          className="text-xs font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50"
+                        >
+                          {moderating === review.id ? "Rejecting..." : "Confirm Rejection"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setRejectionId(null);
+                            setRejectionReason("");
+                          }}
+                          className="text-xs font-medium text-gray-600 bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex sm:flex-col gap-2 flex-shrink-0">
+                  {(review.status === "pending" || review.status === "flagged") && (
+                    <>
+                      <button
+                        disabled={moderating === review.id}
+                        onClick={() => handleModerate(review.id, "approve")}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {moderating === review.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                        Approve
                       </button>
                       <button
-                        onClick={() => {
-                          setRejectionId(null);
-                          setRejectionReason("");
-                        }}
-                        className="text-xs font-medium text-gray-600 bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-md transition-colors"
+                        onClick={() =>
+                          setRejectionId(
+                            rejectionId === review.id ? null : review.id
+                          )
+                        }
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                       >
-                        Cancel
+                        <XCircle className="w-4 h-4" />
+                        Reject
                       </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex sm:flex-col gap-2 flex-shrink-0">
-                {(review.status === "pending" || review.status === "flagged") && (
-                  <>
-                    <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() =>
-                        setRejectionId(
-                          rejectionId === review.id ? null : review.id
-                        )
-                      }
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Reject
-                    </button>
-                    {review.status !== "flagged" && (
-                      <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors">
+                      {review.status !== "flagged" && (
+                        <button
+                          disabled={moderating === review.id}
+                          onClick={() => handleModerate(review.id, "flag")}
+                          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <Flag className="w-4 h-4" />
+                          Flag
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {review.status === "approved" && (
+                    <>
+                      <button
+                        disabled={moderating === review.id}
+                        onClick={() => handleModerate(review.id, "flag")}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-50"
+                      >
                         <Flag className="w-4 h-4" />
                         Flag
                       </button>
-                    )}
-                  </>
-                )}
-                {review.status === "approved" && (
-                  <>
-                    <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors">
-                      <Flag className="w-4 h-4" />
-                      Flag
-                    </button>
+                      <button
+                        onClick={() =>
+                          setRejectionId(
+                            rejectionId === review.id ? null : review.id
+                          )
+                        }
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {review.status === "rejected" && (
                     <button
-                      onClick={() =>
-                        setRejectionId(
-                          rejectionId === review.id ? null : review.id
-                        )
-                      }
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      disabled={moderating === review.id}
+                      onClick={() => handleModerate(review.id, "approve")}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      <XCircle className="w-4 h-4" />
-                      Reject
+                      {moderating === review.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Restore
                     </button>
-                  </>
-                )}
-                {review.status === "rejected" && (
-                  <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Restore
-                  </button>
-                )}
+                  )}
+                </div>
+              </div>
+
+              {/* Review ID */}
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5 text-gray-300" />
+                <span className="text-xs text-gray-400">
+                  Review #{review.id}
+                </span>
               </div>
             </div>
+          ))}
 
-            {/* Review ID */}
-            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-              <MessageSquare className="w-3.5 h-3.5 text-gray-300" />
-              <span className="text-xs text-gray-400">
-                Review #{review.id}
-              </span>
+          {filtered.length === 0 && !loading && (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <p className="text-gray-400 text-sm">
+                No reviews found matching your criteria.
+              </p>
             </div>
-          </div>
-        ))}
+          )}
+        </div>
+      )}
 
-        {filtered.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <p className="text-gray-400 text-sm">
-              No reviews found matching your criteria.
-            </p>
+      {/* Pagination */}
+      {!loading && pagination.totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between">
+          <p className="text-sm text-gray-500">
+            Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
+            {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
+            {pagination.total} reviews
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={pagination.page <= 1}
+              onClick={() => handlePageChange(pagination.page - 1)}
+              className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <span className="text-sm text-gray-500">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() => handlePageChange(pagination.page + 1)}
+              className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
