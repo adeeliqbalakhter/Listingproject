@@ -75,7 +75,15 @@ export async function POST(request: NextRequest) {
       console.error("[SIGNUP-OTP] Failed to send OTP email to:", email);
     }
 
-    return success({ message: "Verification code sent to your email", emailSent: sent });
+    return success({
+      message: sent ? "Verification code sent to your email" : "Failed to send email. Please try again.",
+      emailSent: sent,
+      debug: {
+        hasResendKey: !!(process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY),
+        hasSmtpHost: !!process.env.SMTP_HOST,
+        emailFrom: process.env.EMAIL_FROM || "AgencyHub <onboarding@resend.dev>",
+      },
+    });
   } catch (err) {
     console.error("[SEND-SIGNUP-OTP] Error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
