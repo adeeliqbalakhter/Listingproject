@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     // Store refresh token
     await db.execute(sql`
       INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
-      VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt})
+      VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt.toISOString()})
     `);
 
     // Build response with cookies (matching login route pattern)

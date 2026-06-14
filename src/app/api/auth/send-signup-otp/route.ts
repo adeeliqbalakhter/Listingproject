@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Insert new signup OTP (expires in 10 minutes)
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     await db.execute(
       sql`INSERT INTO signup_otps (email, code, name, password_hash, role, expires_at)
           VALUES (${email}, ${code}, ${name}, ${passwordHash}, ${role}, ${expiresAt})`
