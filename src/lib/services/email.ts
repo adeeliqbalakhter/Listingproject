@@ -29,6 +29,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const resendKey = process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY;
   const smtpHost = process.env.SMTP_HOST;
 
+  // Try Resend first
   if (resendKey) {
     try {
       const res = await fetch("https://api.resend.com/emails", {
@@ -45,48 +46,34 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
           text: options.text,
         }),
       });
-      if (!res.ok) {
-        const body = await res.text();
-        console.error("[EMAIL] Resend API failed:", res.status, res.statusText);
-        console.error("[EMAIL] Resend response body:", body);
-        console.error("[EMAIL] Resend request details:", {
-          from: process.env.EMAIL_FROM || "AgencyHub <onboarding@resend.dev>",
-          to: options.to,
-          subject: options.subject,
-        });
-        return false;
+      if (res.ok) {
+        return true;
       }
-      const responseBody = await res.json();
-      console.log("[EMAIL] Resend success:", JSON.stringify(responseBody));
-      return true;
+      const body = await res.text();
+      console.error("[EMAIL] Resend failed:", res.status, body);
     } catch (err) {
-      console.error("[EMAIL] Resend network/fetch error:", err);
-      return false;
+      console.error("[EMAIL] Resend error:", err);
     }
   }
 
+  // Fall back to SMTP (Gmail, etc.)
   if (smtpHost) {
     const t = getTransporter();
-    if (!t) {
-      console.warn("[EMAIL] SMTP not configured, falling back to console");
-      logEmail(options);
-      return true;
-    }
-    try {
-      await t.sendMail({
-        from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-      });
-      return true;
-    } catch (err) {
-      console.error("[EMAIL] SMTP send failed:", err);
-      return false;
+    if (t) {
+      try {
+        await t.sendMail({
+          from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        });
+        return true;
+      } catch (err) {
+        console.error("[EMAIL] SMTP send failed:", err);
+      }
     }
   }
-
 
   logEmail(options);
   return false;
