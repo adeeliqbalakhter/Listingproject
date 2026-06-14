@@ -77,6 +77,8 @@ export async function POST(request: NextRequest) {
 
     return success({ message: "Verification code sent to your email", emailSent: sent });
   } catch (err) {
-    return serverError(err);
+    console.error("[SEND-SIGNUP-OTP] Error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return error(`Server error: ${message}`, 500);
   }
 }
