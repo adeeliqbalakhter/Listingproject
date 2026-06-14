@@ -129,10 +129,7 @@ export default function SignUpPage() {
         return;
       }
       if (result.data?.requiresVerification || result.requiresVerification) {
-        const otp = result.data?.otp;
-        const params = new URLSearchParams({ email: form.email });
-        if (otp) params.set("code", otp);
-        window.location.href = `/auth/verify-email?${params}`;
+        window.location.href = `/auth/verify-email?email=${encodeURIComponent(form.email)}`;
       } else {
         window.location.href = '/dashboard';
       }

@@ -65,12 +65,12 @@ export async function POST(request: NextRequest) {
     const sent = await sendEmail({ ...emailData, to: email });
 
     if (!sent) {
-      console.error("[OTP] Email send failed for", email, "- returning OTP in response");
+      console.error("[OTP] Email send failed for", email);
     }
 
     return success({
       message: "If an account exists, a verification code has been sent.",
-      otp: code,
+      emailSent: sent,
     });
   } catch (err) {
     return serverError(err);

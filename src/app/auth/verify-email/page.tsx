@@ -28,24 +28,18 @@ function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const email = searchParams.get("email");
-  const prefilledCode = searchParams.get("code");
 
   const [state, setState] = useState<PageState>(
     token ? "verifying" : email ? "otp-entry" : "error"
   );
   const [errorMessage, setErrorMessage] = useState("");
-  const [otp, setOtp] = useState<string[]>(
-    prefilledCode && prefilledCode.length === 6
-      ? prefilledCode.split("")
-      : ["", "", "", "", "", ""]
-  );
-  const [showCodeHint, setShowCodeHint] = useState(!!prefilledCode);
+  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [autoRequesting, setAutoRequesting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const hasVerified = useRef(false);
+  const hasRequestedOtp = useRef(false);
 
   // Auto-verify token on mount
   const verifyToken = useCallback(async () => {
@@ -75,80 +69,28 @@ function VerifyEmailContent() {
     verifyToken();
   }, [verifyToken]);
 
+  // Auto-send OTP email on mount
+  useEffect(() => {
+    if (state !== "otp-entry" || !email || hasRequestedOtp.current) return;
+    hasRequestedOtp.current = true;
+    fetch("/api/auth/request-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, type: "email_verification" }),
+    })
+      .then(() => {
+        setCodeSent(true);
+        inputRefs.current[0]?.focus();
+      })
+      .catch(() => {});
+  }, [state, email]);
+
   // Resend cooldown timer
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
-
-  // Auto-request OTP on mount when no code is prefilled
-  const hasRequested = useRef(false);
-  useEffect(() => {
-    if (state !== "otp-entry" || !email || hasRequested.current) return;
-    if (prefilledCode && prefilledCode.length === 6) return;
-    hasRequested.current = true;
-    setAutoRequesting(true);
-    setStatusMessage("Requesting verification code...");
-    fetch("/api/auth/request-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, type: "email_verification" }),
-    })
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.data?.otp) {
-          const digits = result.data.otp.split("");
-          setOtp(digits);
-          setShowCodeHint(true);
-          setStatusMessage("Code received, verifying...");
-        } else {
-          setStatusMessage("Code sent to your email");
-          setAutoRequesting(false);
-        }
-      })
-      .catch(() => {
-        setStatusMessage("");
-        setAutoRequesting(false);
-      });
-  }, [state, email, prefilledCode]);
-
-  // Auto-submit prefilled OTP (from URL or auto-request)
-  const hasAutoSubmitted = useRef(false);
-  useEffect(() => {
-    const code = otp.join("");
-    if (code.length !== 6 || !email || state !== "otp-entry" || hasAutoSubmitted.current || isSubmitting) return;
-    if (!prefilledCode && !showCodeHint) return;
-    hasAutoSubmitted.current = true;
-    setIsSubmitting(true);
-    setStatusMessage("Verifying code...");
-    fetch("/api/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code, type: "email_verification" }),
-    })
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.error) {
-          setErrorMessage(result.error);
-          setOtp(["", "", "", "", "", ""]);
-          setShowCodeHint(false);
-          hasAutoSubmitted.current = false;
-          setStatusMessage("");
-          setAutoRequesting(false);
-        } else {
-          setStatusMessage("Verified! Redirecting...");
-          window.location.href = "/dashboard";
-        }
-      })
-      .catch(() => {
-        setErrorMessage("Something went wrong. Please try again.");
-        hasAutoSubmitted.current = false;
-        setStatusMessage("");
-        setAutoRequesting(false);
-      })
-      .finally(() => setIsSubmitting(false));
-  }, [otp, email, state, prefilledCode, showCodeHint, isSubmitting]);
 
   // No token or email provided
   useEffect(() => {
@@ -160,7 +102,6 @@ function VerifyEmailContent() {
   function handleOtpChange(index: number, value: string) {
     if (!/^\d*$/.test(value)) return;
     const newOtp = [...otp];
-    // Handle paste of full code
     if (value.length > 1) {
       const digits = value.slice(0, 6).split("");
       digits.forEach((d, i) => {
@@ -203,7 +144,7 @@ function VerifyEmailContent() {
         inputRefs.current[0]?.focus();
         return;
       }
-      window.location.href = "/dashboard";
+      setState("verified");
     } catch {
       setErrorMessage("Something went wrong. Please try again.");
     } finally {
@@ -213,28 +154,19 @@ function VerifyEmailContent() {
 
   async function handleResend() {
     if (resendCooldown > 0 || !email) return;
-    setStatusMessage("Requesting verification code...");
     setErrorMessage("");
     try {
-      const res = await fetch("/api/auth/request-otp", {
+      await fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, type: "email_verification" }),
       });
-      const result = await res.json();
-      if (result.data?.otp) {
-        const digits = result.data.otp.split("");
-        hasAutoSubmitted.current = false;
-        setOtp(digits);
-        setShowCodeHint(true);
-        setStatusMessage("Code received, verifying...");
-      } else {
-        setStatusMessage("Code sent to your email");
-      }
+      setCodeSent(true);
       setResendCooldown(60);
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
     } catch {
       setErrorMessage("Failed to resend code. Please try again.");
-      setStatusMessage("");
     }
   }
 
@@ -292,33 +224,22 @@ function VerifyEmailContent() {
             <div className="space-y-8">
               <div className="text-center">
                 <div className="flex justify-center mb-6">
-                  {autoRequesting ? (
-                    <span className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-brand border-t-transparent" />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
-                      <Mail className="h-8 w-8 text-brand" />
-                    </div>
-                  )}
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
+                    <Mail className="h-8 w-8 text-brand" />
+                  </div>
                 </div>
                 <h1 className="text-3xl font-bold text-navy">
-                  {autoRequesting ? "Verifying your email" : "Check your email"}
+                  Check your email
                 </h1>
-                {statusMessage && (
-                  <p className="mt-2 text-sm font-medium text-brand">{statusMessage}</p>
-                )}
-                {!autoRequesting && (
-                  <p className="mt-2 text-gray-500">
-                    {showCodeHint
-                      ? "Your verification code has been auto-filled below. Click Verify to continue."
-                      : "We sent a verification code to"}
-                  </p>
-                )}
-                {!showCodeHint && !autoRequesting && (
-                  <p className="mt-1 font-medium text-navy">{email}</p>
-                )}
-                {showCodeHint && !autoRequesting && (
-                  <p className="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                    Email delivery is not configured yet. Once you add your RESEND_API_KEY, codes will be emailed automatically.
+                <p className="mt-2 text-gray-500">
+                  {codeSent
+                    ? "We sent a 6-digit verification code to"
+                    : "Sending verification code to"}
+                </p>
+                <p className="mt-1 font-medium text-navy">{email}</p>
+                {codeSent && (
+                  <p className="mt-2 text-xs text-gray-400">
+                    Check your inbox and spam folder. The code expires in 10 minutes.
                   </p>
                 )}
               </div>
