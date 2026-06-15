@@ -423,7 +423,16 @@ export default function ProfilePage() {
             </p>
           )}
           {agencyStatus === "suspended" && (
-            <p>Your agency has been suspended. Contact support.</p>
+            <div>
+              <p className="font-semibold">Your agency listing has been suspended and removed from public listings. Please contact support at support@agencyhub.com to resolve this and get your agency listed again.</p>
+              <a
+                href="mailto:support@agencyhub.com"
+                className="mt-3 inline-flex items-center gap-2 bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+              >
+                <Mail className="w-4 h-4" />
+                Contact Support
+              </a>
+            </div>
           )}
           {agencyStatus === "rejected" && (
             <p>Your agency was not approved. Please update and resubmit.</p>

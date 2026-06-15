@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { ReviewForm } from "@/components/review-form";
 
 // ---------------------------------------------------------------------------
 // DB helpers
@@ -811,9 +812,12 @@ export default async function AgencyProfilePage({
                     </>
                   ) : (
                     <p className="mt-4 text-gray-400 italic">
-                      No reviews yet.
+                      No reviews yet. Be the first to share your experience!
                     </p>
                   )}
+
+                  {/* Write a Review */}
+                  <ReviewForm agencyId={agency.id} />
                 </div>
               </div>
             </div>
