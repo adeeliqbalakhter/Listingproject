@@ -11,8 +11,8 @@ const updateAgencySchema = z.object({
   website: z.string().url().max(500).optional().nullable().or(z.literal("")),
   email: z.string().email().max(255).optional().nullable().or(z.literal("")),
   phone: z.string().max(50).optional().nullable(),
-  logo: z.string().max(10000).optional().nullable(),
-  coverImage: z.string().max(10000).optional().nullable(),
+  logo: z.string().optional().nullable(),
+  coverImage: z.string().optional().nullable(),
   foundedYear: z.number().int().min(1900).max(2030).optional().nullable(),
   companySize: z.string().max(50).optional().nullable(),
   hourlyRate: z.string().max(50).optional().nullable(),
@@ -31,7 +31,7 @@ const updateAgencySchema = z.object({
   serviceIds: z.array(z.string().uuid()).optional(),
   industryIds: z.array(z.string().uuid()).optional(),
   status: z.enum(["draft", "pending"]).optional(),
-}).strict();
+}).passthrough();
 
 export async function GET(
   request: NextRequest,
