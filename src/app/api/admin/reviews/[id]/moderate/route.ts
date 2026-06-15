@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const statusMap: Record<string, string> = { approve: "approved", reject: "rejected", flag: "flagged" };
     const newStatus = statusMap[action];
 
-    const rows = await db.execute(sql`SELECT id, status FROM reviews WHERE id = ${id} AND deleted_at IS NULL`);
+    const rows = await db.execute(sql`SELECT id, status, agency_id FROM reviews WHERE id = ${id} AND deleted_at IS NULL`);
     const review = (rows as unknown as Array<Record<string, unknown>>)[0];
     if (!review) return error("Review not found", 404);
 
@@ -54,6 +55,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       newValues: { status: newStatus },
       ipAddress: getClientIp(request),
     });
+
+    try {
+      const agencyId = review.agency_id as string;
+      if (agencyId) {
+        const slugRows = await db.execute(sql`SELECT slug FROM agencies WHERE id = ${agencyId}`);
+        const slug = (slugRows as unknown as Array<{ slug: string }>)[0]?.slug;
+        if (slug) {
+          revalidatePath(`/agencies/${slug}`);
+        }
+      }
+      revalidatePath('/agencies');
+    } catch {}
 
     return success({ message: `Review ${action}d`, status: newStatus });
   } catch (err) {
