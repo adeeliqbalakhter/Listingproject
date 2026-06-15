@@ -190,24 +190,50 @@ export async function runMigrations() {
     )
   `);
 
-  // ─── Make reviews.user_id nullable and add guest reviewer columns ───
+  // ─── Make reviews.user_id nullable ───
   await db.execute(sql`
     DO $$ BEGIN
       ALTER TABLE reviews ALTER COLUMN user_id DROP NOT NULL;
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_name VARCHAR(100);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_email VARCHAR(255);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_job_title VARCHAR(100);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_company_industry VARCHAR(100);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS budget_rating DECIMAL(3,2);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS schedule_rating DECIMAL(3,2);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS collaboration_rating DECIMAL(3,2);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS objective TEXT;
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS enjoyed TEXT;
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS improvements TEXT;
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_provided VARCHAR(255);
-      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS would_recommend BOOLEAN;
     EXCEPTION WHEN others THEN NULL;
     END $$;
+  `);
+
+  // ─── Add guest reviewer and review detail columns ───
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_name VARCHAR(100)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_email VARCHAR(255)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_job_title VARCHAR(100)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_company_industry VARCHAR(100)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS budget_rating DECIMAL(3,2)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS schedule_rating DECIMAL(3,2)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS collaboration_rating DECIMAL(3,2)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS objective TEXT
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS enjoyed TEXT
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS improvements TEXT
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_provided VARCHAR(255)
+  `);
+  await db.execute(sql`
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS would_recommend BOOLEAN
   `);
 
   // ─── Ensure users table has needed columns ───
