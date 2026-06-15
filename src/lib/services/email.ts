@@ -119,7 +119,7 @@ export function buildOTPEmail(name: string, code: string, purpose: string): Emai
 
 export function buildPasswordResetEmail(name: string, token: string): EmailOptions & { to: "" } {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+  const resetUrl = `${baseUrl}/auth/forgot-password?token=${token}`;
   return {
     to: "" as const,
     subject: "Reset your password",
