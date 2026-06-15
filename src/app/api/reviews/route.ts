@@ -191,9 +191,16 @@ export async function POST(request: NextRequest) {
     `);
 
     return Response.json({ data: (rows as unknown as Array<Record<string, unknown>>)[0] }, { status: 201 });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("POST /api/reviews error:", err);
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: `Server error: ${msg}` }, { status: 500 });
+    const e = err as Record<string, unknown>;
+    const detail = {
+      message: e?.message ?? "Unknown",
+      code: e?.code ?? null,
+      detail: e?.detail ?? null,
+      constraint: e?.constraint ?? null,
+      cause: e?.cause ? String(e.cause) : null,
+    };
+    return Response.json({ error: "Review submission failed", debug: detail }, { status: 500 });
   }
 }
