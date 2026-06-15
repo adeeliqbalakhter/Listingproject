@@ -21,10 +21,10 @@ export async function GET(request: NextRequest) {
     );
 
     if (!params.success) {
-      return Response.json(
-        { error: "Invalid query parameters", details: params.error.format() },
-        { status: 400 }
-      );
+      return Response.json({
+        data: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+      });
     }
 
     if (!hasDb()) {
