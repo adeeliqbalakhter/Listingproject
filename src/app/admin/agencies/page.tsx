@@ -18,7 +18,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-type AgencyStatus = "active" | "draft" | "rejected" | "suspended";
+type AgencyStatus = "active" | "draft" | "pending" | "rejected" | "suspended";
 
 interface Agency {
   id: string;
@@ -45,7 +45,7 @@ interface PaginationInfo {
 
 const statusTabs = [
   { label: "All", value: "" },
-  { label: "Pending", value: "draft" },
+  { label: "Pending", value: "pending" },
   { label: "Active", value: "active" },
   { label: "Suspended", value: "suspended" },
   { label: "Rejected", value: "rejected" },
@@ -93,17 +93,29 @@ export default function AdminAgenciesPage() {
     fetchAgencies();
   }, [fetchAgencies]);
 
-  const handleAction = async (agencyId: string, action: "approve" | "reject") => {
+  const handleAction = async (agencyId: string, action: "approve" | "reject" | "suspend" | "delete" | "verify" | "feature") => {
     try {
       setActionLoading(agencyId);
-      const res = await fetch(`/api/admin/agencies/${agencyId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Failed to ${action} agency`);
+      if (action === "delete") {
+        if (!confirm("Are you sure you want to delete this agency?")) {
+          setActionLoading(null);
+          return;
+        }
+        const res = await fetch(`/api/agencies/${agencyId}`, { method: "DELETE" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || "Failed to delete agency");
+        }
+      } else {
+        const res = await fetch(`/api/admin/agencies/${agencyId}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Failed to ${action} agency`);
+        }
       }
       setOpenDropdown(null);
       await fetchAgencies();
@@ -120,13 +132,15 @@ export default function AdminAgenciesPage() {
   const statusBadge = (status: AgencyStatus) => {
     const styles: Record<string, string> = {
       active: "bg-emerald-50 text-emerald-700",
-      draft: "bg-amber-50 text-amber-700",
+      draft: "bg-gray-100 text-gray-600",
+      pending: "bg-amber-50 text-amber-700",
       suspended: "bg-red-50 text-red-700",
       rejected: "bg-gray-100 text-gray-700",
     };
     const labels: Record<string, string> = {
       active: "Active",
-      draft: "Pending",
+      draft: "Draft",
+      pending: "Pending",
       suspended: "Suspended",
       rejected: "Rejected",
     };
@@ -306,11 +320,18 @@ export default function AdminAgenciesPage() {
                           </button>
                           {openDropdown === agency.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                              <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                <Eye className="w-4 h-4" />
-                                View Details
-                              </button>
-                              {agency.status === "draft" && (
+                              {agency.slug && (
+                                <a
+                                  href={`/agencies/${agency.slug}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View Profile
+                                </a>
+                              )}
+                              {(agency.status === "pending" || agency.status === "draft") && (
                                 <>
                                   <button
                                     disabled={actionLoading === agency.id}
@@ -333,39 +354,51 @@ export default function AdminAgenciesPage() {
                               {agency.status === "active" && (
                                 <button
                                   disabled={actionLoading === agency.id}
-                                  onClick={() => handleAction(agency.id, "reject")}
+                                  onClick={() => handleAction(agency.id, "suspend")}
                                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 disabled:opacity-50"
                                 >
                                   <XCircle className="w-4 h-4" />
-                                  Suspend
+                                  {actionLoading === agency.id ? "Processing..." : "Suspend"}
                                 </button>
                               )}
-                              {agency.status === "suspended" && (
+                              {(agency.status === "suspended" || agency.status === "rejected") && (
                                 <button
                                   disabled={actionLoading === agency.id}
                                   onClick={() => handleAction(agency.id, "approve")}
                                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  Reactivate
+                                  {actionLoading === agency.id ? "Processing..." : "Reactivate"}
                                 </button>
                               )}
                               {!agency.is_featured && agency.status === "active" && (
-                                <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50">
+                                <button
+                                  disabled={actionLoading === agency.id}
+                                  onClick={() => handleAction(agency.id, "feature")}
+                                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+                                >
                                   <Award className="w-4 h-4" />
                                   Feature
                                 </button>
                               )}
                               {!agency.is_verified && agency.status === "active" && (
-                                <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand hover:bg-blue-50">
+                                <button
+                                  disabled={actionLoading === agency.id}
+                                  onClick={() => handleAction(agency.id, "verify")}
+                                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand hover:bg-blue-50 disabled:opacity-50"
+                                >
                                   <Shield className="w-4 h-4" />
                                   Verify
                                 </button>
                               )}
                               <div className="border-t border-gray-100 my-1" />
-                              <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                              <button
+                                disabled={actionLoading === agency.id}
+                                onClick={() => handleAction(agency.id, "delete")}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
                                 <Trash2 className="w-4 h-4" />
-                                Delete
+                                {actionLoading === agency.id ? "Processing..." : "Delete"}
                               </button>
                             </div>
                           )}
