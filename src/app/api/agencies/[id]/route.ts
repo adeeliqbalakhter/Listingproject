@@ -30,6 +30,7 @@ const updateAgencySchema = z.object({
   metaDescription: z.string().max(160).optional().nullable(),
   serviceIds: z.array(z.string().uuid()).optional(),
   industryIds: z.array(z.string().uuid()).optional(),
+  status: z.enum(["draft", "pending"]).optional(),
 }).strict();
 
 export async function GET(
@@ -102,7 +103,7 @@ export async function PATCH(
     if (data.facebookUrl) socialLinks.facebook = data.facebookUrl;
     if (data.instagramUrl) socialLinks.instagram = data.instagramUrl;
 
-    const { serviceIds, industryIds, ...updateFields } = data;
+    const { serviceIds, industryIds, status, ...updateFields } = data;
 
     await db.execute(sql`
       UPDATE agencies SET
@@ -126,6 +127,7 @@ export async function PATCH(
         social_links = ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
         meta_title = ${updateFields.metaTitle ?? null},
         meta_description = ${updateFields.metaDescription ?? null},
+        status = COALESCE(${status ?? null}, status),
         updated_at = NOW()
       WHERE id = ${id}
     `);

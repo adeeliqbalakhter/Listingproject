@@ -15,6 +15,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
+import OnboardingModal from "@/components/onboarding-modal";
 
 const sidebarLinks = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -153,6 +154,15 @@ export default function DashboardLayout({
         {/* Page Content */}
         <div className="flex-1 p-6 lg:p-8">{children}</div>
       </div>
+
+      {/* Onboarding Modal for new users */}
+      {user && (
+        <OnboardingModal
+          userId={user.id}
+          role={user.role}
+          name={user.name}
+        />
+      )}
     </div>
   );
 }

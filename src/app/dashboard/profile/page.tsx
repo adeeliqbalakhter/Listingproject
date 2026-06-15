@@ -37,6 +37,7 @@ type SocialLink = { platform: string; url: string };
 export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [submittingForReview, setSubmittingForReview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [existingAgencyId, setExistingAgencyId] = useState<string | null>(null);
@@ -90,22 +91,19 @@ export default function ProfilePage() {
     }).catch(() => setLoading(false));
   }, []);
 
-  const loadProfile = useCallback((userId: string) => {
+  const loadProfile = useCallback((_userId: string) => {
     Promise.all([
       fetch("/api/locations").then((r) => r.json()),
       fetch("/api/services").then((r) => r.json()),
       fetch("/api/industries").then((r) => r.json()),
-      fetch("/api/agencies?limit=100").then((r) => r.json()),
+      fetch("/api/agencies/mine").then((r) => r.json()),
     ])
-      .then(([loc, svc, ind, agenciesRes]) => {
+      .then(([loc, svc, ind, mineRes]) => {
         setCountries(loc.data || []);
         setServiceOptions(svc.data || []);
         setIndustryOptions(ind.data || []);
 
-        const agencies = agenciesRes.data || [];
-        const agency = agencies.find(
-          (a: Record<string, unknown>) => a.user_id === userId
-        );
+        const agency = mineRes.data?.agency ?? null;
 
         if (agency) {
           setExistingAgencyId(agency.id);
@@ -129,6 +127,9 @@ export default function ProfilePage() {
             metaTitle: agency.meta_title || "",
             metaDescription: agency.meta_description || "",
           });
+
+          if (agency.serviceIds?.length) setSelectedServiceIds(agency.serviceIds);
+          if (agency.industryIds?.length) setSelectedIndustryIds(agency.industryIds);
 
           if (agency.logo) setLogoPreview(agency.logo);
           if (agency.cover_image) setCoverPreview(agency.cover_image);
@@ -311,6 +312,30 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSubmitForReview = async () => {
+    if (!existingAgencyId) return;
+    setSubmittingForReview(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/agencies/${existingAgencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "pending" }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setAgencyStatus("pending");
+        setMessage({ type: "success", text: "Your agency has been submitted for review!" });
+      } else {
+        setMessage({ type: "error", text: json.error || "Failed to submit for review." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSubmittingForReview(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -364,24 +389,44 @@ export default function ProfilePage() {
               ? "bg-blue-50 text-blue-800 border border-blue-200"
               : agencyStatus === "active"
               ? "bg-green-50 text-green-800 border border-green-200"
+              : agencyStatus === "suspended"
+              ? "bg-red-50 text-red-800 border border-red-200"
+              : agencyStatus === "rejected"
+              ? "bg-orange-50 text-orange-800 border border-orange-200"
               : "bg-gray-50 text-gray-700 border border-gray-200"
           }`}
         >
           {agencyStatus === "draft" && (
-            <p>Your agency profile is in draft. Submit for review to go live.</p>
+            <div className="flex items-center justify-between">
+              <p>Your agency profile is saved as a draft. Submit it for review when ready.</p>
+              <button
+                onClick={handleSubmitForReview}
+                disabled={submittingForReview}
+                className="ml-4 flex-shrink-0 flex items-center gap-2 bg-brand text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-60"
+              >
+                {submittingForReview ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {submittingForReview ? "Submitting..." : "Submit for Review"}
+              </button>
+            </div>
           )}
           {agencyStatus === "pending" && (
             <p>Your agency is pending admin approval.</p>
           )}
           {agencyStatus === "active" && (
             <p>
-              Your agency is live!{" "}
+              Your agency is live and visible to the public.{" "}
               {agencySlug && (
                 <a href={`/agencies/${agencySlug}`} className="underline font-medium">
                   View public profile
                 </a>
               )}
             </p>
+          )}
+          {agencyStatus === "suspended" && (
+            <p>Your agency has been suspended. Contact support.</p>
+          )}
+          {agencyStatus === "rejected" && (
+            <p>Your agency was not approved. Please update and resubmit.</p>
           )}
           {agencySlug && agencyStatus !== "active" && (
             <p className="mt-1">
