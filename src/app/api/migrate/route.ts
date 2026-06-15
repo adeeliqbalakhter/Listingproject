@@ -12,6 +12,7 @@ async function needsMigration(): Promise<boolean> {
     await db.execute(sql`SELECT 1 FROM otp_tokens LIMIT 1`);
     await db.execute(sql`SELECT 1 FROM signup_otps LIMIT 1`);
     await db.execute(sql`SELECT budget_rating FROM reviews LIMIT 1`);
+    await db.execute(sql`SELECT challenge FROM agency_portfolio LIMIT 1`);
     return false;
   } catch {
     return true;

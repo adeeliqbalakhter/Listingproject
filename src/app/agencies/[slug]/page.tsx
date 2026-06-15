@@ -26,6 +26,7 @@ import {
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { ReviewForm } from "@/components/review-form";
+import { PortfolioSection } from "@/components/portfolio-section";
 
 // ---------------------------------------------------------------------------
 // DB helpers
@@ -89,6 +90,18 @@ async function fetchCityName(cityId: string) {
     return ((rows as any[])[0]?.name as string) ?? null;
   } catch {
     return null;
+  }
+}
+
+async function fetchPortfolio(agencyId: string) {
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT * FROM agency_portfolio WHERE agency_id = ${agencyId} AND deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC`
+    );
+    return rows as any[];
+  } catch {
+    return [];
   }
 }
 
@@ -334,6 +347,7 @@ function CategoryRating({ label, rating }: { label: string; rating: number }) {
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "portfolio", label: "Portfolio" },
   { id: "services", label: "Services" },
   { id: "reviews", label: "Reviews" },
 ] as const;
@@ -400,12 +414,13 @@ export default async function AgencyProfilePage({
   }
 
   // Fetch related data in parallel
-  const [services, reviews, ratingBreakdown, similarAgencies] =
+  const [services, reviews, ratingBreakdown, similarAgencies, portfolio] =
     await Promise.all([
       fetchServices(agency.id),
       fetchReviews(agency.id),
       fetchRatingBreakdown(agency.id),
       fetchSimilarAgencies(agency.id),
+      fetchPortfolio(agency.id),
     ]);
 
   const cityName = agency.city_id ? await fetchCityName(agency.city_id) : null;
@@ -708,6 +723,16 @@ export default async function AgencyProfilePage({
                   )}
                 </div>
               </div>
+
+              {/* ---- Portfolio & Awards ---- */}
+              {portfolio.length > 0 && (
+                <div id="portfolio" className="scroll-mt-24">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                    <h2 className="text-xl font-bold text-navy">Portfolio & Awards</h2>
+                    <PortfolioSection items={portfolio} />
+                  </div>
+                </div>
+              )}
 
               {/* ---- Services ---- */}
               {services.length > 0 && (
