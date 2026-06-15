@@ -105,28 +105,30 @@ export async function PATCH(
 
     const { serviceIds, industryIds, status, ...updateFields } = data;
 
+    const hasSocial = Object.keys(socialLinks).length > 0;
+
     await db.execute(sql`
       UPDATE agencies SET
         name = COALESCE(${updateFields.name ?? null}, name),
-        tagline = ${updateFields.tagline ?? null},
-        description = ${updateFields.description ?? null},
-        website = ${updateFields.website ?? null},
-        email = ${updateFields.email ?? null},
-        phone = ${updateFields.phone ?? null},
-        logo = ${updateFields.logo ?? null},
-        cover_image = ${updateFields.coverImage ?? null},
-        founded_year = ${updateFields.foundedYear ?? null},
-        company_size = ${updateFields.companySize ?? null},
-        hourly_rate = ${updateFields.hourlyRate ?? null},
-        min_project_size = ${updateFields.minProjectSize ?? null},
-        country_id = ${updateFields.countryId ?? null},
-        city_id = ${updateFields.cityId ?? null},
-        address = ${updateFields.address ?? null},
-        latitude = ${updateFields.latitude ?? null},
-        longitude = ${updateFields.longitude ?? null},
-        social_links = ${Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null},
-        meta_title = ${updateFields.metaTitle ?? null},
-        meta_description = ${updateFields.metaDescription ?? null},
+        tagline = COALESCE(${updateFields.tagline ?? null}, tagline),
+        description = COALESCE(${updateFields.description ?? null}, description),
+        website = COALESCE(${updateFields.website === "" ? null : (updateFields.website ?? null)}, website),
+        email = COALESCE(${updateFields.email === "" ? null : (updateFields.email ?? null)}, email),
+        phone = COALESCE(${updateFields.phone ?? null}, phone),
+        logo = COALESCE(${updateFields.logo ?? null}, logo),
+        cover_image = COALESCE(${updateFields.coverImage ?? null}, cover_image),
+        founded_year = COALESCE(${updateFields.foundedYear ?? null}, founded_year),
+        company_size = COALESCE(${updateFields.companySize ?? null}, company_size),
+        hourly_rate = COALESCE(${updateFields.hourlyRate ?? null}, hourly_rate),
+        min_project_size = COALESCE(${updateFields.minProjectSize ?? null}, min_project_size),
+        country_id = COALESCE(${updateFields.countryId ?? null}, country_id),
+        city_id = COALESCE(${updateFields.cityId ?? null}, city_id),
+        address = COALESCE(${updateFields.address ?? null}, address),
+        latitude = COALESCE(${updateFields.latitude ?? null}, latitude),
+        longitude = COALESCE(${updateFields.longitude ?? null}, longitude),
+        social_links = COALESCE(${hasSocial ? JSON.stringify(socialLinks) : null}, social_links),
+        meta_title = COALESCE(${updateFields.metaTitle ?? null}, meta_title),
+        meta_description = COALESCE(${updateFields.metaDescription ?? null}, meta_description),
         status = COALESCE(${status ?? null}, status),
         updated_at = NOW()
       WHERE id = ${id}
