@@ -196,6 +196,16 @@ export async function runMigrations() {
       ALTER TABLE reviews ALTER COLUMN user_id DROP NOT NULL;
       ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_name VARCHAR(100);
       ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_email VARCHAR(255);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_job_title VARCHAR(100);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_company_industry VARCHAR(100);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS budget_rating DECIMAL(3,2);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS schedule_rating DECIMAL(3,2);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS collaboration_rating DECIMAL(3,2);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS objective TEXT;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS enjoyed TEXT;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS improvements TEXT;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_provided VARCHAR(255);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS would_recommend BOOLEAN;
     EXCEPTION WHEN others THEN NULL;
     END $$;
   `);

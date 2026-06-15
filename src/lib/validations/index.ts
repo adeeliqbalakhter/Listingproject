@@ -65,19 +65,28 @@ export type UpdateAgencyInput = z.infer<typeof updateAgencySchema>;
 
 export const createReviewSchema = z.object({
   agencyId: z.string().uuid(),
-  overallRating: z.number().min(1).max(5),
-  qualityRating: z.number().min(1).max(5).optional(),
-  communicationRating: z.number().min(1).max(5).optional(),
-  valueRating: z.number().min(1).max(5).optional(),
-  timelinessRating: z.number().min(1).max(5).optional(),
-  title: z.string().min(5).max(255),
-  content: z.string().min(20),
-  projectType: z.string().max(255).optional(),
-  projectBudget: z.string().max(100).optional(),
-  projectDuration: z.string().max(100).optional(),
+  // Step 1: Ratings
+  budgetRating: z.number().min(1).max(5),
+  qualityRating: z.number().min(1).max(5),
+  scheduleRating: z.number().min(1).max(5),
+  collaborationRating: z.number().min(1).max(5),
+  // Step 2: Review details
+  objective: z.string().min(20).max(2000),
+  enjoyed: z.string().min(20).max(2000),
+  improvements: z.string().max(2000).optional(),
+  serviceProvided: z.string().max(255).optional(),
+  wouldRecommend: z.boolean(),
+  // Step 3: Personal info (guest fields, handled separately for logged-in users)
+  reviewerName: z.string().min(2).max(100).optional(),
+  reviewerEmail: z.string().email().max(255).optional(),
+  reviewerJobTitle: z.string().min(2).max(100).optional(),
   companyName: z.string().max(255).optional(),
+  companyIndustry: z.string().max(100).optional(),
   companySize: z.string().max(50).optional(),
-});
+  // Spam control
+  website: z.string().optional(),
+  formLoadedAt: z.number().optional(),
+}).passthrough();
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 

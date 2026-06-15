@@ -81,30 +81,25 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Honeypot - if filled, silently return fake success
     if (body.website) {
       return Response.json({ data: { id: "ok" } }, { status: 201 });
     }
 
-    // Time check - form must be open at least 5 seconds
     if (body.formLoadedAt && Date.now() - body.formLoadedAt < 5000) {
       return Response.json({ data: { id: "ok" } }, { status: 201 });
     }
 
-    // URL spam check
     const urlPattern = /https?:\/\/|www\./gi;
-    const combinedText = `${body.title || ""} ${body.content || ""}`;
+    const combinedText = `${body.objective || ""} ${body.enjoyed || ""} ${body.improvements || ""}`;
     const urlMatches = combinedText.match(urlPattern);
     if (urlMatches && urlMatches.length > 3) {
       return Response.json({ error: "Too many links in review" }, { status: 400 });
     }
 
-    // Try to get logged-in user (optional)
     let userId: string | null = null;
     let reviewerName: string | null = null;
     let reviewerEmail: string | null = null;
 
-    // Import and try auth - don't fail if not logged in
     try {
       const { requireAuth } = await import("@/lib/auth/guards");
       const authResult = await requireAuth(request);
@@ -114,9 +109,8 @@ export async function POST(request: NextRequest) {
     } catch {}
 
     if (!userId) {
-      // Guest - validate name and email
-      if (!body.reviewerName || typeof body.reviewerName !== "string" || body.reviewerName.trim().length < 2 || body.reviewerName.trim().length > 50) {
-        return Response.json({ error: "Name is required (2-50 characters)" }, { status: 400 });
+      if (!body.reviewerName || typeof body.reviewerName !== "string" || body.reviewerName.trim().length < 2 || body.reviewerName.trim().length > 100) {
+        return Response.json({ error: "Full name is required (2-100 characters)" }, { status: 400 });
       }
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!body.reviewerEmail || !emailRegex.test(body.reviewerEmail)) {
@@ -126,7 +120,6 @@ export async function POST(request: NextRequest) {
       reviewerEmail = body.reviewerEmail.trim().toLowerCase();
     }
 
-    // Validate core fields
     const parsed = createReviewSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json({ error: "Validation failed", details: parsed.error.format() }, { status: 400 });
@@ -136,7 +129,6 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     const data = parsed.data;
 
-    // Check agency exists and is active
     const agencyRows = await db.execute(
       sql`SELECT id FROM agencies WHERE id = ${data.agencyId} AND status = 'active' AND deleted_at IS NULL`
     );
@@ -144,7 +136,6 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    // Duplicate check
     if (userId) {
       const existing = await db.execute(
         sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND user_id = ${userId} AND deleted_at IS NULL`
@@ -161,30 +152,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const overallRating = (data.budgetRating + data.qualityRating + data.scheduleRating + data.collaborationRating) / 4;
+    const title = data.objective.slice(0, 255);
+
     const rows = await db.execute(sql`
       INSERT INTO reviews (
-        agency_id, user_id, reviewer_name, reviewer_email,
-        overall_rating, quality_rating, communication_rating,
-        value_rating, timeliness_rating, title, content,
-        project_type, project_budget, project_duration,
-        company_name, company_size, status, is_verified, helpful_count
+        agency_id, user_id, reviewer_name, reviewer_email, reviewer_job_title,
+        overall_rating, budget_rating, quality_rating, schedule_rating, collaboration_rating,
+        title, content, objective, enjoyed, improvements,
+        service_provided, would_recommend,
+        company_name, company_size, reviewer_company_industry,
+        status, is_verified, helpful_count
       ) VALUES (
         ${data.agencyId},
         ${userId},
-        ${reviewerName},
-        ${reviewerEmail},
-        ${data.overallRating},
-        ${data.qualityRating ?? null},
-        ${data.communicationRating ?? null},
-        ${data.valueRating ?? null},
-        ${data.timelinessRating ?? null},
-        ${data.title},
-        ${data.content},
-        ${data.projectType ?? null},
-        ${data.projectBudget ?? null},
-        ${data.projectDuration ?? null},
+        ${reviewerName ?? data.reviewerName ?? null},
+        ${reviewerEmail ?? data.reviewerEmail ?? null},
+        ${data.reviewerJobTitle ?? null},
+        ${overallRating},
+        ${data.budgetRating},
+        ${data.qualityRating},
+        ${data.scheduleRating},
+        ${data.collaborationRating},
+        ${title},
+        ${data.objective},
+        ${data.objective},
+        ${data.enjoyed},
+        ${data.improvements ?? null},
+        ${data.serviceProvided ?? null},
+        ${data.wouldRecommend},
         ${data.companyName ?? null},
         ${data.companySize ?? null},
+        ${data.companyIndustry ?? null},
         'pending',
         false,
         0

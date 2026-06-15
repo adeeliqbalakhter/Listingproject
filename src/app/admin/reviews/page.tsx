@@ -22,11 +22,18 @@ interface Review {
   reviewer: string;
   agency: string;
   rating: number;
+  budgetRating: number | null;
+  qualityRating: number | null;
+  scheduleRating: number | null;
+  collaborationRating: number | null;
   title: string;
   content: string;
   date: string;
   status: ReviewStatus;
   flagReason?: string;
+  wouldRecommend: boolean | null;
+  reviewerJobTitle: string | null;
+  companyIndustry: string | null;
 }
 
 interface Pagination {
@@ -57,6 +64,10 @@ function mapApiReview(raw: Record<string, unknown>): Review {
     reviewer: reviewerLabel,
     agency: (raw.agency_name as string) || "Unknown Agency",
     rating: raw.overall_rating as number,
+    budgetRating: (raw.budget_rating as number) ?? null,
+    qualityRating: (raw.quality_rating as number) ?? null,
+    scheduleRating: (raw.schedule_rating as number) ?? null,
+    collaborationRating: (raw.collaboration_rating as number) ?? null,
     title: (raw.title as string) || "",
     content: (raw.content as string) || "",
     date: new Date(raw.created_at as string).toLocaleDateString("en-US", {
@@ -66,6 +77,9 @@ function mapApiReview(raw: Record<string, unknown>): Review {
     }),
     status: raw.status as ReviewStatus,
     flagReason: undefined,
+    wouldRecommend: (raw.would_recommend as boolean) ?? null,
+    reviewerJobTitle: (raw.reviewer_job_title as string) ?? null,
+    companyIndustry: (raw.reviewer_company_industry as string) ?? null,
   };
 }
 
@@ -290,6 +304,31 @@ export default function AdminReviewsPage() {
                     <span className="text-sm font-medium text-navy">
                       {review.rating}.0
                     </span>
+                  </div>
+
+                  {/* Category Ratings */}
+                  {(review.budgetRating || review.qualityRating || review.scheduleRating || review.collaborationRating) && (
+                    <div className="flex flex-wrap gap-3 mb-2 text-xs text-gray-500">
+                      {review.budgetRating != null && <span>Budget: <span className="font-medium text-navy">{review.budgetRating}</span></span>}
+                      {review.qualityRating != null && <span>Quality: <span className="font-medium text-navy">{review.qualityRating}</span></span>}
+                      {review.scheduleRating != null && <span>Schedule: <span className="font-medium text-navy">{review.scheduleRating}</span></span>}
+                      {review.collaborationRating != null && <span>Collaboration: <span className="font-medium text-navy">{review.collaborationRating}</span></span>}
+                    </div>
+                  )}
+
+                  {/* Meta Info */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {review.wouldRecommend != null && (
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${review.wouldRecommend ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                        {review.wouldRecommend ? "Would recommend" : "Would not recommend"}
+                      </span>
+                    )}
+                    {review.reviewerJobTitle && (
+                      <span className="text-xs text-gray-500">{review.reviewerJobTitle}</span>
+                    )}
+                    {review.companyIndustry && (
+                      <span className="text-xs text-gray-400">({review.companyIndustry})</span>
+                    )}
                   </div>
 
                   {/* Content */}

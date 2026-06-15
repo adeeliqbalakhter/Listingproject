@@ -20,6 +20,8 @@ import {
   Share2,
   ChevronRight,
   Building2,
+  ThumbsUp,
+  CheckCircle2,
 } from "lucide-react";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -302,6 +304,26 @@ function RatingBar({
         />
       </div>
       <span className="w-8 text-right text-gray-500">{count}</span>
+    </div>
+  );
+}
+
+function CategoryRating({ label, rating }: { label: string; rating: number }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-gray-600">{label}</span>
+      <div className="flex gap-0.5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Star
+            key={i}
+            className={`w-3 h-3 ${
+              i < Math.round(rating)
+                ? "fill-yellow-400 text-yellow-400"
+                : "fill-gray-200 text-gray-200"
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -744,76 +766,161 @@ export default async function AgencyProfilePage({
                       {/* Individual reviews */}
                       {reviews.length > 0 && (
                         <div className="mt-8 divide-y divide-gray-100">
-                          {reviews.map((review) => (
-                            <div
-                              key={review.id}
-                              className="py-6 first:pt-0 last:pb-0"
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-semibold text-sm">
-                                      {(review.user_name || review.reviewer_name || "A").charAt(0).toUpperCase()}
+                          {reviews.map((review) => {
+                            const name = review.user_name || review.reviewer_name || "Anonymous";
+                            const initials = name
+                              .split(" ")
+                              .map((w: string) => w.charAt(0))
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2);
+
+                            return (
+                              <div
+                                key={review.id}
+                                className="flex flex-col md:flex-row gap-6 py-6 first:pt-0 last:pb-0"
+                              >
+                                {/* Left: Reviewer info */}
+                                <div className="md:w-48 shrink-0">
+                                  <div className="flex items-center gap-3 md:flex-col md:items-start">
+                                    <div className="w-12 h-12 rounded-full bg-navy text-white flex items-center justify-center font-bold text-lg">
+                                      {initials}
                                     </div>
                                     <div>
-                                      <p className="text-xs text-gray-500">
-                                        {review.user_name || review.reviewer_name || "Anonymous"}
-                                      </p>
-                                      <p className="font-semibold text-gray-900">
-                                        {review.title || "Review"}
-                                      </p>
-                                      {review.project_type && (
-                                        <p className="text-xs text-gray-500">
-                                          {review.project_type}
-                                        </p>
+                                      <p className="font-bold text-gray-900">{name}</p>
+                                      {review.reviewer_job_title && (
+                                        <p className="text-xs text-brand">{review.reviewer_job_title}</p>
+                                      )}
+                                      {review.company_name && (
+                                        <p className="text-xs text-gray-500">{review.company_name}</p>
                                       )}
                                     </div>
                                   </div>
+                                  {review.service_provided && (
+                                    <div className="mt-3 text-xs text-gray-500">
+                                      <p className="font-semibold text-gray-700">Service</p>
+                                      <p>{review.service_provided}</p>
+                                    </div>
+                                  )}
+                                  {review.company_size && (
+                                    <div className="mt-2 text-xs text-gray-500">
+                                      <p className="font-semibold text-gray-700">Team</p>
+                                      <p>{review.company_size}</p>
+                                    </div>
+                                  )}
+                                  {review.created_at && (
+                                    <p className="mt-2 text-xs text-gray-400">
+                                      {new Date(review.created_at).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })}
+                                    </p>
+                                  )}
                                 </div>
-                                {review.created_at && (
-                                  <time className="text-xs text-gray-400 whitespace-nowrap">
-                                    {new Date(
-                                      review.created_at
-                                    ).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                  </time>
-                                )}
-                              </div>
-                              <div className="mt-3">
-                                <Stars
-                                  rating={Number(review.overall_rating)}
-                                />
-                                {review.content && (
-                                  <p className="mt-1 text-sm text-gray-600 leading-relaxed">
-                                    {review.content}
-                                  </p>
-                                )}
-                                {(review.pros || review.cons) && (
-                                  <div className="mt-2 flex flex-col gap-1 text-sm">
-                                    {review.pros && (
-                                      <p className="text-green-700">
-                                        <span className="font-medium">
-                                          Pros:
-                                        </span>{" "}
-                                        {review.pros}
+
+                                {/* Center: Review content */}
+                                <div className="flex-1 min-w-0">
+                                  {review.objective ? (
+                                    <>
+                                      <div className="mb-4">
+                                        <p className="font-semibold text-gray-800 text-sm">
+                                          What was the objective behind your collaboration?
+                                        </p>
+                                        <p className="mt-1 text-sm text-gray-600">
+                                          {review.objective}
+                                        </p>
+                                      </div>
+                                      {review.enjoyed && (
+                                        <div className="mb-4">
+                                          <p className="font-semibold text-gray-800 text-sm">
+                                            What did you enjoy the most during your collaboration?
+                                          </p>
+                                          <p className="mt-1 text-sm text-gray-600">
+                                            {review.enjoyed}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {review.improvements && (
+                                        <div className="mb-4">
+                                          <p className="font-semibold text-gray-800 text-sm">
+                                            Are there any areas for improvements?
+                                          </p>
+                                          <p className="mt-1 text-sm text-gray-600">
+                                            {review.improvements}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="mb-4">
+                                      <p className="font-semibold text-gray-900">
+                                        {review.title || "Review"}
                                       </p>
-                                    )}
-                                    {review.cons && (
-                                      <p className="text-red-700">
-                                        <span className="font-medium">
-                                          Cons:
-                                        </span>{" "}
-                                        {review.cons}
-                                      </p>
-                                    )}
+                                      {review.content && (
+                                        <p className="mt-1 text-sm text-gray-600">
+                                          {review.content}
+                                        </p>
+                                      )}
+                                      {(review.pros || review.cons) && (
+                                        <div className="mt-2 flex flex-col gap-1 text-sm">
+                                          {review.pros && (
+                                            <p className="text-green-700">
+                                              <span className="font-medium">Pros:</span> {review.pros}
+                                            </p>
+                                          )}
+                                          {review.cons && (
+                                            <p className="text-red-700">
+                                              <span className="font-medium">Cons:</span> {review.cons}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {review.would_recommend && (
+                                    <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-medium">
+                                      <ThumbsUp className="w-3 h-3" />
+                                      {name.split(" ")[0]} recommends this agency
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Right: Ratings */}
+                                <div className="md:w-40 shrink-0">
+                                  <div className="text-center mb-3">
+                                    <span className="text-2xl font-bold text-brand">
+                                      {Number(review.overall_rating).toFixed(1)}
+                                    </span>
+                                    <span className="text-sm text-gray-400">/5</span>
                                   </div>
-                                )}
+                                  <Stars rating={Number(review.overall_rating)} size="w-4 h-4" />
+                                  {(review.budget_rating || review.quality_rating || review.schedule_rating || review.collaboration_rating) && (
+                                    <div className="mt-3 space-y-1.5">
+                                      {review.budget_rating && (
+                                        <CategoryRating label="Budget" rating={Number(review.budget_rating)} />
+                                      )}
+                                      {review.quality_rating && (
+                                        <CategoryRating label="Quality" rating={Number(review.quality_rating)} />
+                                      )}
+                                      {review.schedule_rating && (
+                                        <CategoryRating label="Schedule" rating={Number(review.schedule_rating)} />
+                                      )}
+                                      {review.collaboration_rating && (
+                                        <CategoryRating label="Collaboration" rating={Number(review.collaboration_rating)} />
+                                      )}
+                                    </div>
+                                  )}
+                                  {review.is_verified && (
+                                    <div className="mt-3 flex items-center gap-1 text-xs text-emerald-600">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Verified review
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </>
@@ -824,7 +931,7 @@ export default async function AgencyProfilePage({
                   )}
 
                   {/* Write a Review */}
-                  <ReviewForm agencyId={agency.id} />
+                  <ReviewForm agencyId={agency.id} agencyName={agency.name} />
                 </div>
               </div>
             </div>
