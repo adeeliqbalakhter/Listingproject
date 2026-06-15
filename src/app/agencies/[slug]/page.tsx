@@ -37,82 +37,112 @@ async function fetchAgencyBySlug(slug: string) {
 }
 
 async function fetchServices(agencyId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT s.name, s.slug FROM services s JOIN agency_services as2 ON s.id = as2.service_id WHERE as2.agency_id = ${agencyId}`
-  );
-  return rows as unknown as { name: string; slug: string }[];
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT s.name, s.slug FROM services s JOIN agency_services as2 ON s.id = as2.service_id WHERE as2.agency_id = ${agencyId}`
+    );
+    return rows as unknown as { name: string; slug: string }[];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchReviews(agencyId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT * FROM reviews WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5`
-  );
-  return rows as any[];
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT * FROM reviews WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5`
+    );
+    return rows as any[];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchCountryName(countryId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT name FROM countries WHERE id = ${countryId} LIMIT 1`
-  );
-  return ((rows as any[])[0]?.name as string) ?? null;
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT name FROM countries WHERE id = ${countryId} LIMIT 1`
+    );
+    return ((rows as any[])[0]?.name as string) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchCityName(cityId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT name FROM cities WHERE id = ${cityId} LIMIT 1`
-  );
-  return ((rows as any[])[0]?.name as string) ?? null;
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT name FROM cities WHERE id = ${cityId} LIMIT 1`
+    );
+    return ((rows as any[])[0]?.name as string) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchSimilarAgencies(agencyId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT a.slug, a.name, a.tagline, a.logo, a.average_rating, a.total_reviews,
-               co.name AS country_name, ci.name AS city_name
-        FROM agencies a
-        LEFT JOIN countries co ON a.country_id = co.id
-        LEFT JOIN cities ci ON a.city_id = ci.id
-        WHERE a.status = 'active' AND a.deleted_at IS NULL AND a.id != ${agencyId}
-        ORDER BY a.average_rating DESC NULLS LAST
-        LIMIT 3`
-  );
-  // Fetch services for each similar agency
-  const result = [];
-  for (const row of rows as any[]) {
-    const svcRows = await db.execute(
-      sql`SELECT s.name FROM services s JOIN agency_services asvc ON s.id = asvc.service_id WHERE asvc.agency_id = ${row.id} LIMIT 3`
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT a.slug, a.name, a.tagline, a.logo, a.average_rating, a.total_reviews,
+                 co.name AS country_name, ci.name AS city_name
+          FROM agencies a
+          LEFT JOIN countries co ON a.country_id = co.id
+          LEFT JOIN cities ci ON a.city_id = ci.id
+          WHERE a.status = 'active' AND a.deleted_at IS NULL AND a.id != ${agencyId}
+          ORDER BY a.average_rating DESC NULLS LAST
+          LIMIT 3`
     );
-    result.push({
-      slug: row.slug,
-      name: row.name,
-      tagline: row.tagline,
-      logo: row.logo,
-      averageRating: row.average_rating ? Number(row.average_rating) : null,
-      totalReviews: row.total_reviews ?? 0,
-      location: [row.city_name, row.country_name].filter(Boolean).join(", "),
-      services: (svcRows as any[]).map((s: any) => s.name),
-    });
+    const result = [];
+    for (const row of rows as any[]) {
+      try {
+        const svcRows = await db.execute(
+          sql`SELECT s.name FROM services s JOIN agency_services asvc ON s.id = asvc.service_id WHERE asvc.agency_id = ${row.id} LIMIT 3`
+        );
+        result.push({
+          slug: row.slug,
+          name: row.name,
+          tagline: row.tagline,
+          logo: row.logo,
+          averageRating: row.average_rating ? Number(row.average_rating) : null,
+          totalReviews: row.total_reviews ?? 0,
+          location: [row.city_name, row.country_name].filter(Boolean).join(", "),
+          services: (svcRows as any[]).map((s: any) => s.name),
+        });
+      } catch {
+        result.push({
+          slug: row.slug, name: row.name, tagline: row.tagline, logo: row.logo,
+          averageRating: null, totalReviews: 0, location: "", services: [],
+        });
+      }
+    }
+    return result;
+  } catch {
+    return [];
   }
-  return result;
 }
 
 async function fetchRatingBreakdown(agencyId: string) {
-  const db = getDb();
-  const rows = await db.execute(
-    sql`SELECT overall_rating, COUNT(*)::int as count FROM reviews WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL GROUP BY overall_rating`
-  );
-  const breakdown: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-  for (const row of rows as any[]) {
-    const rating = Math.round(Number(row.overall_rating));
-    if (rating >= 1 && rating <= 5) {
-      breakdown[rating] = Number(row.count);
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT overall_rating, COUNT(*)::int as count FROM reviews WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL GROUP BY overall_rating`
+    );
+    const breakdown: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    for (const row of rows as any[]) {
+      const rating = Math.round(Number(row.overall_rating));
+      if (rating >= 1 && rating <= 5) {
+        breakdown[rating] = Number(row.count);
+      }
     }
+    return breakdown;
+  } catch {
+    return { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   }
-  return breakdown;
 }
 
 // ---------------------------------------------------------------------------
