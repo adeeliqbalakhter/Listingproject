@@ -198,6 +198,19 @@ export async function runMigrations() {
     END $$;
   `);
 
+  // ─── Ensure all review columns exist (table may predate some columns) ───
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS quality_rating DECIMAL(3,2)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS communication_rating DECIMAL(3,2)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS value_rating DECIMAL(3,2)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS timeliness_rating DECIMAL(3,2)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS project_type VARCHAR(255)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS project_budget VARCHAR(100)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS project_duration VARCHAR(100)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS company_size VARCHAR(50)`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT false`);
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS helpful_count INTEGER DEFAULT 0`);
+
   // ─── Add guest reviewer and review detail columns ───
   await db.execute(sql`
     ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_name VARCHAR(100)
