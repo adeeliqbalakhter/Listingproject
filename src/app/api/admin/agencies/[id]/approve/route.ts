@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const rows = await db.execute(
-      sql`SELECT id, status, is_verified, is_featured FROM agencies WHERE id = ${id} AND deleted_at IS NULL`
+      sql`SELECT id, slug, status, is_verified, is_featured FROM agencies WHERE id = ${id} AND deleted_at IS NULL`
     );
     const agency = (rows as unknown as Array<Record<string, unknown>>)[0];
     if (!agency) return error("Agency not found", 404);
@@ -64,6 +65,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       newValues: { status: newStatus, is_verified: isVerified, is_featured: isFeatured },
       ipAddress: getClientIp(request),
     });
+
+    try {
+      const slug = agency.slug as string;
+      if (slug) {
+        revalidatePath(`/agencies/${slug}`);
+      }
+      revalidatePath('/agencies');
+    } catch {}
 
     return success({ message: `Agency ${action} successful`, status: newStatus });
   } catch (err) {

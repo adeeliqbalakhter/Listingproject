@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
     const rows = await db.execute(sql`
-      SELECT r.*, u.name as user_name, u.email as user_email, a.name as agency_name
+      SELECT r.*, u.name as user_name, u.email as user_email, a.name as agency_name, r.reviewer_name as guest_name, r.reviewer_email as guest_email
       FROM reviews r
       LEFT JOIN users u ON u.id = r.user_id
       LEFT JOIN agencies a ON a.id = r.agency_id

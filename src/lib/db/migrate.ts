@@ -190,6 +190,16 @@ export async function runMigrations() {
     )
   `);
 
+  // ─── Make reviews.user_id nullable and add guest reviewer columns ───
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE reviews ALTER COLUMN user_id DROP NOT NULL;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_name VARCHAR(100);
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS reviewer_email VARCHAR(255);
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+  `);
+
   // ─── Ensure users table has needed columns ───
   await db.execute(sql`
     DO $$ BEGIN

@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireAuth } from "@/lib/auth/guards";
 import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -74,57 +73,106 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth(request);
-    if ("error" in authResult) return authResult.error;
-    const { user } = authResult;
-
-    const rateLimit = checkRateLimit(request, { windowMs: 60_000, maxRequests: 10 }, `review:${user.id}`);
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rateLimit = checkRateLimit(request, { windowMs: 3600_000, maxRequests: 3 }, `review:${ip}`);
     if (!rateLimit.allowed) {
       return rateLimitResponse(rateLimit.resetAt);
     }
 
     const body = await request.json();
+
+    // Honeypot - if filled, silently return fake success
+    if (body.website) {
+      return Response.json({ data: { id: "ok" } }, { status: 201 });
+    }
+
+    // Time check - form must be open at least 5 seconds
+    if (body.formLoadedAt && Date.now() - body.formLoadedAt < 5000) {
+      return Response.json({ data: { id: "ok" } }, { status: 201 });
+    }
+
+    // URL spam check
+    const urlPattern = /https?:\/\/|www\./gi;
+    const combinedText = `${body.title || ""} ${body.content || ""}`;
+    const urlMatches = combinedText.match(urlPattern);
+    if (urlMatches && urlMatches.length > 3) {
+      return Response.json({ error: "Too many links in review" }, { status: 400 });
+    }
+
+    // Try to get logged-in user (optional)
+    let userId: string | null = null;
+    let reviewerName: string | null = null;
+    let reviewerEmail: string | null = null;
+
+    // Import and try auth - don't fail if not logged in
+    try {
+      const { requireAuth } = await import("@/lib/auth/guards");
+      const authResult = await requireAuth(request);
+      if (!("error" in authResult)) {
+        userId = authResult.user.id;
+      }
+    } catch {}
+
+    if (!userId) {
+      // Guest - validate name and email
+      if (!body.reviewerName || typeof body.reviewerName !== "string" || body.reviewerName.trim().length < 2 || body.reviewerName.trim().length > 50) {
+        return Response.json({ error: "Name is required (2-50 characters)" }, { status: 400 });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!body.reviewerEmail || !emailRegex.test(body.reviewerEmail)) {
+        return Response.json({ error: "Valid email is required" }, { status: 400 });
+      }
+      reviewerName = body.reviewerName.trim();
+      reviewerEmail = body.reviewerEmail.trim().toLowerCase();
+    }
+
+    // Validate core fields
     const parsed = createReviewSchema.safeParse(body);
-
     if (!parsed.success) {
-      return Response.json(
-        { error: "Validation failed", details: parsed.error.format() },
-        { status: 400 }
-      );
+      return Response.json({ error: "Validation failed", details: parsed.error.format() }, { status: 400 });
     }
 
-    if (!hasDb()) {
-      return Response.json({ error: "Database not available" }, { status: 503 });
-    }
-
+    if (!hasDb()) return Response.json({ error: "Database not available" }, { status: 503 });
     const db = getDb();
     const data = parsed.data;
 
+    // Check agency exists and is active
     const agencyRows = await db.execute(
       sql`SELECT id FROM agencies WHERE id = ${data.agencyId} AND status = 'active' AND deleted_at IS NULL`
     );
-    const agency = (agencyRows as unknown as Array<Record<string, unknown>>)[0];
-    if (!agency) {
+    if (!(agencyRows as unknown as Array<Record<string, unknown>>)[0]) {
       return Response.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    const existingRows = await db.execute(
-      sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND user_id = ${user.id} AND deleted_at IS NULL`
-    );
-    const existing = (existingRows as unknown as Array<Record<string, unknown>>)[0];
-    if (existing) {
-      return Response.json({ error: "You have already reviewed this agency" }, { status: 409 });
+    // Duplicate check
+    if (userId) {
+      const existing = await db.execute(
+        sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND user_id = ${userId} AND deleted_at IS NULL`
+      );
+      if ((existing as unknown as Array<Record<string, unknown>>)[0]) {
+        return Response.json({ error: "You have already reviewed this agency" }, { status: 409 });
+      }
+    } else if (reviewerEmail) {
+      const existing = await db.execute(
+        sql`SELECT id FROM reviews WHERE agency_id = ${data.agencyId} AND reviewer_email = ${reviewerEmail} AND deleted_at IS NULL`
+      );
+      if ((existing as unknown as Array<Record<string, unknown>>)[0]) {
+        return Response.json({ error: "A review from this email already exists for this agency" }, { status: 409 });
+      }
     }
 
     const rows = await db.execute(sql`
       INSERT INTO reviews (
-        agency_id, user_id, overall_rating, quality_rating, communication_rating,
+        agency_id, user_id, reviewer_name, reviewer_email,
+        overall_rating, quality_rating, communication_rating,
         value_rating, timeliness_rating, title, content,
         project_type, project_budget, project_duration,
         company_name, company_size, status, is_verified, helpful_count
       ) VALUES (
         ${data.agencyId},
-        ${user.id},
+        ${userId},
+        ${reviewerName},
+        ${reviewerEmail},
         ${data.overallRating},
         ${data.qualityRating ?? null},
         ${data.communicationRating ?? null},
@@ -143,9 +191,7 @@ export async function POST(request: NextRequest) {
       ) RETURNING *
     `);
 
-    const review = (rows as unknown as Array<Record<string, unknown>>)[0];
-
-    return Response.json({ data: review }, { status: 201 });
+    return Response.json({ data: (rows as unknown as Array<Record<string, unknown>>)[0] }, { status: 201 });
   } catch (error) {
     console.error("POST /api/reviews error:", error);
     return Response.json({ error: "Internal server error" }, { status: 500 });

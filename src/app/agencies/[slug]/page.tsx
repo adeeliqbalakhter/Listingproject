@@ -54,7 +54,11 @@ async function fetchReviews(agencyId: string) {
   try {
     const db = getDb();
     const rows = await db.execute(
-      sql`SELECT * FROM reviews WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5`
+      sql`SELECT r.*, u.name as user_name, u.image as user_image
+          FROM reviews r
+          LEFT JOIN users u ON r.user_id = u.id
+          WHERE r.agency_id = ${agencyId} AND r.status = 'approved' AND r.deleted_at IS NULL
+          ORDER BY r.created_at DESC LIMIT 5`
     );
     return rows as any[];
   } catch {
@@ -749,9 +753,12 @@ export default async function AgencyProfilePage({
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <div className="w-9 h-9 rounded-full bg-navy text-white flex items-center justify-center font-semibold text-sm">
-                                      R
+                                      {(review.user_name || review.reviewer_name || "A").charAt(0).toUpperCase()}
                                     </div>
                                     <div>
+                                      <p className="text-xs text-gray-500">
+                                        {review.user_name || review.reviewer_name || "Anonymous"}
+                                      </p>
                                       <p className="font-semibold text-gray-900">
                                         {review.title || "Review"}
                                       </p>

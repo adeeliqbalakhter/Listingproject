@@ -44,9 +44,17 @@ const statusTabs = [
 ];
 
 function mapApiReview(raw: Record<string, unknown>): Review {
+  const guestName = raw.guest_name as string | null;
+  const guestEmail = raw.guest_email as string | null;
+  const userName = raw.user_name as string | null;
+  const reviewerLabel = userName
+    ? userName
+    : guestName
+      ? `${guestName} (guest${guestEmail ? `, ${guestEmail}` : ""})`
+      : "Unknown User";
   return {
     id: raw.id as number,
-    reviewer: (raw.user_name as string) || "Unknown User",
+    reviewer: reviewerLabel,
     agency: (raw.agency_name as string) || "Unknown Agency",
     rating: raw.overall_rating as number,
     title: (raw.title as string) || "",
