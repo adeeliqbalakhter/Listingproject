@@ -157,14 +157,24 @@ function AgencyCard({ agency, index }: { agency: Agency; index: number }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 sm:p-6 hover:border-brand/40 hover:shadow-md transition-all group">
       <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
-        {/* Logo placeholder */}
-        <div
-          className={`${logoColor} w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center shrink-0`}
-        >
-          <span className="text-white font-bold text-xl sm:text-2xl">
-            {initials}
-          </span>
-        </div>
+        {/* Logo */}
+        {agency.logo ? (
+          <img
+            src={agency.logo}
+            alt={`${agency.name} logo`}
+            width={80}
+            height={80}
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shrink-0"
+          />
+        ) : (
+          <div
+            className={`${logoColor} w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center shrink-0`}
+          >
+            <span className="text-white font-bold text-xl sm:text-2xl">
+              {initials}
+            </span>
+          </div>
+        )}
 
         {/* Details */}
         <div className="flex-1 min-w-0">

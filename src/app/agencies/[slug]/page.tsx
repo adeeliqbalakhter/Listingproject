@@ -19,6 +19,7 @@ import {
   AtSign,
   Share2,
   ChevronRight,
+  Building2,
 } from "lucide-react";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -324,6 +325,51 @@ export default async function AgencyProfilePage({
   const agency = await fetchAgencyBySlug(slug);
   if (!agency || agency.deleted_at) {
     notFound();
+  }
+
+  // Show message pages for non-active statuses
+  if (agency.status === "suspended" || agency.status === "rejected") {
+    return (
+      <section className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="max-w-lg mx-auto px-4 py-20 text-center">
+          <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-6">
+            <Building2 className="w-8 h-8 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-navy">Agency Unavailable</h1>
+          <p className="mt-4 text-gray-600 leading-relaxed">
+            This agency listing is currently unavailable. It may be under review. Please check back later.
+          </p>
+          <Link
+            href="/agencies"
+            className="inline-flex items-center gap-2 mt-8 bg-brand text-white px-6 py-3 rounded-xl font-medium hover:bg-brand-dark transition-colors"
+          >
+            Browse Agencies
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (agency.status === "draft" || agency.status === "pending") {
+    return (
+      <section className="bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="max-w-lg mx-auto px-4 py-20 text-center">
+          <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-6">
+            <Clock className="w-8 h-8 text-yellow-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-navy">Not Yet Published</h1>
+          <p className="mt-4 text-gray-600 leading-relaxed">
+            This agency profile is not yet published. It&apos;s currently under review.
+          </p>
+          <Link
+            href="/agencies"
+            className="inline-flex items-center gap-2 mt-8 bg-brand text-white px-6 py-3 rounded-xl font-medium hover:bg-brand-dark transition-colors"
+          >
+            Browse Agencies
+          </Link>
+        </div>
+      </section>
+    );
   }
 
   // Fetch related data in parallel
