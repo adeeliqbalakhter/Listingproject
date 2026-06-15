@@ -191,8 +191,9 @@ export async function POST(request: NextRequest) {
     `);
 
     return Response.json({ data: (rows as unknown as Array<Record<string, unknown>>)[0] }, { status: 201 });
-  } catch (error) {
-    console.error("POST /api/reviews error:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+  } catch (err) {
+    console.error("POST /api/reviews error:", err);
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return Response.json({ error: `Server error: ${msg}` }, { status: 500 });
   }
 }
