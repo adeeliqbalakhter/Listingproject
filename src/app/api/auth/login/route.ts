@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const validPassword = await verifyPassword(password, user.password_hash as string);
     if (!validPassword) {
       const attempts = ((user.failed_login_attempts as number) || 0) + 1;
-      const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
+      const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
 
       await db.execute(sql`
         UPDATE users SET failed_login_attempts = ${attempts},
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     await db.execute(sql`
       INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
-      VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt})
+      VALUES (${user.id}, ${refresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${refresh.expiresAt.toISOString()})
     `);
 
     await logLoginAttempt(user.id as string, request, "success");
@@ -121,6 +121,8 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    return serverError(err);
+    console.error("[LOGIN] Error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return error(`Server error: ${message}`, 500);
   }
 }

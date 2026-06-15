@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     try {
       await db.execute(sql`
         INSERT INTO otp_tokens (user_id, code, type, expires_at)
-        VALUES (${user.id}, ${code}, ${type}, ${new Date(Date.now() + 10 * 60 * 1000)})
+        VALUES (${user.id}, ${code}, ${type}, ${new Date(Date.now() + 10 * 60 * 1000).toISOString()})
       `);
     } catch (e) {
       console.error("Failed to insert OTP token:", e);

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     await db.execute(sql`
       INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-      VALUES (${user.id}, ${tokenHash}, ${new Date(Date.now() + 60 * 60 * 1000)})
+      VALUES (${user.id}, ${tokenHash}, ${new Date(Date.now() + 60 * 60 * 1000).toISOString()})
     `);
 
     const emailData = buildPasswordResetEmail((user.name as string) || "", token);

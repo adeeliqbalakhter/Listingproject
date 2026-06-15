@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       const emailToken = generateEmailToken();
       await db.execute(sql`
         INSERT INTO email_verification_tokens (user_id, token, expires_at)
-        VALUES (${userId}, ${emailToken}, ${new Date(Date.now() + 24 * 60 * 60 * 1000)})
+        VALUES (${userId}, ${emailToken}, ${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()})
       `);
       const verificationEmail = buildVerificationEmail(name, emailToken);
       await sendEmail({ ...verificationEmail, to: email });
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       const otpCode = generateOTP();
       await db.execute(sql`
         INSERT INTO otp_tokens (user_id, code, type, expires_at)
-        VALUES (${userId}, ${otpCode}, 'email_verification', ${new Date(Date.now() + 10 * 60 * 1000)})
+        Values (${userId}, ${otpCode}, 'email_verification', ${new Date(Date.now() + 10 * 60 * 1000).toISOString()})
       `);
       const otpEmail = buildOTPEmail(name, otpCode, "email verification");
       const sent = await sendEmail({ ...otpEmail, to: email });
