@@ -77,13 +77,22 @@ export async function POST(request: NextRequest) {
       sql`UPDATE signup_otps SET used_at = NOW() WHERE id = ${otpRecord.id}`
     );
 
-    // Check if email already exists (with or without soft-delete)
+    // Check if email already exists
     const existingRows = await db.execute(
-      sql`SELECT id FROM users WHERE email = ${email}`
+      sql`SELECT id, deleted_at FROM users WHERE email = ${email}`
     );
-    const existing = (existingRows as unknown as Array<Record<string, unknown>>);
-    if (existing.length > 0) {
+    const existing = (existingRows as unknown as Array<Record<string, unknown>>)[0];
+    if (existing && !existing.deleted_at) {
       return error("This email is already registered. Please sign in instead.", 409);
+    }
+    // Clean up soft-deleted user so re-registration works
+    if (existing && existing.deleted_at) {
+      const uid = existing.id as string;
+      await db.execute(sql`DELETE FROM notification_preferences WHERE user_id = ${uid}`);
+      await db.execute(sql`DELETE FROM user_profiles WHERE user_id = ${uid}`);
+      await db.execute(sql`DELETE FROM refresh_tokens WHERE user_id = ${uid}`);
+      await db.execute(sql`DELETE FROM reviews WHERE user_id = ${uid}`);
+      await db.execute(sql`DELETE FROM users WHERE id = ${uid}`);
     }
 
     // Create user with email_verified = NOW()
