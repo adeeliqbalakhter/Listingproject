@@ -17,13 +17,21 @@ import {
   DollarSign,
   Mail,
   Phone,
-  FileText,
   Loader2,
   Inbox,
   MessageSquare,
+  Lock,
+  CreditCard,
+  Unlock,
 } from "lucide-react";
 
-type LeadStatus = "new" | "sent" | "viewed" | "responded" | "won" | "lost";
+type AssignmentStatus = "sent" | "claimed" | "responded" | "won" | "lost";
+
+interface Assignment {
+  id: string;
+  agencyId: string;
+  status: AssignmentStatus;
+}
 
 interface Lead {
   id: string;
@@ -33,25 +41,18 @@ interface Lead {
   phone: string;
   budget: string;
   timeline: string;
-  status: LeadStatus;
-  date: string;
   description: string;
+  date: string;
+  assignmentId: string | null;
+  assignmentStatus: AssignmentStatus;
 }
 
-interface ApiLead {
-  id: string;
-  company_name: string;
-  contact_name: string;
-  contact_email: string;
-  contact_phone: string;
-  project_description: string;
-  budget: string | null;
-  timeline: string | null;
-  status: string;
-  created_at: string;
+interface CreditBalance {
+  available: number;
+  monthlyCredits: number;
+  consumed: number;
+  granted: number;
 }
-
-const VALID_STATUSES: LeadStatus[] = ["new", "sent", "viewed", "responded", "won", "lost"];
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -66,27 +67,9 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function mapApiLead(l: ApiLead): Lead {
-  return {
-    id: l.id,
-    company: l.company_name || "Unknown",
-    contact: l.contact_name || "Unknown",
-    email: l.contact_email || "",
-    phone: l.contact_phone || "",
-    budget: l.budget || "",
-    timeline: l.timeline || "",
-    status: (VALID_STATUSES.includes(l.status as LeadStatus)
-      ? l.status
-      : "new") as LeadStatus,
-    date: l.created_at ? timeAgo(l.created_at) : "",
-    description: l.project_description || "",
-  };
-}
-
-const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
-  new: { label: "New", classes: "bg-blue-50 text-brand" },
-  sent: { label: "Sent", classes: "bg-indigo-50 text-indigo-700" },
-  viewed: { label: "Viewed", classes: "bg-yellow-50 text-yellow-700" },
+const statusConfig: Record<AssignmentStatus, { label: string; classes: string }> = {
+  sent: { label: "New", classes: "bg-blue-50 text-brand" },
+  claimed: { label: "Claimed", classes: "bg-yellow-50 text-yellow-700" },
   responded: { label: "Responded", classes: "bg-green-50 text-green-700" },
   won: { label: "Won", classes: "bg-emerald-50 text-emerald-700" },
   lost: { label: "Lost", classes: "bg-red-50 text-red-600" },
@@ -94,62 +77,113 @@ const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [credits, setCredits] = useState<CreditBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | LeadStatus>("all");
+  const [filter, setFilter] = useState<"all" | AssignmentStatus>("all");
+  const [claimingId, setClaimingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    totalPages: 0,
-    page: 1,
-  });
+  const [agencyId, setAgencyId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchLeads() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch("/api/leads?limit=50");
-        if (!res.ok) {
-          const json = await res.json().catch(() => null);
-          throw new Error(json?.error || `Failed to fetch leads (${res.status})`);
-        }
-        const json = await res.json();
-        const apiLeads: ApiLead[] = json.data ?? [];
-        setLeads(apiLeads.map(mapApiLead));
-        if (json.pagination) {
-          setPagination({
-            total: json.pagination.total ?? 0,
-            totalPages: json.pagination.totalPages ?? 0,
-            page: json.pagination.page ?? 1,
-          });
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load leads");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchLeads();
+    fetchData();
   }, []);
 
-  const filteredLeads = leads.filter((l) => {
-    if (filter === "all") return true;
-    return l.status === filter;
-  });
-
-  const updateStatus = async (id: string, status: LeadStatus) => {
-    setUpdatingId(id);
+  async function fetchData() {
     try {
-      const res = await fetch(`/api/leads/${id}`, {
+      setLoading(true);
+      setError(null);
+
+      // Fetch agency info
+      const agencyRes = await fetch("/api/agencies/mine");
+      if (!agencyRes.ok) throw new Error("Could not load agency");
+      const agencyJson = await agencyRes.json();
+      const agency = agencyJson.data?.agency;
+      if (!agency) throw new Error("No agency found");
+      setAgencyId(agency.id);
+
+      // Fetch credits and leads in parallel
+      const [creditsRes, leadsRes] = await Promise.all([
+        fetch("/api/credits"),
+        fetch(`/api/leads?agencyId=${agency.id}&limit=50`),
+      ]);
+
+      if (creditsRes.ok) {
+        const creditsJson = await creditsRes.json();
+        setCredits(creditsJson.data ?? null);
+      }
+
+      if (!leadsRes.ok) throw new Error("Failed to fetch leads");
+      const leadsJson = await leadsRes.json();
+      const apiLeads = leadsJson.data ?? [];
+
+      const mapped: Lead[] = apiLeads.map((l: Record<string, unknown>) => {
+        const assignments = (l.assignments as Assignment[] | null) ?? [];
+        const myAssignment = assignments.find((a) => a.agencyId === agency.id) ?? assignments[0];
+        return {
+          id: l.id as string,
+          company: (l.company_name as string) || "Unknown",
+          contact: (l.contact_name as string) || "Unknown",
+          email: (l.contact_email as string) || "",
+          phone: (l.contact_phone as string) || "",
+          budget: (l.budget as string) || "",
+          timeline: (l.timeline as string) || "",
+          description: (l.project_description as string) || "",
+          date: l.created_at ? timeAgo(l.created_at as string) : "",
+          assignmentId: myAssignment?.id ?? null,
+          assignmentStatus: (myAssignment?.status as AssignmentStatus) ?? "sent",
+        };
+      });
+
+      setLeads(mapped);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load leads");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function claimLead(lead: Lead) {
+    if (!lead.assignmentId) return;
+    setClaimingId(lead.id);
+    try {
+      const res = await fetch("/api/leads/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, assignmentId: lead.assignmentId }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === lead.id ? { ...l, assignmentStatus: "claimed" } : l
+          )
+        );
+        if (credits) {
+          setCredits({ ...credits, available: json.data?.creditsRemaining ?? credits.available - 1, consumed: credits.consumed + 1 });
+        }
+      } else {
+        alert(json.error || "Failed to claim lead");
+      }
+    } catch {
+      alert("Network error while claiming lead");
+    } finally {
+      setClaimingId(null);
+    }
+  }
+
+  async function updateStatus(leadId: string, status: AssignmentStatus) {
+    setUpdatingId(leadId);
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
         setLeads((prev) =>
-          prev.map((l) => (l.id === id ? { ...l, status } : l))
+          prev.map((l) => (l.id === leadId ? { ...l, assignmentStatus: status } : l))
         );
       }
     } catch {
@@ -157,20 +191,27 @@ export default function LeadsPage() {
     } finally {
       setUpdatingId(null);
     }
-  };
+  }
+
+  const isClaimed = (s: AssignmentStatus) => s !== "sent";
+
+  const filteredLeads = leads.filter((l) => {
+    if (filter === "all") return true;
+    return l.assignmentStatus === filter;
+  });
 
   const statusCounts = leads.reduce(
     (acc, l) => {
-      acc[l.status] = (acc[l.status] || 0) + 1;
+      acc[l.assignmentStatus] = (acc[l.assignmentStatus] || 0) + 1;
       return acc;
     },
     {} as Record<string, number>
   );
 
   const stats = [
-    { label: "Total Leads", value: String(pagination.total || leads.length), icon: Users, color: "text-brand", bg: "bg-blue-50" },
-    { label: "New Leads", value: String(statusCounts["new"] || 0), icon: Sparkles, color: "text-green-600", bg: "bg-green-50" },
-    { label: "Responded", value: String(statusCounts["responded"] || 0), icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
+    { label: "Total Leads", value: String(leads.length), icon: Users, color: "text-brand", bg: "bg-blue-50" },
+    { label: "Unclaimed", value: String(statusCounts["sent"] || 0), icon: Sparkles, color: "text-yellow-600", bg: "bg-yellow-50" },
+    { label: "Claimed", value: String((statusCounts["claimed"] || 0) + (statusCounts["responded"] || 0)), icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
     { label: "Won", value: String(statusCounts["won"] || 0), icon: Coins, color: "text-orange-500", bg: "bg-orange-50" },
   ];
 
@@ -202,9 +243,44 @@ export default function LeadsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-navy">Leads</h1>
         <p className="mt-1 text-gray-500">
-          Track and manage incoming project inquiries.
+          Claim leads to view full details and start engaging.
         </p>
       </div>
+
+      {/* Credit Balance Banner */}
+      {credits && (
+        <div className="mb-6 bg-gradient-to-r from-brand/5 to-blue-50 rounded-xl border border-brand/20 p-5">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-brand/10 rounded-lg flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-brand" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Available Credits</p>
+                <p className="text-2xl font-bold text-navy">
+                  {credits.monthlyCredits === -1 ? "Unlimited" : credits.available}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 text-sm">
+              <div className="text-center">
+                <p className="text-gray-500">Plan</p>
+                <p className="font-semibold text-navy">
+                  {credits.monthlyCredits === -1 ? "∞" : credits.monthlyCredits}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-gray-500">Bonus</p>
+                <p className="font-semibold text-green-600">+{credits.granted}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-gray-500">Used</p>
+                <p className="font-semibold text-red-600">{credits.consumed}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -226,7 +302,7 @@ export default function LeadsPage() {
 
       {/* Filter */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {(["all", ...VALID_STATUSES] as const).map((f) => (
+        {(["all", "sent", "claimed", "responded", "won", "lost"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -236,7 +312,7 @@ export default function LeadsPage() {
                 : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
             }`}
           >
-            {f === "all" ? "All" : statusConfig[f as LeadStatus].label}
+            {f === "all" ? "All" : statusConfig[f as AssignmentStatus].label}
           </button>
         ))}
       </div>
@@ -245,7 +321,10 @@ export default function LeadsPage() {
       <div className="space-y-4">
         {filteredLeads.map((lead) => {
           const isExpanded = expandedLead === lead.id;
+          const claimed = isClaimed(lead.assignmentStatus);
+          const isClaiming = claimingId === lead.id;
           const isUpdating = updatingId === lead.id;
+
           return (
             <div
               key={lead.id}
@@ -254,14 +333,18 @@ export default function LeadsPage() {
               {/* Lead Header */}
               <div
                 className="p-5 cursor-pointer"
-                onClick={() =>
-                  setExpandedLead(isExpanded ? null : lead.id)
-                }
+                onClick={() => setExpandedLead(isExpanded ? null : lead.id)}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Building2 className="w-5 h-5 text-gray-400" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      claimed ? "bg-green-50" : "bg-gray-100"
+                    }`}>
+                      {claimed ? (
+                        <Unlock className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <Lock className="w-5 h-5 text-gray-400" />
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -269,9 +352,9 @@ export default function LeadsPage() {
                           {lead.company}
                         </p>
                         <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig[lead.status].classes}`}
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConfig[lead.assignmentStatus].classes}`}
                         >
-                          {statusConfig[lead.status].label}
+                          {statusConfig[lead.assignmentStatus].label}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
@@ -285,6 +368,12 @@ export default function LeadsPage() {
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {lead.timeline}
+                          </span>
+                        )}
+                        {!claimed && (
+                          <span className="text-orange-500 font-medium flex items-center gap-1">
+                            <Lock className="w-3 h-3" />
+                            Claim to view details
                           </span>
                         )}
                       </div>
@@ -304,99 +393,172 @@ export default function LeadsPage() {
               {/* Expanded Details */}
               {isExpanded && (
                 <div className="border-t border-gray-100 px-5 py-5 bg-gray-50/50">
-                  <div className="grid sm:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="text-sm font-semibold text-navy mb-2">
-                        Project Description
-                      </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                        {lead.description || "No description provided."}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-navy mb-2">
-                        Contact Information
-                      </h4>
-                      <div className="space-y-2">
-                        <p className="text-sm text-gray-600 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-gray-400" />
-                          {lead.contact}
-                        </p>
-                        {lead.email && (
-                          <a
-                            href={`mailto:${lead.email}`}
-                            className="text-sm text-brand flex items-center gap-2 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
+                  {claimed ? (
+                    <>
+                      {/* Full details for claimed leads */}
+                      <div className="grid sm:grid-cols-2 gap-6">
+                        <div>
+                          <h4 className="text-sm font-semibold text-navy mb-2">
+                            Project Description
+                          </h4>
+                          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                            {lead.description || "No description provided."}
+                          </p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-navy mb-2">
+                            Contact Information
+                          </h4>
+                          <div className="space-y-2">
+                            <p className="text-sm text-gray-600 flex items-center gap-2">
+                              <Users className="w-4 h-4 text-gray-400" />
+                              {lead.contact}
+                            </p>
+                            {lead.email && (
+                              <a
+                                href={`mailto:${lead.email}`}
+                                className="text-sm text-brand flex items-center gap-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Mail className="w-4 h-4 text-gray-400" />
+                                {lead.email}
+                              </a>
+                            )}
+                            {lead.phone && (
+                              <a
+                                href={`tel:${lead.phone}`}
+                                className="text-sm text-brand flex items-center gap-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Phone className="w-4 h-4 text-gray-400" />
+                                {lead.phone}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions for claimed leads */}
+                      <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200 flex-wrap">
+                        {lead.assignmentStatus === "claimed" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "responded"); }}
+                            disabled={isUpdating}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50"
                           >
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            {lead.email}
-                          </a>
+                            {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            Mark as Responded
+                          </button>
                         )}
-                        {lead.phone && (
-                          <a
-                            href={`tel:${lead.phone}`}
-                            className="text-sm text-brand flex items-center gap-2 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Phone className="w-4 h-4 text-gray-400" />
-                            {lead.phone}
-                          </a>
+                        <a
+                          href={`/dashboard/messages?leadId=${lead.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Messages
+                        </a>
+                        {lead.assignmentStatus !== "won" && lead.assignmentStatus !== "lost" && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "won"); }}
+                              disabled={isUpdating}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
+                            >
+                              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                              Won
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "lost"); }}
+                              disabled={isUpdating}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            >
+                              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                              Lost
+                            </button>
+                          </>
                         )}
                       </div>
-                    </div>
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Locked view for unclaimed leads */}
+                      <div className="grid sm:grid-cols-2 gap-6">
+                        <div>
+                          <h4 className="text-sm font-semibold text-navy mb-2">
+                            Project Description
+                          </h4>
+                          <div className="relative">
+                            <p className="text-sm text-gray-400 leading-relaxed line-clamp-2 select-none" style={{ filter: "blur(4px)" }}>
+                              {lead.description || "Project description will be visible after claiming this lead with your credits."}
+                            </p>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs text-gray-500 bg-white/80 px-3 py-1 rounded-full border border-gray-200 flex items-center gap-1">
+                                <Lock className="w-3 h-3" />
+                                Claim to view
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-navy mb-2">
+                            Contact Information
+                          </h4>
+                          <div className="relative">
+                            <div className="space-y-2 select-none" style={{ filter: "blur(4px)" }}>
+                              <p className="text-sm text-gray-400 flex items-center gap-2">
+                                <Users className="w-4 h-4 text-gray-300" />
+                                Contact Name Hidden
+                              </p>
+                              <p className="text-sm text-gray-400 flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-gray-300" />
+                                email@hidden.com
+                              </p>
+                              <p className="text-sm text-gray-400 flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-gray-300" />
+                                +1 (xxx) xxx-xxxx
+                              </p>
+                            </div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs text-gray-500 bg-white/80 px-3 py-1 rounded-full border border-gray-200 flex items-center gap-1">
+                                <Lock className="w-3 h-3" />
+                                Claim to view
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200 flex-wrap">
-                    {lead.status === "new" && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "viewed"); }}
-                        disabled={isUpdating}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                      >
-                        {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                        Mark as Viewed
-                      </button>
-                    )}
-                    {(lead.status === "new" || lead.status === "viewed") && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "responded"); }}
-                        disabled={isUpdating}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50"
-                      >
-                        {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        Mark as Responded
-                      </button>
-                    )}
-                    <a
-                      href={`/dashboard/messages?leadId=${lead.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Messages
-                    </a>
-                    {lead.status !== "won" && lead.status !== "lost" && (
-                      <>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "won"); }}
-                          disabled={isUpdating}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
-                        >
-                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
-                          Won
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "lost"); }}
-                          disabled={isUpdating}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                        >
-                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                          Lost
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      {/* Claim CTA */}
+                      <div className="mt-5 pt-4 border-t border-gray-200">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <p className="text-sm text-gray-600">
+                            Use <span className="font-semibold">1 credit</span> to unlock full lead details and contact information.
+                          </p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              claimLead(lead);
+                            }}
+                            disabled={isClaiming || (credits !== null && credits.available < 1 && credits.monthlyCredits !== -1)}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isClaiming ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CreditCard className="w-4 h-4" />
+                            )}
+                            {isClaiming ? "Claiming..." : "Claim Lead (1 Credit)"}
+                          </button>
+                        </div>
+                        {credits !== null && credits.available < 1 && credits.monthlyCredits !== -1 && (
+                          <p className="text-xs text-red-600 mt-2">
+                            You have no credits remaining. Contact support or upgrade your plan for more credits.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

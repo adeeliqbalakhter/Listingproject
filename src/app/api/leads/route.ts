@@ -78,14 +78,14 @@ export async function GET(request: NextRequest) {
       }
       try {
         const leadsQuery = status
-          ? sql`SELECT l.*, json_agg(json_build_object('agencyId', la.agency_id, 'status', la.status)) as assignments
+          ? sql`SELECT l.*, json_agg(json_build_object('id', la.id, 'agencyId', la.agency_id, 'status', la.status)) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
                 WHERE la.agency_id = ${agencyId} AND l.status = ${status}
                 GROUP BY l.id
                 ORDER BY l.created_at DESC
                 LIMIT ${limit} OFFSET ${offset}`
-          : sql`SELECT l.*, json_agg(json_build_object('agencyId', la.agency_id, 'status', la.status)) as assignments
+          : sql`SELECT l.*, json_agg(json_build_object('id', la.id, 'agencyId', la.agency_id, 'status', la.status)) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
                 WHERE la.agency_id = ${agencyId}
@@ -116,17 +116,21 @@ export async function GET(request: NextRequest) {
 
     try {
       const combinedQuery = status
-        ? sql`SELECT DISTINCT l.* FROM leads l
+        ? sql`SELECT l.*, json_agg(json_build_object('id', la.id, 'agencyId', la.agency_id, 'status', la.status)) FILTER (WHERE la.id IS NOT NULL) as assignments
+              FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
               WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})
                 AND l.status = ${status}
+              GROUP BY l.id
               ORDER BY l.created_at DESC
               LIMIT ${limit} OFFSET ${offset}`
-        : sql`SELECT DISTINCT l.* FROM leads l
+        : sql`SELECT l.*, json_agg(json_build_object('id', la.id, 'agencyId', la.agency_id, 'status', la.status)) FILTER (WHERE la.id IS NOT NULL) as assignments
+              FROM leads l
               LEFT JOIN lead_assignments la ON l.id = la.lead_id
               LEFT JOIN agencies a ON la.agency_id = a.id
               WHERE (l.user_id = ${user.id} OR a.user_id = ${user.id})
+              GROUP BY l.id
               ORDER BY l.created_at DESC
               LIMIT ${limit} OFFSET ${offset}`;
 

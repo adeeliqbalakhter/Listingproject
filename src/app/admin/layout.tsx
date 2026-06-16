@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   FileText,
+  CreditCard,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/components/providers/SessionProvider";
@@ -23,6 +24,7 @@ const sidebarLinks = [
   { name: "Agencies", href: "/admin/agencies", icon: Building2 },
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "Leads", href: "/admin/leads", icon: FileText },
+  { name: "Credits", href: "/admin/credits", icon: CreditCard },
   { name: "Reviews", href: "/admin/reviews", icon: Star },
   { name: "Reports", href: "/admin/reports", icon: Flag },
   { name: "Settings", href: "/admin/settings", icon: Settings },
