@@ -199,7 +199,7 @@ export async function DELETE(
     const db = getDb();
 
     const existingRows = await db.execute(
-      sql`SELECT * FROM agencies WHERE id = ${id} AND deleted_at IS NULL`
+      sql`SELECT id FROM agencies WHERE id = ${id}`
     );
     const existing = (existingRows as unknown as Array<Record<string, unknown>>)[0];
 
@@ -207,11 +207,14 @@ export async function DELETE(
       return Response.json({ error: "Agency not found" }, { status: 404 });
     }
 
-    await db.execute(
-      sql`UPDATE agencies SET deleted_at = NOW(), status = 'archived' WHERE id = ${id}`
-    );
+    // Hard delete: remove related data then the agency
+    await db.execute(sql`DELETE FROM agency_portfolio WHERE agency_id = ${id}`);
+    await db.execute(sql`DELETE FROM agency_services WHERE agency_id = ${id}`);
+    await db.execute(sql`DELETE FROM agency_industries WHERE agency_id = ${id}`);
+    await db.execute(sql`DELETE FROM reviews WHERE agency_id = ${id}`);
+    await db.execute(sql`DELETE FROM agencies WHERE id = ${id}`);
 
-    return Response.json({ message: "Agency deleted successfully" });
+    return Response.json({ message: "Agency permanently deleted" });
   } catch (error: unknown) {
     console.error("DELETE /api/agencies/[id] error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";

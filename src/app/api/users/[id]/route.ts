@@ -34,13 +34,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const authResult = await requireRole(request, "super_admin");
     if ("error" in authResult) return authResult.error;
+    const { user: adminUser } = authResult;
 
     const { id } = await params;
+    if (id === adminUser.id) return error("Cannot delete your own account", 400);
+
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
-    await db.execute(sql`UPDATE users SET deleted_at = NOW() WHERE id = ${id}`);
-    return success({ message: "User deleted" });
+    // Hard delete: remove related data then the user
+    await db.execute(sql`DELETE FROM notification_preferences WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM user_profiles WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM refresh_tokens WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM reviews WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM users WHERE id = ${id}`);
+    return success({ message: "User permanently deleted" });
   } catch (err) {
     return serverError(err);
   }
