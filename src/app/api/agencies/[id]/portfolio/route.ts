@@ -3,7 +3,7 @@ import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAgencyAccess } from "@/lib/auth/guards";
 import { z } from "zod";
-import { success, created, error, serverError } from "@/lib/api/response";
+import { success, created, error } from "@/lib/api/response";
 import { checkPortfolioLimit } from "@/lib/subscriptions/gates";
 
 const portfolioSchema = z.object({
@@ -22,11 +22,47 @@ const portfolioSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 }).passthrough();
 
+async function ensurePortfolioTable() {
+  const db = getDb();
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS agency_portfolio (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      image_url TEXT,
+      project_url TEXT,
+      client_name VARCHAR(255),
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS client_logo TEXT`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_schedule VARCHAR(255)`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_size VARCHAR(100)`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS challenge TEXT`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS approach TEXT`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS results TEXT`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS services_provided TEXT`);
+  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+}
+
+function logErr(label: string, err: unknown) {
+  const e = err as Record<string, unknown>;
+  console.error(`[PORTFOLIO] ${label}:`, {
+    message: e?.message ?? "Unknown",
+    code: e?.code ?? null,
+    detail: e?.detail ?? null,
+  });
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+
+    await ensurePortfolioTable();
 
     const rows = await db.execute(sql`
       SELECT * FROM agency_portfolio WHERE agency_id = ${id} AND deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC
@@ -34,7 +70,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return success(rows);
   } catch (err) {
-    return serverError(err);
+    logErr("GET", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -44,13 +81,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const authResult = await requireAgencyAccess(request, id);
     if ("error" in authResult) return authResult.error;
 
+    if (!hasDb()) return error("Database not available", 503);
+    const db = getDb();
+
+    await ensurePortfolioTable();
+
     const portfolioCheck = await checkPortfolioLimit(id);
     if (!portfolioCheck.allowed) {
       return Response.json({ error: "Portfolio item limit reached for your plan", limit: portfolioCheck.limit }, { status: 403 });
     }
-
-    if (!hasDb()) return error("Database not available", 503);
-    const db = getDb();
 
     const body = await request.json();
     const parsed = portfolioSchema.safeParse(body);
@@ -72,7 +111,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
-    return serverError(err);
+    logErr("POST", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -84,6 +124,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+
+    await ensurePortfolioTable();
 
     const body = await request.json();
     const itemId = body.itemId;
@@ -114,7 +156,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updated = await db.execute(sql`SELECT * FROM agency_portfolio WHERE id = ${itemId}`);
     return success((updated as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
-    return serverError(err);
+    logErr("PATCH", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -127,6 +170,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
+    await ensurePortfolioTable();
+
     const { searchParams } = request.nextUrl;
     const itemId = searchParams.get("itemId");
     if (!itemId) return error("itemId query parameter required", 400);
@@ -134,6 +179,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await db.execute(sql`UPDATE agency_portfolio SET deleted_at = NOW() WHERE id = ${itemId} AND agency_id = ${id}`);
     return success({ message: "Portfolio item deleted" });
   } catch (err) {
-    return serverError(err);
+    logErr("DELETE", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
