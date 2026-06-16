@@ -5,6 +5,8 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createLeadSchema } from "@/lib/validations";
+import { isAdmin } from "@/lib/auth/rbac";
+import { autoAssignLead } from "@/lib/services/lead-assignment";
 
 const leadQuerySchema = z.object({
   agencyId: z.string().uuid().optional(),
@@ -44,6 +46,27 @@ export async function GET(request: NextRequest) {
     const { agencyId, status, page, limit } = params.data;
     const offset = (page - 1) * limit;
     const db = getDb();
+
+    // Super admin / admin: return ALL leads
+    if (isAdmin(user.role) && !agencyId) {
+      const leadsQuery = status
+        ? sql`SELECT l.* FROM leads l WHERE l.status = ${status}
+              ORDER BY l.created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : sql`SELECT l.* FROM leads l
+              ORDER BY l.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      const countQuery = status
+        ? sql`SELECT count(*) as count FROM leads WHERE status = ${status}`
+        : sql`SELECT count(*) as count FROM leads`;
+
+      const results = await db.execute(leadsQuery);
+      const countResult = await db.execute(countQuery);
+      const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+
+      return Response.json({
+        data: results,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      });
+    }
 
     if (agencyId) {
       const agencyRows = await db.execute(
@@ -222,6 +245,14 @@ export async function POST(request: NextRequest) {
             sql`UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agencyId}`
           );
         } catch { /* skip invalid agency */ }
+      }
+    } else {
+      // Auto-assign to relevant agencies
+      try {
+        const parsedServiceIds = data.serviceIds && data.serviceIds.length > 0 ? data.serviceIds : null;
+        await autoAssignLead(leadId, parsedServiceIds, data.industryId ?? null);
+      } catch (err) {
+        console.error("[LEADS] Auto-assignment error:", err);
       }
     }
 
