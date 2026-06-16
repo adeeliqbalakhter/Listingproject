@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { success, error, serverError } from "@/lib/api/response";
+import { success, error } from "@/lib/api/response";
 import { z } from "zod";
 
 const claimSchema = z.object({
@@ -26,18 +26,24 @@ export async function POST(request: NextRequest) {
     const { leadId, assignmentId } = parsed.data;
 
     // Verify the assignment exists and belongs to an agency this user owns
-    const assignmentRows = await db.execute(sql`
-      SELECT la.*, a.user_id as agency_owner_id, a.name as agency_name
-      FROM lead_assignments la
-      JOIN agencies a ON a.id = la.agency_id
-      WHERE la.id = ${assignmentId} AND la.lead_id = ${leadId}
-    `);
-    const assignment = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
+    let assignment: Record<string, unknown> | undefined;
+    try {
+      const assignmentRows = await db.execute(sql`
+        SELECT la.id, la.lead_id, la.agency_id, la.status,
+               a.user_id as agency_owner_id, a.name as agency_name
+        FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.id = ${assignmentId} AND la.lead_id = ${leadId}
+      `);
+      assignment = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
+    } catch (err) {
+      console.error("[CLAIM] Assignment query error:", err);
+      return error("Failed to verify assignment", 500);
+    }
 
     if (!assignment) return error("Assignment not found", 404);
     if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
 
-    // Already claimed
     if (assignment.status === "claimed" || assignment.status === "responded" || assignment.status === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
@@ -70,7 +76,6 @@ export async function POST(request: NextRequest) {
       if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
     } catch { /* default 1 */ }
 
-    // Get consumed this month
     let consumed = 0;
     try {
       const usedRows = await db.execute(sql`
@@ -82,7 +87,6 @@ export async function POST(request: NextRequest) {
       consumed = Number((usedRows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
     } catch { /* ignore */ }
 
-    // Get granted bonus credits (all time)
     let granted = 0;
     try {
       const grantRows = await db.execute(sql`
@@ -103,27 +107,36 @@ export async function POST(request: NextRequest) {
     try {
       await db.execute(sql`
         INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-        VALUES (${agencyId}, -1, 'consume', ${'Claimed lead: ' + leadId})
+        VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
       `);
     } catch (err) {
       console.error("[CLAIM] Credit deduction error:", err);
+      return error("Failed to deduct credit", 500);
     }
 
     // Update assignment status to claimed
-    await db.execute(sql`
-      UPDATE lead_assignments SET status = 'claimed', viewed_at = NOW()
-      WHERE id = ${assignmentId}
-    `);
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed'
+        WHERE id = ${assignmentId}
+      `);
+    } catch (err) {
+      console.error("[CLAIM] Assignment update error:", err);
+    }
 
     // Update lead status if still 'new'
-    await db.execute(sql`
-      UPDATE leads SET status = 'viewed', updated_at = NOW()
-      WHERE id = ${leadId} AND status = 'new'
-    `);
+    try {
+      await db.execute(sql`
+        UPDATE leads SET status = 'viewed', updated_at = NOW()
+        WHERE id = ${leadId} AND status = 'new'
+      `);
+    } catch (err) {
+      console.error("[CLAIM] Lead update error:", err);
+    }
 
     return success({ message: "Lead claimed successfully", creditsRemaining: available - 1 });
   } catch (err) {
-    console.error("[CLAIM] Error:", err);
-    return serverError(err);
+    console.error("[CLAIM] Unhandled error:", err);
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
