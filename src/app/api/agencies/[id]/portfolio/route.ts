@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { requireAgencyAccess } from "@/lib/auth/guards";
 import { z } from "zod";
 import { success, created, error } from "@/lib/api/response";
@@ -56,6 +57,18 @@ function logErr(label: string, err: unknown) {
   });
 }
 
+async function revalidateAgency(agencyId: string) {
+  try {
+    const db = getDb();
+    const slugRows = await db.execute(sql`SELECT slug FROM agencies WHERE id = ${agencyId} LIMIT 1`);
+    const slug = (slugRows as unknown as Array<{ slug: string }>)[0]?.slug;
+    if (slug) {
+      revalidatePath(`/agencies/${slug}`);
+    }
+    revalidatePath("/agencies");
+  } catch { /* ignore */ }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -68,7 +81,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       SELECT * FROM agency_portfolio WHERE agency_id = ${id} AND deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC
     `);
 
-    return success(rows);
+    return success(rows as unknown as Record<string, unknown>[]);
   } catch (err) {
     logErr("GET", err);
     return Response.json({ error: "Internal server error" }, { status: 500 });
@@ -109,6 +122,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ) RETURNING *
     `);
 
+    await revalidateAgency(id);
     return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
     logErr("POST", err);
@@ -154,6 +168,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     `);
 
     const updated = await db.execute(sql`SELECT * FROM agency_portfolio WHERE id = ${itemId}`);
+    await revalidateAgency(id);
     return success((updated as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
     logErr("PATCH", err);
@@ -177,6 +192,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!itemId) return error("itemId query parameter required", 400);
 
     await db.execute(sql`UPDATE agency_portfolio SET deleted_at = NOW() WHERE id = ${itemId} AND agency_id = ${id}`);
+    await revalidateAgency(id);
     return success({ message: "Portfolio item deleted" });
   } catch (err) {
     logErr("DELETE", err);
