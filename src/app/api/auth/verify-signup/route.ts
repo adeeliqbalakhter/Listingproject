@@ -157,7 +157,15 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (err) {
-    return serverError(err);
+  } catch (err: unknown) {
+    console.error("[VERIFY-SIGNUP] Error:", err);
+    const e = err as Record<string, unknown>;
+    const detail = {
+      message: e?.message ?? "Unknown",
+      code: e?.code ?? null,
+      detail: e?.detail ?? null,
+      cause: e?.cause ? String(e.cause) : null,
+    };
+    return NextResponse.json({ error: "Signup verification failed", debug: detail }, { status: 500 });
   }
 }
