@@ -77,13 +77,13 @@ export async function POST(request: NextRequest) {
       sql`UPDATE signup_otps SET used_at = NOW() WHERE id = ${otpRecord.id}`
     );
 
-    // Race condition check: email might have been taken between OTP request and verification
+    // Check if email already exists (with or without soft-delete)
     const existingRows = await db.execute(
-      sql`SELECT id FROM users WHERE email = ${email} AND deleted_at IS NULL`
+      sql`SELECT id FROM users WHERE email = ${email}`
     );
     const existing = (existingRows as unknown as Array<Record<string, unknown>>);
     if (existing.length > 0) {
-      return error("Email already registered", 409);
+      return error("This email is already registered. Please sign in instead.", 409);
     }
 
     // Create user with email_verified = NOW()
