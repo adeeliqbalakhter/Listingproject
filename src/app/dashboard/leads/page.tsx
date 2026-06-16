@@ -19,9 +19,11 @@ import {
   Phone,
   FileText,
   Loader2,
+  Inbox,
+  MessageSquare,
 } from "lucide-react";
 
-type LeadStatus = "new" | "viewed" | "responded" | "won" | "lost";
+type LeadStatus = "new" | "sent" | "viewed" | "responded" | "won" | "lost";
 
 interface Lead {
   id: string;
@@ -29,7 +31,6 @@ interface Lead {
   contact: string;
   email: string;
   phone: string;
-  service: string;
   budget: string;
   timeline: string;
   status: LeadStatus;
@@ -48,8 +49,9 @@ interface ApiLead {
   timeline: string | null;
   status: string;
   created_at: string;
-  service_ids?: string[] | null;
 }
+
+const VALID_STATUSES: LeadStatus[] = ["new", "sent", "viewed", "responded", "won", "lost"];
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -71,10 +73,9 @@ function mapApiLead(l: ApiLead): Lead {
     contact: l.contact_name || "Unknown",
     email: l.contact_email || "",
     phone: l.contact_phone || "",
-    service: "",
     budget: l.budget || "",
     timeline: l.timeline || "",
-    status: (["new", "viewed", "responded", "won", "lost"].includes(l.status)
+    status: (VALID_STATUSES.includes(l.status as LeadStatus)
       ? l.status
       : "new") as LeadStatus,
     date: l.created_at ? timeAgo(l.created_at) : "",
@@ -84,6 +85,7 @@ function mapApiLead(l: ApiLead): Lead {
 
 const statusConfig: Record<LeadStatus, { label: string; classes: string }> = {
   new: { label: "New", classes: "bg-blue-50 text-brand" },
+  sent: { label: "Sent", classes: "bg-indigo-50 text-indigo-700" },
   viewed: { label: "Viewed", classes: "bg-yellow-50 text-yellow-700" },
   responded: { label: "Responded", classes: "bg-green-50 text-green-700" },
   won: { label: "Won", classes: "bg-emerald-50 text-emerald-700" },
@@ -96,6 +98,7 @@ export default function LeadsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     total: 0,
     totalPages: 0,
@@ -136,10 +139,24 @@ export default function LeadsPage() {
     return l.status === filter;
   });
 
-  const updateStatus = (id: string, status: LeadStatus) => {
-    setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status } : l))
-    );
+  const updateStatus = async (id: string, status: LeadStatus) => {
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        setLeads((prev) =>
+          prev.map((l) => (l.id === id ? { ...l, status } : l))
+        );
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   const statusCounts = leads.reduce(
@@ -168,6 +185,7 @@ export default function LeadsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
+        <Inbox className="w-10 h-10 text-gray-300 mb-3" />
         <p className="text-red-600 text-sm mb-4">{error}</p>
         <button
           onClick={() => window.location.reload()}
@@ -208,27 +226,26 @@ export default function LeadsPage() {
 
       {/* Filter */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {(["all", "new", "viewed", "responded", "won", "lost"] as const).map(
-          (f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                filter === f
-                  ? "bg-brand text-white"
-                  : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-              }`}
-            >
-              {f === "all" ? "All" : statusConfig[f].label}
-            </button>
-          )
-        )}
+        {(["all", ...VALID_STATUSES] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              filter === f
+                ? "bg-brand text-white"
+                : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            {f === "all" ? "All" : statusConfig[f as LeadStatus].label}
+          </button>
+        ))}
       </div>
 
       {/* Lead Cards */}
       <div className="space-y-4">
         {filteredLeads.map((lead) => {
           const isExpanded = expandedLead === lead.id;
+          const isUpdating = updatingId === lead.id;
           return (
             <div
               key={lead.id}
@@ -258,12 +275,6 @@ export default function LeadsPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
-                        {lead.service && (
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3 h-3" />
-                            {lead.service}
-                          </span>
-                        )}
                         {lead.budget && (
                           <span className="flex items-center gap-1">
                             <DollarSign className="w-3 h-3" />
@@ -298,7 +309,7 @@ export default function LeadsPage() {
                       <h4 className="text-sm font-semibold text-navy mb-2">
                         Project Description
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed">
+                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
                         {lead.description || "No description provided."}
                       </p>
                     </div>
@@ -312,16 +323,24 @@ export default function LeadsPage() {
                           {lead.contact}
                         </p>
                         {lead.email && (
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
+                          <a
+                            href={`mailto:${lead.email}`}
+                            className="text-sm text-brand flex items-center gap-2 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Mail className="w-4 h-4 text-gray-400" />
                             {lead.email}
-                          </p>
+                          </a>
                         )}
                         {lead.phone && (
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
+                          <a
+                            href={`tel:${lead.phone}`}
+                            className="text-sm text-brand flex items-center gap-2 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Phone className="w-4 h-4 text-gray-400" />
                             {lead.phone}
-                          </p>
+                          </a>
                         )}
                       </div>
                     </div>
@@ -331,37 +350,49 @@ export default function LeadsPage() {
                   <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200 flex-wrap">
                     {lead.status === "new" && (
                       <button
-                        onClick={() => updateStatus(lead.id, "viewed")}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "viewed"); }}
+                        disabled={isUpdating}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
                       >
-                        <Eye className="w-4 h-4" />
+                        {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                         Mark as Viewed
                       </button>
                     )}
                     {(lead.status === "new" || lead.status === "viewed") && (
                       <button
-                        onClick={() => updateStatus(lead.id, "responded")}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors"
+                        onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "responded"); }}
+                        disabled={isUpdating}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50"
                       >
-                        <Send className="w-4 h-4" />
-                        Respond
+                        {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        Mark as Responded
                       </button>
                     )}
+                    <a
+                      href={`/dashboard/messages?leadId=${lead.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Messages
+                    </a>
                     {lead.status !== "won" && lead.status !== "lost" && (
                       <>
                         <button
-                          onClick={() => updateStatus(lead.id, "won")}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-green-200 text-green-700 hover:bg-green-50 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "won"); }}
+                          disabled={isUpdating}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-green-200 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
                         >
-                          <Trophy className="w-4 h-4" />
-                          Mark as Won
+                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
+                          Won
                         </button>
                         <button
-                          onClick={() => updateStatus(lead.id, "lost")}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "lost"); }}
+                          disabled={isUpdating}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                         >
-                          <XCircle className="w-4 h-4" />
-                          Mark as Lost
+                          {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                          Lost
                         </button>
                       </>
                     )}
