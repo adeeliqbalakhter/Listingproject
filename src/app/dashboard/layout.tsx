@@ -12,6 +12,7 @@ import {
   Settings,
   CreditCard,
   MessageSquare,
+  Briefcase,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
@@ -20,6 +21,7 @@ import OnboardingModal from "@/components/onboarding-modal";
 const sidebarLinks = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Agency Profile", href: "/dashboard/profile", icon: Building2 },
+  { name: "Portfolio", href: "/dashboard/portfolio", icon: Briefcase },
   { name: "Reviews", href: "/dashboard/reviews", icon: Star },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
   { name: "Messages", href: "/dashboard/messages", icon: MessageSquare },
@@ -45,7 +47,7 @@ export default function DashboardLayout({
         const res = await fetch("/api/agencies/mine");
         if (res.ok) {
           const json = await res.json();
-          const agencyData = json.data;
+          const agencyData = json.data?.agency;
           if (agencyData) {
             const name = agencyData.name || "My Agency";
             setAgencyName(name);

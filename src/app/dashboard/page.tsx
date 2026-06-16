@@ -64,7 +64,7 @@ export default function DashboardPage() {
           return;
         }
         const agencyJson = await agencyRes.json();
-        const a = agencyJson.data;
+        const a = agencyJson.data?.agency;
 
         if (a) {
           const agencyData: AgencyData = {

@@ -67,7 +67,7 @@ export default function ReviewsPage() {
           return;
         }
         const agencyJson = await agencyRes.json();
-        const agencyData = agencyJson.data;
+        const agencyData = agencyJson.data?.agency;
 
         if (!agencyData) {
           setError("No agency found. Please create an agency first.");

@@ -81,7 +81,7 @@ export default function AnalyticsPage() {
           return;
         }
         const json = await res.json();
-        const agencyData = json.data;
+        const agencyData = json.data?.agency;
         if (!agencyData) {
           setError("No agency found. Create an agency to view analytics.");
           setLoading(false);
