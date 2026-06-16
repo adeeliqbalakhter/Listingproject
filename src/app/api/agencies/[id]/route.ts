@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAuth, requireAgencyAccess } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 const updateAgencySchema = z.object({
@@ -175,6 +176,13 @@ export async function PATCH(
     );
     const updated = (updatedRows as unknown as Array<Record<string, unknown>>)[0];
 
+    // Bust ISR cache for public profile
+    const slug = updated?.slug as string | undefined;
+    if (slug) {
+      revalidatePath(`/agencies/${slug}`);
+    }
+    revalidatePath("/agencies");
+
     return Response.json({ data: updated });
   } catch (error: unknown) {
     console.error("PATCH /api/agencies/[id] error:", error);
@@ -207,12 +215,19 @@ export async function DELETE(
       return Response.json({ error: "Agency not found" }, { status: 404 });
     }
 
+    // Get slug before deleting for cache invalidation
+    const slugRows = await db.execute(sql`SELECT slug FROM agencies WHERE id = ${id} LIMIT 1`);
+    const slug = (slugRows as unknown as Array<{ slug: string }>)[0]?.slug;
+
     // Hard delete: remove related data then the agency
     await db.execute(sql`DELETE FROM agency_portfolio WHERE agency_id = ${id}`);
     await db.execute(sql`DELETE FROM agency_services WHERE agency_id = ${id}`);
     await db.execute(sql`DELETE FROM agency_industries WHERE agency_id = ${id}`);
     await db.execute(sql`DELETE FROM reviews WHERE agency_id = ${id}`);
     await db.execute(sql`DELETE FROM agencies WHERE id = ${id}`);
+
+    if (slug) revalidatePath(`/agencies/${slug}`);
+    revalidatePath("/agencies");
 
     return Response.json({ message: "Agency permanently deleted" });
   } catch (error: unknown) {
