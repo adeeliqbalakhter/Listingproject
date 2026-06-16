@@ -44,6 +44,20 @@ export async function POST(request: NextRequest) {
 
     const agencyId = assignment.agency_id as string;
 
+    // Ensure credit transactions table exists
+    try {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS lead_credit_transactions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+          amount INTEGER NOT NULL,
+          type VARCHAR(30) NOT NULL,
+          description TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } catch { /* already exists */ }
+
     // Calculate available credits
     let monthlyCredits = 1;
     try {
@@ -53,7 +67,7 @@ export async function POST(request: NextRequest) {
         WHERE s.agency_id = ${agencyId} AND s.status = 'active'
       `);
       const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
-      if (plan) monthlyCredits = Number(plan.monthly_lead_credits);
+      if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
     } catch { /* default 1 */ }
 
     // Get consumed this month
@@ -66,7 +80,7 @@ export async function POST(request: NextRequest) {
           AND created_at >= date_trunc('month', NOW())
       `);
       consumed = Number((usedRows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
-    } catch { /* table may not exist */ }
+    } catch { /* ignore */ }
 
     // Get granted bonus credits (all time)
     let granted = 0;
@@ -77,7 +91,7 @@ export async function POST(request: NextRequest) {
         WHERE agency_id = ${agencyId} AND type = 'grant'
       `);
       granted = Number((grantRows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
-    } catch { /* table may not exist */ }
+    } catch { /* ignore */ }
 
     const available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
 
@@ -87,16 +101,6 @@ export async function POST(request: NextRequest) {
 
     // Deduct credit
     try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS lead_credit_transactions (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
-          amount INTEGER NOT NULL,
-          type VARCHAR(30) NOT NULL,
-          description TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
       await db.execute(sql`
         INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
         VALUES (${agencyId}, -1, 'consume', ${'Claimed lead: ' + leadId})

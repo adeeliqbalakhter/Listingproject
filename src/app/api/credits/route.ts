@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         WHERE s.agency_id = ${agencyId} AND s.status = 'active'
       `);
       const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
-      if (plan) monthlyCredits = Number(plan.monthly_lead_credits);
+      if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
     } catch { /* default */ }
 
     let consumed = 0;
