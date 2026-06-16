@@ -42,12 +42,12 @@ export default function DashboardLayout({
   useEffect(() => {
     async function fetchAgency() {
       try {
-        const res = await fetch("/api/agencies?limit=1");
+        const res = await fetch("/api/agencies/mine");
         if (res.ok) {
           const json = await res.json();
-          const agencies = json.data ?? [];
-          if (agencies.length > 0) {
-            const name = agencies[0].name || "My Agency";
+          const agencyData = json.data;
+          if (agencyData) {
+            const name = agencyData.name || "My Agency";
             setAgencyName(name);
             setAgencyInitials(
               name

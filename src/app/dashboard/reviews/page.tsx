@@ -60,22 +60,22 @@ export default function ReviewsPage() {
     async function fetchData() {
       try {
         // Fetch user's agency
-        const agencyRes = await fetch("/api/agencies?limit=1");
+        const agencyRes = await fetch("/api/agencies/mine");
         if (!agencyRes.ok) {
           setError("Failed to load agency information.");
           setLoading(false);
           return;
         }
         const agencyJson = await agencyRes.json();
-        const agencies = agencyJson.data ?? [];
+        const agencyData = agencyJson.data;
 
-        if (agencies.length === 0) {
+        if (!agencyData) {
           setError("No agency found. Please create an agency first.");
           setLoading(false);
           return;
         }
 
-        const agencyId = agencies[0].id;
+        const agencyId = agencyData.id;
 
         // Fetch reviews for this agency
         const reviewsRes = await fetch(

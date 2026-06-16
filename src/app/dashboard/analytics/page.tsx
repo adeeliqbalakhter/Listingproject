@@ -74,20 +74,20 @@ export default function AnalyticsPage() {
   useEffect(() => {
     async function fetchAgency() {
       try {
-        const res = await fetch("/api/agencies?limit=1");
+        const res = await fetch("/api/agencies/mine");
         if (!res.ok) {
           setError("Failed to load agency data.");
           setLoading(false);
           return;
         }
         const json = await res.json();
-        const agencies = json.data ?? [];
-        if (agencies.length === 0) {
+        const agencyData = json.data;
+        if (!agencyData) {
           setError("No agency found. Create an agency to view analytics.");
           setLoading(false);
           return;
         }
-        setAgencyId(agencies[0].id);
+        setAgencyId(agencyData.id);
       } catch {
         setError("Failed to load agency data.");
         setLoading(false);

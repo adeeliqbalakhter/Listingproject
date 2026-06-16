@@ -58,16 +58,15 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         // Fetch user's agency
-        const agencyRes = await fetch("/api/agencies?limit=1");
+        const agencyRes = await fetch("/api/agencies/mine");
         if (!agencyRes.ok) {
           setLoading(false);
           return;
         }
         const agencyJson = await agencyRes.json();
-        const agencies = agencyJson.data ?? [];
+        const a = agencyJson.data;
 
-        if (agencies.length > 0) {
-          const a = agencies[0];
+        if (a) {
           const agencyData: AgencyData = {
             id: a.id,
             profile_views: a.profile_views ? Number(a.profile_views) : null,
