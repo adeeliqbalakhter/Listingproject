@@ -53,6 +53,18 @@ async function fetchServices(agencyId: string) {
   }
 }
 
+async function fetchIndustries(agencyId: string) {
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT i.name, i.slug FROM industries i JOIN agency_industries ai ON i.id = ai.industry_id WHERE ai.agency_id = ${agencyId}`
+    );
+    return rows as unknown as { name: string; slug: string }[];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchReviews(agencyId: string) {
   try {
     const db = getDb();
@@ -96,11 +108,34 @@ async function fetchCityName(cityId: string) {
 async function fetchPortfolio(agencyId: string) {
   try {
     const db = getDb();
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agency_portfolio (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        project_url TEXT,
+        client_name VARCHAR(255),
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS client_logo TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_schedule VARCHAR(255)`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_size VARCHAR(100)`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS challenge TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS approach TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS results TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS services_provided TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+
     const rows = await db.execute(
       sql`SELECT * FROM agency_portfolio WHERE agency_id = ${agencyId} AND deleted_at IS NULL ORDER BY sort_order ASC, created_at DESC`
     );
     return rows as any[];
-  } catch {
+  } catch (err) {
+    console.error("[AGENCY-PROFILE] fetchPortfolio error:", err);
     return [];
   }
 }
@@ -349,6 +384,7 @@ const tabs = [
   { id: "overview", label: "Overview" },
   { id: "portfolio", label: "Portfolio" },
   { id: "services", label: "Services" },
+  { id: "industries", label: "Industries" },
   { id: "reviews", label: "Reviews" },
 ] as const;
 
@@ -414,9 +450,10 @@ export default async function AgencyProfilePage({
   }
 
   // Fetch related data in parallel
-  const [services, reviews, ratingBreakdown, similarAgencies, portfolio] =
+  const [services, industries, reviews, ratingBreakdown, similarAgencies, portfolio] =
     await Promise.all([
       fetchServices(agency.id),
+      fetchIndustries(agency.id),
       fetchReviews(agency.id),
       fetchRatingBreakdown(agency.id),
       fetchSimilarAgencies(agency.id),
@@ -750,6 +787,30 @@ export default async function AgencyProfilePage({
                           </div>
                           <span className="font-medium text-gray-800">
                             {service.name}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---- Industries ---- */}
+              {industries.length > 0 && (
+                <div id="industries" className="scroll-mt-24">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                    <h2 className="text-xl font-bold text-navy">Industries</h2>
+                    <div className="mt-6 grid sm:grid-cols-2 gap-4">
+                      {industries.map((industry) => (
+                        <div
+                          key={industry.name}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-brand/30 hover:bg-blue-50/40 transition-colors"
+                        >
+                          <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+                            <Building2 className="w-4.5 h-4.5 text-brand" />
+                          </div>
+                          <span className="font-medium text-gray-800">
+                            {industry.name}
                           </span>
                         </div>
                       ))}
