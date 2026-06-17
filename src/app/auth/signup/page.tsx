@@ -171,8 +171,9 @@ export default function SignUpPage() {
         inputRefs.current[0]?.focus();
         return;
       }
-      // Success — redirect to dashboard
-      window.location.href = "/dashboard";
+      // Success — redirect based on role
+      const userRole = result.data?.user?.role;
+      window.location.href = userRole === "client" ? "/client" : "/dashboard";
     } catch {
       setOtpError("Something went wrong. Please try again.");
     } finally {

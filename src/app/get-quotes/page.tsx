@@ -19,6 +19,12 @@ import {
   Mail,
   PenTool,
   Send,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
+  MessageSquare,
+  FolderOpen,
 } from "lucide-react";
 
 const SERVICES = [
@@ -173,6 +179,11 @@ export default function GetQuotesPage() {
   }
 
   const [submitError, setSubmitError] = useState("");
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [signupForm, setSignupForm] = useState({ password: "", showPassword: false });
+  const [signupLoading, setSignupLoading] = useState(false);
+  const [signupDone, setSignupDone] = useState(false);
+  const [signupError, setSignupError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -211,13 +222,14 @@ export default function GetQuotesPage() {
         }),
       });
 
+      const resData = await res.json().catch(() => null);
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
         throw new Error(
-          body?.error ?? `Request failed (${res.status})`
+          resData?.error ?? `Request failed (${res.status})`
         );
       }
 
+      if (resData?.data?.id) setLeadId(resData.data.id);
       setSubmitted(true);
     } catch (err) {
       setSubmitError(
@@ -228,20 +240,143 @@ export default function GetQuotesPage() {
     }
   }
 
+  async function handleClientSignup(e: React.FormEvent) {
+    e.preventDefault();
+    if (signupForm.password.length < 8) {
+      setSignupError("Password must be at least 8 characters");
+      return;
+    }
+    setSignupLoading(true);
+    setSignupError("");
+    try {
+      const res = await fetch("/api/auth/register-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: signupForm.password,
+          leadId: leadId || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setSignupDone(true);
+      } else {
+        setSignupError(json.error || "Registration failed");
+      }
+    } catch {
+      setSignupError("Network error. Please try again.");
+    } finally {
+      setSignupLoading(false);
+    }
+  }
+
   if (submitted) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-24 text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
-          <CheckCircle className="h-8 w-8 text-success" />
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <div className="text-center mb-10">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
+            <CheckCircle className="h-8 w-8 text-success" />
+          </div>
+          <h1 className="text-3xl font-bold text-navy">
+            Your request has been submitted!
+          </h1>
+          <p className="mt-4 text-lg text-gray-500">
+            We&apos;re matching you with the best agencies for your project.
+            Agencies will start responding soon.
+          </p>
         </div>
-        <h1 className="text-3xl font-bold text-navy">
-          Your request has been submitted!
-        </h1>
-        <p className="mt-4 text-lg text-gray-500">
-          We&apos;re matching you with the best agencies for your project.
-          You&apos;ll receive proposals in your inbox within 24-48 hours.
-        </p>
-        <div className="mt-8 flex items-center justify-center gap-4">
+
+        {/* Signup prompt */}
+        {!signupDone ? (
+          <div className="rounded-xl border-2 border-brand/20 bg-gradient-to-br from-brand/5 to-blue-50 p-6 sm:p-8 mb-8">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-10 h-10 bg-brand/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Lock className="w-5 h-5 text-brand" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-navy">Create your free account</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Track your project, chat with agencies, and compare proposals — all in one place.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-3 mb-6">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MessageSquare className="w-4 h-4 text-brand" />
+                Chat with agencies
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <FolderOpen className="w-4 h-4 text-brand" />
+                Track your projects
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Search className="w-4 h-4 text-brand" />
+                Discover more agencies
+              </div>
+            </div>
+
+            <form onSubmit={handleClientSignup}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 bg-gray-100 rounded-lg px-4 py-2.5 text-sm text-gray-500">
+                  {form.email}
+                </div>
+              </div>
+              <div className="relative mb-3">
+                <input
+                  type={signupForm.showPassword ? "text" : "password"}
+                  value={signupForm.password}
+                  onChange={(e) => setSignupForm((p) => ({ ...p, password: e.target.value }))}
+                  placeholder="Create a password (min 8 characters)"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-navy pr-10 focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSignupForm((p) => ({ ...p, showPassword: !p.showPassword }))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {signupForm.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {signupError && (
+                <p className="text-sm text-danger mb-3">{signupError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={signupLoading}
+                className="w-full rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {signupLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Create Account & Track Project"
+                )}
+              </button>
+            </form>
+            <p className="text-xs text-gray-400 mt-3 text-center">
+              Already have an account? <Link href="/auth/signin" className="text-brand hover:underline">Sign in</Link>
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6 sm:p-8 mb-8 text-center">
+            <CheckCircle className="w-10 h-10 text-green-600 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-navy">Account created!</h2>
+            <p className="text-sm text-gray-600 mt-1 mb-4">
+              You can now track your project and chat with agencies.
+            </p>
+            <Link
+              href="/client"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+            >
+              Go to My Dashboard
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-4">
           <Link
             href="/agencies"
             className="rounded-lg border border-gray-200 px-6 py-3 text-sm font-semibold text-navy shadow-sm transition hover:bg-gray-50"
@@ -250,7 +385,7 @@ export default function GetQuotesPage() {
           </Link>
           <Link
             href="/"
-            className="rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+            className="rounded-lg bg-white border border-gray-200 px-6 py-3 text-sm font-semibold text-navy shadow-sm transition hover:bg-gray-50"
           >
             Back to Home
           </Link>

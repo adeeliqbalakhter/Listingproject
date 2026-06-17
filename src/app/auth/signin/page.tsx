@@ -58,7 +58,8 @@ export default function SignInPage() {
       if (result.data?.requiresVerification) {
         window.location.href = `/auth/verify-email?email=${encodeURIComponent(email)}`;
       } else {
-        window.location.href = '/dashboard';
+        const role = result.data?.user?.role;
+        window.location.href = role === 'client' ? '/client' : '/dashboard';
       }
     } catch {
       setErrors({ email: 'Something went wrong. Please try again.' });
