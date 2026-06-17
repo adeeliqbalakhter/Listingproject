@@ -131,6 +131,7 @@ export default function GetQuotesPage() {
               ...prev,
               name: prev.name || u.name,
               email: prev.email || u.email,
+              company: prev.company || u.company || u.name,
             }));
           }
         }
@@ -236,9 +237,9 @@ export default function GetQuotesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyName: form.company,
-          contactName: form.name,
-          contactEmail: form.email,
+          companyName: form.company || (loggedInUser ? loggedInUser.name : ""),
+          contactName: form.name || (loggedInUser ? loggedInUser.name : ""),
+          contactEmail: form.email || (loggedInUser ? loggedInUser.email : ""),
           contactPhone: form.phone || undefined,
           projectDescription: descriptionParts.join(""),
           budget: form.budget || undefined,

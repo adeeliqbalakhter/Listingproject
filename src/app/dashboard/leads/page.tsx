@@ -85,6 +85,11 @@ export default function LeadsPage() {
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [agencyId, setAgencyId] = useState<string | null>(null);
+  const [proposalLeadId, setProposalLeadId] = useState<string | null>(null);
+  const [proposalMsg, setProposalMsg] = useState("");
+  const [proposalBudget, setProposalBudget] = useState("");
+  const [proposalTimeline, setProposalTimeline] = useState("");
+  const [submittingProposal, setSubmittingProposal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -119,7 +124,14 @@ export default function LeadsPage() {
       const apiLeads = leadsJson.data ?? [];
 
       const mapped: Lead[] = apiLeads.map((l: Record<string, unknown>) => {
-        const assignments = (l.assignments as Assignment[] | null) ?? [];
+        let assignments: Assignment[] = [];
+        try {
+          const raw = l.assignments;
+          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (Array.isArray(parsed)) {
+            assignments = parsed.filter((a: Record<string, unknown>) => a && a.id);
+          }
+        } catch { /* ignore */ }
         const myAssignment = assignments.find((a) => a.agencyId === agency.id) ?? assignments[0];
         return {
           id: l.id as string,
@@ -190,6 +202,42 @@ export default function LeadsPage() {
       // silently fail
     } finally {
       setUpdatingId(null);
+    }
+  }
+
+  async function submitProposal(lead: Lead) {
+    if (!lead.assignmentId || !proposalMsg.trim()) return;
+    setSubmittingProposal(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/proposal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignmentId: lead.assignmentId,
+          message: proposalMsg.trim(),
+          estimatedBudget: proposalBudget.trim() || undefined,
+          estimatedTimeline: proposalTimeline.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === lead.id ? { ...l, assignmentStatus: "responded" } : l
+          )
+        );
+        setProposalLeadId(null);
+        setProposalMsg("");
+        setProposalBudget("");
+        setProposalTimeline("");
+        alert("Proposal submitted successfully!");
+      } else {
+        alert(json.error || "Failed to submit proposal");
+      }
+    } catch {
+      alert("Network error while submitting proposal");
+    } finally {
+      setSubmittingProposal(false);
     }
   }
 
@@ -440,14 +488,16 @@ export default function LeadsPage() {
 
                       {/* Actions for claimed leads */}
                       <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200 flex-wrap">
-                        {lead.assignmentStatus === "claimed" && (
+                        {(lead.assignmentStatus === "claimed" || lead.assignmentStatus === "responded") && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); updateStatus(lead.id, "responded"); }}
-                            disabled={isUpdating}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProposalLeadId(proposalLeadId === lead.id ? null : lead.id);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand text-white hover:bg-brand-dark transition-colors"
                           >
-                            {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Mark as Responded
+                            <Send className="w-4 h-4" />
+                            {lead.assignmentStatus === "responded" ? "Send Another Proposal" : "Send Proposal"}
                           </button>
                         )}
                         <a
@@ -479,6 +529,85 @@ export default function LeadsPage() {
                           </>
                         )}
                       </div>
+
+                      {/* Proposal Form */}
+                      {proposalLeadId === lead.id && (
+                        <div className="mt-4 p-4 bg-white rounded-xl border border-brand/20" onClick={(e) => e.stopPropagation()}>
+                          <h4 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
+                            <Send className="w-4 h-4 text-brand" />
+                            Submit Proposal
+                          </h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Proposal Message *
+                              </label>
+                              <textarea
+                                value={proposalMsg}
+                                onChange={(e) => setProposalMsg(e.target.value)}
+                                placeholder="Describe your approach, expertise, and why you're the best fit for this project..."
+                                rows={4}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
+                              />
+                              <p className="text-xs text-gray-400 mt-1">{proposalMsg.length}/5000 characters (min 10)</p>
+                            </div>
+                            <div className="grid sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Estimated Budget (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={proposalBudget}
+                                  onChange={(e) => setProposalBudget(e.target.value)}
+                                  placeholder="e.g. $2,000 - $5,000"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Estimated Timeline (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={proposalTimeline}
+                                  onChange={(e) => setProposalTimeline(e.target.value)}
+                                  placeholder="e.g. 2-4 weeks"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 pt-2">
+                              <button
+                                onClick={() => submitProposal(lead)}
+                                disabled={submittingProposal || proposalMsg.trim().length < 10}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {submittingProposal ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Send className="w-4 h-4" />
+                                )}
+                                {submittingProposal ? "Submitting..." : "Submit Proposal"}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setProposalLeadId(null);
+                                  setProposalMsg("");
+                                  setProposalBudget("");
+                                  setProposalTimeline("");
+                                }}
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              The client will receive an email notification with your proposal.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
