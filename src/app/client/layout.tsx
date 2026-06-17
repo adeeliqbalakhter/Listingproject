@@ -24,24 +24,31 @@ const sidebarLinks = [
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, user } = useAuth();
+  const { logout, user, loading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (loading) return;
+    if (!user) {
+      router.replace("/auth/signin");
+      return;
+    }
     if (user.role === "agency_owner" || user.role === "agency_team_member") {
       router.replace("/dashboard");
-      return;
-    }
-    if (user.role === "super_admin" || user.role === "admin") {
+    } else if (user.role === "super_admin" || user.role === "admin") {
       router.replace("/admin");
-      return;
     }
-    setChecking(false);
-  }, [user, router]);
+  }, [user, loading, router]);
 
-  if (!user || checking) {
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
+
+  if (user.role === "agency_owner" || user.role === "agency_team_member" || user.role === "super_admin" || user.role === "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-brand animate-spin" />

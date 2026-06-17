@@ -38,19 +38,28 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, user } = useAuth();
-  const [roleChecked, setRoleChecked] = useState(false);
+  const { logout, user, loading } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
-    if (user.role === "client" || user.role === "user") {
-      router.replace("/client");
+    if (loading) return;
+    if (!user) {
+      router.replace("/auth/signin");
       return;
     }
-    setRoleChecked(true);
-  }, [user, router]);
+    if (user.role === "client" || user.role === "user") {
+      router.replace("/client");
+    }
+  }, [user, loading, router]);
 
-  if (!user || !roleChecked) {
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
+
+  if (user.role === "client" || user.role === "user") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-brand animate-spin" />
