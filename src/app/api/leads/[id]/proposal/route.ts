@@ -41,19 +41,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
 
     if (assignment.status === "sent") {
-      const creditCheck = await db.execute(sql`
-        SELECT id FROM lead_credit_transactions
-        WHERE agency_id = ${assignment.agency_id} AND type = 'consume'
-          AND description LIKE ${"%" + leadId + "%"}
-        LIMIT 1
-      `);
-      const hasClaimed = (creditCheck as unknown as Array<Record<string, unknown>>).length > 0;
-      if (!hasClaimed) {
+      try {
+        const creditCheck = await db.execute(sql`
+          SELECT id FROM lead_credit_transactions
+          WHERE agency_id = ${assignment.agency_id} AND type = 'consume'
+            AND description LIKE ${"%" + leadId + "%"}
+          LIMIT 1
+        `);
+        const hasClaimed = (creditCheck as unknown as Array<Record<string, unknown>>).length > 0;
+        if (!hasClaimed) {
+          return error("You must claim this lead first", 400);
+        }
+      } catch {
         return error("You must claim this lead first", 400);
       }
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
-      `);
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+        `);
+      } catch { /* ignore */ }
     }
 
     // Ensure proposals table exists
@@ -61,9 +67,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS lead_proposals (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-          assignment_id UUID NOT NULL REFERENCES lead_assignments(id) ON DELETE CASCADE,
-          agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+          lead_id UUID NOT NULL,
+          assignment_id UUID NOT NULL,
+          agency_id UUID NOT NULL,
           message TEXT NOT NULL,
           estimated_budget VARCHAR(255),
           estimated_timeline VARCHAR(255),
@@ -75,17 +81,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch { /* exists */ }
 
     // Insert proposal
-    const proposalRows = await db.execute(sql`
-      INSERT INTO lead_proposals (lead_id, assignment_id, agency_id, message, estimated_budget, estimated_timeline)
-      VALUES (${leadId}, ${assignmentId}, ${assignment.agency_id}, ${message}, ${estimatedBudget ?? null}, ${estimatedTimeline ?? null})
-      RETURNING *
-    `);
+    let proposalRows;
+    try {
+      proposalRows = await db.execute(sql`
+        INSERT INTO lead_proposals (lead_id, assignment_id, agency_id, message, estimated_budget, estimated_timeline)
+        VALUES (${leadId}, ${assignmentId}, ${assignment.agency_id}, ${message}, ${estimatedBudget ?? null}, ${estimatedTimeline ?? null})
+        RETURNING *
+      `);
+    } catch (err) {
+      console.error("[PROPOSAL] Insert error:", err);
+      return error("Failed to save proposal", 500);
+    }
 
     // Update assignment status to responded
-    await db.execute(sql`
-      UPDATE lead_assignments SET status = 'responded', responded_at = COALESCE(responded_at, NOW())
-      WHERE id = ${assignmentId}
-    `);
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'responded' WHERE id = ${assignmentId}
+      `);
+    } catch { /* ignore */ }
 
     // Also add proposal as a message in the conversation
     try {

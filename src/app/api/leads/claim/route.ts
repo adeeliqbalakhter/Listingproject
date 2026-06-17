@@ -44,18 +44,19 @@ export async function POST(request: NextRequest) {
     if (!assignment) return error("Assignment not found", 404);
     if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
 
+    const agencyId = assignment.agency_id as string;
+
+    // Check if already claimed (by status OR by existing credit transaction)
     if (assignment.status === "claimed" || assignment.status === "responded" || assignment.status === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
-
-    const agencyId = assignment.agency_id as string;
 
     // Ensure credit transactions table exists
     try {
       await db.execute(sql`
         CREATE TABLE IF NOT EXISTS lead_credit_transactions (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+          agency_id UUID NOT NULL,
           amount INTEGER NOT NULL,
           type VARCHAR(30) NOT NULL,
           description TEXT,
@@ -63,6 +64,25 @@ export async function POST(request: NextRequest) {
         )
       `);
     } catch { /* already exists */ }
+
+    // Check if credit was already consumed for this lead (prevents double-charge)
+    try {
+      const existingClaim = await db.execute(sql`
+        SELECT id FROM lead_credit_transactions
+        WHERE agency_id = ${agencyId} AND type = 'consume'
+          AND description = ${"Claimed lead: " + leadId}
+        LIMIT 1
+      `);
+      if ((existingClaim as unknown as Array<Record<string, unknown>>).length > 0) {
+        // Credit was already charged — just fix the status and return success
+        try {
+          await db.execute(sql`
+            UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId} AND status = 'sent'
+          `);
+        } catch { /* ignore */ }
+        return success({ message: "Already claimed", alreadyClaimed: true });
+      }
+    } catch { /* table might not have data yet */ }
 
     // Calculate available credits
     let monthlyCredits = 1;
@@ -103,6 +123,17 @@ export async function POST(request: NextRequest) {
       return error("No credits remaining. Please upgrade your plan or contact support.", 403);
     }
 
+    // Update assignment status FIRST, then deduct credit
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed'
+        WHERE id = ${assignmentId}
+      `);
+    } catch (err) {
+      console.error("[CLAIM] Assignment update error:", err);
+      return error("Failed to claim lead", 500);
+    }
+
     // Deduct credit
     try {
       await db.execute(sql`
@@ -114,25 +145,13 @@ export async function POST(request: NextRequest) {
       return error("Failed to deduct credit", 500);
     }
 
-    // Update assignment status to claimed
-    try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed'
-        WHERE id = ${assignmentId}
-      `);
-    } catch (err) {
-      console.error("[CLAIM] Assignment update error:", err);
-    }
-
     // Update lead status if still 'new'
     try {
       await db.execute(sql`
         UPDATE leads SET status = 'viewed', updated_at = NOW()
         WHERE id = ${leadId} AND status = 'new'
       `);
-    } catch (err) {
-      console.error("[CLAIM] Lead update error:", err);
-    }
+    } catch { /* ignore */ }
 
     return success({ message: "Lead claimed successfully", creditsRemaining: available - 1 });
   } catch (err) {
