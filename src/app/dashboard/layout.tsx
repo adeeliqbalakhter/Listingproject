@@ -39,6 +39,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user, loading } = useAuth();
+  const [agencyName, setAgencyName] = useState<string | null>(null);
+  const [agencyInitials, setAgencyInitials] = useState("--");
+  const [loadingAgency, setLoadingAgency] = useState(true);
 
   useEffect(() => {
     if (loading) return;
@@ -51,26 +54,8 @@ export default function DashboardLayout({
     }
   }, [user, loading, router]);
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
-  }
-
-  if (user.role === "client" || user.role === "user") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
-  }
-  const [agencyName, setAgencyName] = useState<string | null>(null);
-  const [agencyInitials, setAgencyInitials] = useState("--");
-  const [loadingAgency, setLoadingAgency] = useState(true);
-
   useEffect(() => {
+    if (!user || user.role === "client" || user.role === "user") return;
     async function fetchAgency() {
       try {
         const res = await fetch("/api/agencies/mine");
@@ -97,7 +82,15 @@ export default function DashboardLayout({
       }
     }
     fetchAgency();
-  }, []);
+  }, [user]);
+
+  if (loading || !user || user.role === "client" || user.role === "user") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
 
   const displayName = agencyName || "My Agency";
 
