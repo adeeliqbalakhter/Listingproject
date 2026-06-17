@@ -41,7 +41,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
 
     if (assignment.status === "sent") {
-      return error("You must claim this lead first", 400);
+      const creditCheck = await db.execute(sql`
+        SELECT id FROM lead_credit_transactions
+        WHERE agency_id = ${assignment.agency_id} AND type = 'consume'
+          AND description LIKE ${"%" + leadId + "%"}
+        LIMIT 1
+      `);
+      const hasClaimed = (creditCheck as unknown as Array<Record<string, unknown>>).length > 0;
+      if (!hasClaimed) {
+        return error("You must claim this lead first", 400);
+      }
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+      `);
     }
 
     // Ensure proposals table exists
