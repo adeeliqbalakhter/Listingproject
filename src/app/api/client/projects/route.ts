@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       FROM leads l
       LEFT JOIN lead_assignments la ON la.lead_id = l.id
       LEFT JOIN agencies a ON a.id = la.agency_id AND a.deleted_at IS NULL
-      WHERE l.user_id = ${user.id}
+      WHERE (l.user_id = ${user.id} OR l.contact_email = ${user.email})
       GROUP BY l.id
       ORDER BY l.created_at DESC
     `);

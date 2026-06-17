@@ -26,7 +26,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
     if (!lead) return notFound("Lead not found");
 
-    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+    // Access: admin, lead owner (by user_id or contact_email), or assigned agency
+    const isOwner = lead.user_id === user.id || lead.contact_email === user.email;
+    if (!isAdmin(user.role) && !isOwner) {
       const assignment = await db.execute(sql`
         SELECT la.id FROM lead_assignments la
         JOIN agencies a ON a.id = la.agency_id
@@ -36,6 +38,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if ((assignment as unknown as Array<unknown>).length === 0) {
         return error("Access denied", 403);
       }
+    }
+
+    // Auto-link lead to user if it matches by email but has no user_id
+    if (!lead.user_id && lead.contact_email === user.email) {
+      try {
+        await db.execute(sql`UPDATE leads SET user_id = ${user.id} WHERE id = ${id} AND user_id IS NULL`);
+      } catch { /* ignore */ }
     }
 
     const { searchParams } = request.nextUrl;
@@ -71,7 +80,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
     if (!lead) return notFound("Lead not found");
 
-    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+    const isOwner = lead.user_id === user.id || lead.contact_email === user.email;
+    if (!isAdmin(user.role) && !isOwner) {
       const assignment = await db.execute(sql`
         SELECT la.id FROM lead_assignments la
         JOIN agencies a ON a.id = la.agency_id

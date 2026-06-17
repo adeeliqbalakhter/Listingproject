@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       FROM lead_assignments la
       JOIN leads l ON l.id = la.lead_id
       JOIN agencies a ON a.id = la.agency_id AND a.deleted_at IS NULL
-      WHERE l.user_id = ${user.id}
+      WHERE (l.user_id = ${user.id} OR l.contact_email = ${user.email})
         AND la.status IN ('claimed', 'responded', 'won')
       ORDER BY last_message_at DESC NULLS LAST, la.created_at DESC
     `);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Briefcase,
   LogOut,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
 import OnboardingModal from "@/components/onboarding-modal";
@@ -36,7 +37,26 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout, user } = useAuth();
+  const [roleChecked, setRoleChecked] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === "client" || user.role === "user") {
+      router.replace("/client");
+      return;
+    }
+    setRoleChecked(true);
+  }, [user, router]);
+
+  if (!user || !roleChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
   const [agencyName, setAgencyName] = useState<string | null>(null);
   const [agencyInitials, setAgencyInitials] = useState("--");
   const [loadingAgency, setLoadingAgency] = useState(true);

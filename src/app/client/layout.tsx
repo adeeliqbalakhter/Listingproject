@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   FolderOpen,
   MessageSquare,
@@ -10,20 +10,44 @@ import {
   User,
   Menu,
   X,
+  Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/SessionProvider";
 
 const sidebarLinks = [
   { name: "My Projects", href: "/client", icon: FolderOpen },
   { name: "Messages", href: "/client/messages", icon: MessageSquare },
-  { name: "Find Agencies", href: "/agencies", icon: Search },
+  { name: "Find Agencies", href: "/client/agencies", icon: Search },
 ];
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout, user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === "agency_owner" || user.role === "agency_team_member") {
+      router.replace("/dashboard");
+      return;
+    }
+    if (user.role === "super_admin" || user.role === "admin") {
+      router.replace("/admin");
+      return;
+    }
+    setChecking(false);
+  }, [user, router]);
+
+  if (!user || checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      </div>
+    );
+  }
 
   const initials = user?.name
     ? user.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()

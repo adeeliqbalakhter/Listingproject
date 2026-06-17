@@ -17,6 +17,9 @@ import {
   DollarSign,
   Calendar,
   Star,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 
 interface Agency {
@@ -73,6 +76,9 @@ export default function ClientProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ description: "", budget: "", timeline: "" });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -87,6 +93,41 @@ export default function ClientProjectsPage() {
     }
     load();
   }, []);
+
+  function startEditing(project: Project) {
+    setEditingId(project.id);
+    setEditForm({
+      description: project.project_description,
+      budget: project.budget || "",
+      timeline: project.timeline || "",
+    });
+  }
+
+  async function saveEdit(projectId: string) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/leads/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectDescription: editForm.description,
+          budget: editForm.budget || undefined,
+          timeline: editForm.timeline || undefined,
+        }),
+      });
+      if (res.ok) {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === projectId
+              ? { ...p, project_description: editForm.description, budget: editForm.budget, timeline: editForm.timeline }
+              : p
+          )
+        );
+        setEditingId(null);
+      }
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  }
 
   if (loading) {
     return (
@@ -250,8 +291,64 @@ export default function ClientProjectsPage() {
                 {isExpanded && (
                   <div className="border-t border-gray-100 px-5 py-5 bg-gray-50/50">
                     <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-navy mb-2">Project Brief</h4>
-                      <p className="text-sm text-gray-600 whitespace-pre-line">{project.project_description}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-navy">Project Brief</h4>
+                        {editingId === project.id ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => saveEdit(project.id)}
+                              disabled={saving}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-brand rounded-lg hover:bg-brand-dark disabled:opacity-50"
+                            >
+                              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                            >
+                              <X className="w-3 h-3" />
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEditing(project)}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                      {editingId === project.id ? (
+                        <div className="space-y-3">
+                          <textarea
+                            value={editForm.description}
+                            onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+                            rows={4}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                          />
+                          <div className="grid grid-cols-2 gap-3">
+                            <input
+                              type="text"
+                              value={editForm.budget}
+                              onChange={(e) => setEditForm((p) => ({ ...p, budget: e.target.value }))}
+                              placeholder="Budget"
+                              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={editForm.timeline}
+                              onChange={(e) => setEditForm((p) => ({ ...p, timeline: e.target.value }))}
+                              placeholder="Timeline"
+                              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600 whitespace-pre-line">{project.project_description}</p>
+                      )}
                     </div>
 
                     <h4 className="text-sm font-semibold text-navy mb-3">

@@ -64,8 +64,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
     if (!lead) return notFound("Lead not found");
 
-    // Authorization: must be lead creator, assigned agency, or admin
-    if (!isAdmin(user.role) && lead.user_id !== user.id) {
+    const isOwner = isAdmin(user.role) || lead.user_id === user.id || lead.contact_email === user.email;
+    if (!isOwner) {
       const assignment = await db.execute(sql`
         SELECT la.id FROM lead_assignments la
         JOIN agencies a ON a.id = la.agency_id
@@ -78,20 +78,46 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json();
-    const { status } = body as { status: string };
 
-    if (!["new", "sent", "viewed", "responded", "won", "lost", "expired"].includes(status)) {
-      return error("Invalid status", 400);
+    // Status update (agency or admin)
+    if (body.status) {
+      const { status } = body as { status: string };
+      if (!["new", "sent", "viewed", "responded", "won", "lost", "expired"].includes(status)) {
+        return error("Invalid status", 400);
+      }
+      await db.execute(sql`UPDATE leads SET status = ${status}, updated_at = NOW() WHERE id = ${id}`);
+      try {
+        await db.execute(sql`
+          INSERT INTO lead_activity_logs (lead_id, user_id, action, details)
+          VALUES (${id}, ${user.id}, 'status_changed', ${JSON.stringify({ status })})
+        `);
+      } catch { /* ignore */ }
+      return success({ message: "Lead updated" });
     }
 
-    await db.execute(sql`UPDATE leads SET status = ${status}, updated_at = NOW() WHERE id = ${id}`);
+    // Brief edit (client only — must be owner)
+    if (!isOwner) return error("Only the project owner can edit the brief", 403);
+
+    const updates: string[] = [];
+    const { projectDescription, budget, timeline, companyName } = body;
+    if (projectDescription !== undefined) updates.push("project_description");
+    if (budget !== undefined) updates.push("budget");
+    if (timeline !== undefined) updates.push("timeline");
+    if (companyName !== undefined) updates.push("company_name");
+
+    if (updates.length === 0) return error("No fields to update", 400);
 
     await db.execute(sql`
-      INSERT INTO lead_activity_logs (lead_id, user_id, action, details)
-      VALUES (${id}, ${user.id}, 'status_changed', ${JSON.stringify({ status })})
+      UPDATE leads SET
+        project_description = COALESCE(${projectDescription ?? null}, project_description),
+        budget = COALESCE(${budget ?? null}, budget),
+        timeline = COALESCE(${timeline ?? null}, timeline),
+        company_name = COALESCE(${companyName ?? null}, company_name),
+        updated_at = NOW()
+      WHERE id = ${id}
     `);
 
-    return success({ message: "Lead updated" });
+    return success({ message: "Brief updated" });
   } catch (err) {
     return serverError(err);
   }

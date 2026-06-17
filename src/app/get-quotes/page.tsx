@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -116,6 +116,28 @@ export default function GetQuotesPage() {
     company: "",
   });
   const [errors, setErrors] = useState<FormErrors>({});
+  const [loggedInUser, setLoggedInUser] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const json = await res.json();
+          const u = json.data;
+          if (u?.name && u?.email) {
+            setLoggedInUser({ name: u.name, email: u.email });
+            setForm((prev) => ({
+              ...prev,
+              name: prev.name || u.name,
+              email: prev.email || u.email,
+            }));
+          }
+        }
+      } catch { /* not logged in */ }
+    }
+    checkAuth();
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -161,11 +183,13 @@ export default function GetQuotesPage() {
     return next;
   }
 
+  const totalSteps = loggedInUser ? 2 : 3;
+
   function handleNext() {
     const v = validateStep(step);
     setErrors(v);
     if (Object.keys(v).length > 0) return;
-    if (step < 2) {
+    if (step < totalSteps - 1) {
       setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -288,8 +312,23 @@ export default function GetQuotesPage() {
           </p>
         </div>
 
-        {/* Signup prompt */}
-        {!signupDone ? (
+        {/* Signup prompt — only for non-logged-in users */}
+        {loggedInUser ? (
+          <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6 sm:p-8 mb-8 text-center">
+            <CheckCircle className="w-10 h-10 text-green-600 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-navy">Project submitted!</h2>
+            <p className="text-sm text-gray-600 mt-1 mb-4">
+              Track progress and chat with agencies from your dashboard.
+            </p>
+            <Link
+              href="/client"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
+            >
+              Go to My Dashboard
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        ) : !signupDone ? (
           <div className="rounded-xl border-2 border-brand/20 bg-gradient-to-br from-brand/5 to-blue-50 p-6 sm:p-8 mb-8">
             <div className="flex items-start gap-4 mb-5">
               <div className="w-10 h-10 bg-brand/10 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -355,8 +394,26 @@ export default function GetQuotesPage() {
                 )}
               </button>
             </form>
-            <p className="text-xs text-gray-400 mt-3 text-center">
-              Already have an account? <Link href="/auth/signin" className="text-brand hover:underline">Sign in</Link>
+            <div className="flex items-center justify-center gap-4 mt-3">
+              <p className="text-xs text-gray-400">
+                Already have an account? <Link href="/auth/signin" className="text-brand hover:underline">Sign in</Link>
+              </p>
+              <span className="text-xs text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={() => { setSignupDone(true); setSignupError("skipped"); }}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        ) : signupError === "skipped" ? (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 sm:p-8 mb-8 text-center">
+            <Mail className="w-10 h-10 text-brand mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-navy">We&apos;ll email you!</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Agencies will contact you at <span className="font-semibold">{form.email}</span> with their proposals.
             </p>
           </div>
         ) : (
@@ -409,7 +466,7 @@ export default function GetQuotesPage() {
       {/* Progress */}
       <div className="mb-10">
         <div className="flex items-center justify-between">
-          {STEPS.map((s, i) => (
+          {(loggedInUser ? STEPS.slice(0, 2) : STEPS).map((s, i) => (
             <div key={s.label} className="flex flex-1 items-center">
               <div className="flex flex-col items-center gap-2">
                 <div
@@ -435,7 +492,7 @@ export default function GetQuotesPage() {
                   {s.label}
                 </span>
               </div>
-              {i < STEPS.length - 1 && (
+              {i < totalSteps - 1 && (
                 <div className="mx-2 h-0.5 flex-1 sm:mx-4">
                   <div
                     className={`h-full rounded-full transition-colors ${
@@ -616,8 +673,8 @@ export default function GetQuotesPage() {
             </div>
           )}
 
-          {/* Step 3: Contact info */}
-          {step === 2 && (
+          {/* Step 3: Contact info (skipped for logged-in users) */}
+          {step === 2 && !loggedInUser && (
             <div className="space-y-5">
               <h2 className="text-xl font-bold text-navy">
                 How can agencies reach you?
@@ -747,7 +804,7 @@ export default function GetQuotesPage() {
               <div />
             )}
 
-            {step < 2 ? (
+            {step < totalSteps - 1 ? (
               <button
                 type="button"
                 onClick={handleNext}
