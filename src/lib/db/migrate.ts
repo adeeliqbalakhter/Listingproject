@@ -611,6 +611,37 @@ export async function runMigrations() {
     )
   `);
 
+  // ─── Deduplicate lead_assignments, keeping the most-progressed row per
+  //     (lead_id, agency_id). Required before the UNIQUE constraint below and
+  //     fixes any historical duplicates that caused claims to appear to revert.
+  await db.execute(sql`
+    DELETE FROM lead_assignments
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (
+          PARTITION BY lead_id, agency_id
+          ORDER BY (CASE status
+              WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
+              WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END) DESC,
+            created_at ASC, id ASC
+        ) AS rn
+        FROM lead_assignments
+      ) ranked
+      WHERE rn > 1
+    )
+  `);
+
+  // ─── Enforce one assignment per (lead, agency) so ON CONFLICT works and
+  //     duplicate rows can never desync claim state again.
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE lead_assignments
+        ADD CONSTRAINT uq_lead_assignments_lead_agency UNIQUE (lead_id, agency_id);
+    EXCEPTION WHEN duplicate_table THEN NULL;
+    WHEN duplicate_object THEN NULL;
+    END $$;
+  `);
+
   // ─── Ensure messages table exists ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS messages (

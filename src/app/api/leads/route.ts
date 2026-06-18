@@ -77,26 +77,17 @@ export async function GET(request: NextRequest) {
         return Response.json({ error: "Forbidden" }, { status: 403 });
       }
 
-      // Auto-heal: fix any assignments stuck as 'sent' when a credit was already consumed
       try {
-        await db.execute(sql`
-          UPDATE lead_assignments la SET status = 'claimed'
-          WHERE la.agency_id = ${agencyId}
-            AND la.status = 'sent'
-            AND EXISTS (
-              SELECT 1 FROM lead_credit_transactions lct
-              WHERE lct.agency_id = ${agencyId}
-                AND lct.type = 'consume'
-                AND lct.description = 'Claimed lead: ' || la.lead_id::text
-            )
-        `);
-      } catch { /* table may not exist yet */ }
-
-      try {
+        // Aggregate assignments ordered by status progression (most-progressed
+        // first) so the client always reads the true claim state even if a
+        // duplicate assignment row exists.
         const leadsQuery = status
           ? sql`SELECT l.*, json_agg(json_build_object(
                   'id', la.id, 'agencyId', la.agency_id, 'status', la.status
-                )) as assignments
+                ) ORDER BY (CASE la.status
+                    WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
+                    WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END) DESC,
+                  la.created_at ASC) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
                 WHERE la.agency_id = ${agencyId} AND l.status = ${status}
@@ -105,7 +96,10 @@ export async function GET(request: NextRequest) {
                 LIMIT ${limit} OFFSET ${offset}`
           : sql`SELECT l.*, json_agg(json_build_object(
                   'id', la.id, 'agencyId', la.agency_id, 'status', la.status
-                )) as assignments
+                ) ORDER BY (CASE la.status
+                    WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
+                    WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END) DESC,
+                  la.created_at ASC) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
                 WHERE la.agency_id = ${agencyId}
