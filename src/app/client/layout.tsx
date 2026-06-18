@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/SessionProvider";
+import { ToastProvider } from "@/components/ui/toast";
 
 const sidebarLinks = [
   { name: "My Projects", href: "/client", icon: FolderOpen },
@@ -61,6 +62,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     : "CL";
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-gray-50 flex">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col fixed inset-y-0 left-0 z-30">
@@ -186,5 +188,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div className="flex-1 p-4 lg:p-8">{children}</div>
       </div>
     </div>
+    </ToastProvider>
   );
 }

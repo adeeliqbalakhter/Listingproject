@@ -32,6 +32,17 @@ interface Agency {
   respondedAt: string | null;
 }
 
+interface Proposal {
+  id: string;
+  agency_name: string;
+  agency_logo: string | null;
+  message: string;
+  estimated_budget: string | null;
+  estimated_timeline: string | null;
+  status: string;
+  created_at: string;
+}
+
 interface Project {
   id: string;
   company_name: string;
@@ -79,6 +90,8 @@ export default function ClientProjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ description: "", budget: "", timeline: "" });
   const [saving, setSaving] = useState(false);
+  const [proposals, setProposals] = useState<Record<string, Proposal[]>>({});
+  const [loadingProposals, setLoadingProposals] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -93,6 +106,25 @@ export default function ClientProjectsPage() {
     }
     load();
   }, []);
+
+  async function fetchProposals(projectId: string) {
+    if (proposals[projectId]) return;
+    setLoadingProposals(projectId);
+    try {
+      const res = await fetch(`/api/leads/${projectId}/proposal`);
+      if (res.ok) {
+        const json = await res.json();
+        setProposals((prev) => ({ ...prev, [projectId]: json.data ?? [] }));
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingProposals(null); }
+  }
+
+  function handleExpand(projectId: string) {
+    const isExpanding = expandedId !== projectId;
+    setExpandedId(isExpanding ? projectId : null);
+    if (isExpanding) fetchProposals(projectId);
+  }
 
   function startEditing(project: Project) {
     setEditingId(project.id);
@@ -219,7 +251,7 @@ export default function ClientProjectsPage() {
               <div key={project.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div
                   className="p-5 cursor-pointer hover:bg-gray-50/50 transition-colors"
-                  onClick={() => setExpandedId(isExpanded ? null : project.id)}
+                  onClick={() => handleExpand(project.id)}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -407,6 +439,69 @@ export default function ClientProjectsPage() {
                         })}
                       </div>
                     )}
+
+                    {/* Proposals Section */}
+                    {(() => {
+                      const projectProposals = proposals[project.id];
+                      const isLoadingP = loadingProposals === project.id;
+                      if (isLoadingP) {
+                        return (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Loading proposals...
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (!projectProposals || projectProposals.length === 0) return null;
+                      return (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
+                            <Star className="w-4 h-4 text-amber-500" />
+                            Proposals ({projectProposals.length})
+                          </h4>
+                          <div className="space-y-3">
+                            {projectProposals.map((proposal) => (
+                              <div key={proposal.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
+                                      {proposal.agency_logo ? (
+                                        <img src={proposal.agency_logo} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                      ) : (
+                                        <Building2 className="w-4 h-4 text-brand" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-navy">{proposal.agency_name}</p>
+                                      <p className="text-xs text-gray-400">{timeAgo(proposal.created_at)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{proposal.message}</p>
+                                {(proposal.estimated_budget || proposal.estimated_timeline) && (
+                                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
+                                    {proposal.estimated_budget && (
+                                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                                        <DollarSign className="w-3 h-3" />
+                                        {proposal.estimated_budget}
+                                      </span>
+                                    )}
+                                    {proposal.estimated_timeline && (
+                                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                                        <Calendar className="w-3 h-3" />
+                                        {proposal.estimated_timeline}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

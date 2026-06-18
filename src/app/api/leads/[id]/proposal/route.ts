@@ -172,6 +172,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
+    // Verify access: lead owner (by user_id or email) or assigned agency owner
+    const leadRows = await db.execute(sql`SELECT user_id, contact_email FROM leads WHERE id = ${leadId}`);
+    const lead = (leadRows as unknown as Array<Record<string, unknown>>)[0];
+    if (!lead) return error("Lead not found", 404);
+
+    const isOwner = lead.user_id === user.id || lead.contact_email === user.email;
+    if (!isOwner) {
+      const agencyCheck = await db.execute(sql`
+        SELECT la.id FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.lead_id = ${leadId} AND a.user_id = ${user.id}
+        LIMIT 1
+      `);
+      if ((agencyCheck as unknown as Array<unknown>).length === 0) {
+        return error("Access denied", 403);
+      }
+    }
+
     try {
       const rows = await db.execute(sql`
         SELECT lp.*, a.name as agency_name, a.logo as agency_logo
