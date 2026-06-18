@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     const agencyId = assignment.agency_id as string;
 
-    // Check if already claimed (by status OR by existing credit transaction)
+    // Check if already claimed by status
     if (assignment.status === "claimed" || assignment.status === "responded" || assignment.status === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
@@ -74,10 +74,10 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `);
       if ((existingClaim as unknown as Array<Record<string, unknown>>).length > 0) {
-        // Credit was already charged — just fix the status and return success
+        // Credit already charged — try to fix the status and return success
         try {
           await db.execute(sql`
-            UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId} AND status = 'sent'
+            UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
           `);
         } catch { /* ignore */ }
         return success({ message: "Already claimed", alreadyClaimed: true });
@@ -123,18 +123,7 @@ export async function POST(request: NextRequest) {
       return error("No credits remaining. Please upgrade your plan or contact support.", 403);
     }
 
-    // Update assignment status FIRST, then deduct credit
-    try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed'
-        WHERE id = ${assignmentId}
-      `);
-    } catch (err) {
-      console.error("[CLAIM] Assignment update error:", err);
-      return error("Failed to claim lead", 500);
-    }
-
-    // Deduct credit
+    // Deduct credit first
     try {
       await db.execute(sql`
         INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
@@ -143,6 +132,25 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("[CLAIM] Credit deduction error:", err);
       return error("Failed to deduct credit", 500);
+    }
+
+    // Update assignment status to claimed (best-effort, don't fail if this errors)
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed'
+        WHERE id = ${assignmentId}
+      `);
+    } catch (err) {
+      console.error("[CLAIM] Assignment status update error:", err);
+      // Try alternative approach with explicit cast
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed'::varchar
+          WHERE id = ${assignmentId}::uuid
+        `);
+      } catch (err2) {
+        console.error("[CLAIM] Assignment status update retry error:", err2);
+      }
     }
 
     // Update lead status if still 'new'

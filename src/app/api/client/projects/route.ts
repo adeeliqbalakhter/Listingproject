@@ -26,7 +26,14 @@ export async function GET(request: NextRequest) {
               'agencyName', a.name,
               'agencyLogo', a.logo,
               'agencySlug', a.slug,
-              'assignmentStatus', la.status,
+              'assignmentStatus', CASE
+                WHEN la.status = 'sent' AND EXISTS (
+                  SELECT 1 FROM lead_credit_transactions lct
+                  WHERE lct.agency_id = la.agency_id AND lct.type = 'consume'
+                    AND lct.description = 'Claimed lead: ' || l.id::text
+                ) THEN 'claimed'
+                ELSE la.status
+              END,
               'respondedAt', la.responded_at
             )
           ) FILTER (WHERE la.id IS NOT NULL), '[]'

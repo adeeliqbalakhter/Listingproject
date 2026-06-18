@@ -32,16 +32,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const assignments = await db.execute(sql`
-      SELECT la.*, a.name as agency_name
-      FROM lead_assignments la
-      JOIN agencies a ON a.id = la.agency_id
-      WHERE la.lead_id = ${id}
-    `);
+    let assignments: unknown[] = [];
+    try {
+      assignments = await db.execute(sql`
+        SELECT la.*, a.name as agency_name
+        FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.lead_id = ${id}
+      `) as unknown as unknown[];
+    } catch { /* ignore */ }
 
-    const activityLogs = await db.execute(sql`
-      SELECT * FROM lead_activity_logs WHERE lead_id = ${id} ORDER BY created_at DESC LIMIT 50
-    `);
+    let activityLogs: unknown[] = [];
+    try {
+      activityLogs = await db.execute(sql`
+        SELECT * FROM lead_activity_logs WHERE lead_id = ${id} ORDER BY created_at DESC LIMIT 50
+      `) as unknown as unknown[];
+    } catch { /* ignore */ }
 
     return success({ ...lead, assignments, activityLogs });
   } catch (err) {

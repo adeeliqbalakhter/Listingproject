@@ -13,12 +13,19 @@ export async function GET(request: NextRequest) {
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
-    // Get all conversations for this client's leads
+    // Get all conversations for this client's leads (agencies that claimed or have credit transactions)
     const rows = await db.execute(sql`
       SELECT
         la.id as assignment_id,
         la.lead_id,
-        la.status as assignment_status,
+        CASE
+          WHEN la.status = 'sent' AND EXISTS (
+            SELECT 1 FROM lead_credit_transactions lct
+            WHERE lct.agency_id = la.agency_id AND lct.type = 'consume'
+              AND lct.description = 'Claimed lead: ' || la.lead_id::text
+          ) THEN 'claimed'
+          ELSE la.status
+        END as assignment_status,
         l.company_name,
         l.project_description,
         a.id as agency_id,
@@ -32,7 +39,17 @@ export async function GET(request: NextRequest) {
       JOIN leads l ON l.id = la.lead_id
       JOIN agencies a ON a.id = la.agency_id AND a.deleted_at IS NULL
       WHERE (l.user_id = ${user.id} OR l.contact_email = ${user.email})
-        AND la.status IN ('claimed', 'responded', 'won')
+        AND (
+          la.status IN ('claimed', 'responded', 'won')
+          OR EXISTS (
+            SELECT 1 FROM lead_credit_transactions lct
+            WHERE lct.agency_id = la.agency_id AND lct.type = 'consume'
+              AND lct.description = 'Claimed lead: ' || la.lead_id::text
+          )
+          OR EXISTS (
+            SELECT 1 FROM messages m WHERE m.lead_assignment_id = la.id
+          )
+        )
       ORDER BY last_message_at DESC NULLS LAST, la.created_at DESC
     `);
 
