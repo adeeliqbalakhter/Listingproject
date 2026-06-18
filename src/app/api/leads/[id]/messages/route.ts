@@ -103,11 +103,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       RETURNING *
     `);
 
-    // Update assignment responded_at if this is agency's first response
-    await db.execute(sql`
-      UPDATE lead_assignments SET responded_at = COALESCE(responded_at, NOW()), status = 'responded'
-      WHERE id = ${parsed.data.assignmentId} AND responded_at IS NULL
-    `);
+    // Update assignment responded_at if this is agency's first response (don't overwrite won/lost)
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET responded_at = COALESCE(responded_at, NOW()), status = 'responded'
+        WHERE id = ${parsed.data.assignmentId} AND status IN ('sent', 'claimed')
+      `);
+    } catch { /* non-critical */ }
 
     return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {
