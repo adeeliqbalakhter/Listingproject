@@ -19,6 +19,10 @@ async function needsMigration(): Promise<boolean> {
   }
 }
 
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");

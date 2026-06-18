@@ -25,38 +25,23 @@ export async function POST(request: NextRequest) {
 
     const { leadId, assignmentId } = parsed.data;
 
-    // 1. Verify the assignment exists and belongs to an agency this user owns.
-    //    We match by lead_id so we operate on ALL of this agency's rows for the
-    //    lead (defensive against any duplicate assignment rows).
-    let agencyId: string | null = null;
-    let alreadyClaimed = false;
-    try {
-      const assignmentRows = await db.execute(sql`
-        SELECT la.agency_id,
-               a.user_id as agency_owner_id,
-               bool_or(la.status IN ('claimed', 'responded', 'won')) as has_claimed
-        FROM lead_assignments la
-        JOIN agencies a ON a.id = la.agency_id
-        WHERE la.lead_id = ${leadId}
-          AND (la.id = ${assignmentId} OR la.agency_id = (
-            SELECT agency_id FROM lead_assignments WHERE id = ${assignmentId}
-          ))
-        GROUP BY la.agency_id, a.user_id
-      `);
-      const row = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
-      if (!row) return error("Assignment not found", 404);
-      if (row.agency_owner_id !== user.id) return error("Access denied", 403);
-      agencyId = row.agency_id as string;
-      alreadyClaimed = row.has_claimed === true;
-    } catch (err) {
-      console.error("[CLAIM] Assignment lookup error:", err);
-      return error("Failed to verify assignment: " + (err instanceof Error ? err.message : "DB error"), 500);
-    }
+    // 1. Look up the specific assignment row
+    const assignmentRows = await db.execute(sql`
+      SELECT la.id, la.lead_id, la.agency_id, la.status,
+             a.user_id as agency_owner_id
+      FROM lead_assignments la
+      JOIN agencies a ON a.id = la.agency_id
+      WHERE la.id = ${assignmentId} AND la.lead_id = ${leadId}
+    `);
+    const assignment = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
+    if (!assignment) return error("Assignment not found", 404);
+    if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
 
-    if (!agencyId) return error("Assignment not found", 404);
+    const agencyId = assignment.agency_id as string;
+    const currentStatus = assignment.status as string;
 
-    // 2. Already claimed — nothing to do, no charge.
-    if (alreadyClaimed) {
+    // 2. Already claimed — nothing to do
+    if (currentStatus === "claimed" || currentStatus === "responded" || currentStatus === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
 
@@ -74,7 +59,7 @@ export async function POST(request: NextRequest) {
       `);
     } catch { /* already exists */ }
 
-    // 4. Compute available credits (outside the transaction is fine — read-only).
+    // 4. Compute available credits
     let monthlyCredits = 1;
     try {
       const planRows = await db.execute(sql`
@@ -111,13 +96,12 @@ export async function POST(request: NextRequest) {
       return error("No credits remaining. Please upgrade your plan or contact support.", 403);
     }
 
-    // 5. ATOMIC claim: update status + deduct credit in one transaction.
-    //    If anything fails, the whole thing rolls back — no partial writes.
+    // 5. ATOMIC: update status + deduct credit in one transaction.
+    //    If anything fails, the whole thing rolls back.
     let claimedRowCount = 0;
     try {
       await db.transaction(async (tx) => {
-        // 5a. Skip charging if a credit for this exact lead already exists
-        //     (idempotent retry protection), but still make sure status is set.
+        // 5a. Check if credit already exists for this lead (idempotent retry)
         const existing = await tx.execute(sql`
           SELECT id FROM lead_credit_transactions
           WHERE agency_id = ${agencyId} AND type = 'consume'
@@ -126,20 +110,19 @@ export async function POST(request: NextRequest) {
         `);
         const alreadyCharged = (existing as unknown as Array<Record<string, unknown>>).length > 0;
 
-        // 5b. Update EVERY assignment row for this agency+lead that is still open.
+        // 5b. Update ALL assignment rows for this agency+lead
         const updated = await tx.execute(sql`
           UPDATE lead_assignments
           SET status = 'claimed'
           WHERE lead_id = ${leadId}
             AND agency_id = ${agencyId}
-            AND status IN ('sent', 'viewed')
-          RETURNING id, status
+            AND status = 'sent'
+          RETURNING id
         `);
-        const updatedRows = updated as unknown as Array<Record<string, unknown>>;
-        claimedRowCount = updatedRows.length;
-        console.log(`[CLAIM] lead=${leadId} agency=${agencyId} updated ${claimedRowCount} row(s) ->`, updatedRows);
+        claimedRowCount = (updated as unknown as Array<Record<string, unknown>>).length;
+        console.log(`[CLAIM] lead=${leadId} agency=${agencyId} updated ${claimedRowCount} row(s)`);
 
-        // 5c. Deduct one credit (only if not already charged for this lead).
+        // 5c. Deduct credit (only if not already charged)
         if (!alreadyCharged) {
           await tx.execute(sql`
             INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
@@ -147,7 +130,7 @@ export async function POST(request: NextRequest) {
           `);
         }
 
-        // 5d. Bump the lead's own status if it was still 'new'.
+        // 5d. Bump lead status
         await tx.execute(sql`
           UPDATE leads SET status = 'viewed', updated_at = NOW()
           WHERE id = ${leadId} AND status = 'new'
