@@ -76,6 +76,22 @@ export async function GET(request: NextRequest) {
       if (!agency) {
         return Response.json({ error: "Forbidden" }, { status: 403 });
       }
+
+      // Auto-heal: fix any assignments stuck as 'sent' when a credit was already consumed
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments la SET status = 'claimed'
+          WHERE la.agency_id = ${agencyId}
+            AND la.status = 'sent'
+            AND EXISTS (
+              SELECT 1 FROM lead_credit_transactions lct
+              WHERE lct.agency_id = ${agencyId}
+                AND lct.type = 'consume'
+                AND lct.description = 'Claimed lead: ' || la.lead_id::text
+            )
+        `);
+      } catch { /* table may not exist yet */ }
+
       try {
         const leadsQuery = status
           ? sql`SELECT l.*, json_agg(json_build_object(

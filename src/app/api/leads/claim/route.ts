@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       assignment = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
     } catch (err) {
       console.error("[CLAIM] Assignment lookup error:", err);
-      return error("Failed to verify assignment", 500);
+      return error("Failed to verify assignment: " + (err instanceof Error ? err.message : "DB error"), 500);
     }
 
     if (!assignment) return error("Assignment not found", 404);
@@ -74,10 +74,11 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `);
       if ((existingClaimRows as unknown as Array<Record<string, unknown>>).length > 0) {
-        // Credit already charged — fix the stuck status and return
+        // Credit already charged — fix the stuck status
         try {
           await db.execute(sql`
-            UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId} AND status = 'sent'
+            UPDATE lead_assignments SET status = 'claimed'
+            WHERE id = ${assignmentId} AND status = 'sent'
           `);
         } catch { /* ignore */ }
         return success({ message: "Already claimed", alreadyClaimed: true });
@@ -125,17 +126,7 @@ export async function POST(request: NextRequest) {
       return error("No credits remaining. Please upgrade your plan or contact support.", 403);
     }
 
-    // 6. UPDATE status to 'claimed'
-    try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
-      `);
-    } catch (err) {
-      console.error("[CLAIM] Status update error:", err);
-      return error("Failed to update claim status", 500);
-    }
-
-    // 7. Deduct credit
+    // 6. Deduct credit FIRST (this is the permanent record of the claim)
     try {
       await db.execute(sql`
         INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
@@ -143,11 +134,45 @@ export async function POST(request: NextRequest) {
       `);
     } catch (err) {
       console.error("[CLAIM] Credit deduction error:", err);
-      // Credit deduction failed but status is already claimed — don't revert
-      // The credit will be caught by the duplicate check on next attempt
+      return error("Failed to process claim: " + (err instanceof Error ? err.message : "DB error"), 500);
     }
 
-    // 8. Update lead status if still 'new'
+    // 7. UPDATE status to 'claimed' with RETURNING to verify
+    let updateSucceeded = false;
+    try {
+      const updated = await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed'
+        WHERE id = ${assignmentId}
+        RETURNING id, status
+      `);
+      const updatedRow = (updated as unknown as Array<Record<string, unknown>>)[0];
+      updateSucceeded = !!updatedRow && updatedRow.status === "claimed";
+    } catch (err) {
+      console.error("[CLAIM] Status update error:", err);
+    }
+
+    // 8. If RETURNING didn't confirm, retry with a separate UPDATE + SELECT
+    if (!updateSucceeded) {
+      console.warn("[CLAIM] First UPDATE didn't confirm, retrying...");
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+        `);
+        const verifyRows = await db.execute(sql`
+          SELECT status FROM lead_assignments WHERE id = ${assignmentId}
+        `);
+        const verified = (verifyRows as unknown as Array<Record<string, unknown>>)[0];
+        if (verified && verified.status === "claimed") {
+          updateSucceeded = true;
+        } else {
+          console.error("[CLAIM] Status still not claimed after retry. DB returned:", verified);
+        }
+      } catch (err) {
+        console.error("[CLAIM] Retry update error:", err);
+      }
+    }
+
+    // 9. Update lead status if still 'new'
     try {
       await db.execute(sql`
         UPDATE leads SET status = 'viewed', updated_at = NOW()
@@ -155,9 +180,13 @@ export async function POST(request: NextRequest) {
       `);
     } catch { /* non-critical */ }
 
-    return success({ message: "Lead claimed successfully", creditsRemaining: available - 1 });
+    return success({
+      message: "Lead claimed successfully",
+      creditsRemaining: available - 1,
+      statusPersisted: updateSucceeded,
+    });
   } catch (err) {
     console.error("[CLAIM] Unexpected error:", err);
-    return error("Internal server error: " + (err instanceof Error ? err.message : "Unknown"), 500);
+    return error("Claim failed: " + (err instanceof Error ? err.message : "Unknown error"), 500);
   }
 }
