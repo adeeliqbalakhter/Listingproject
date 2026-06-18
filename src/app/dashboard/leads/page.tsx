@@ -6,13 +6,11 @@ import {
   Sparkles,
   TrendingUp,
   Coins,
-  Eye,
   Send,
   Trophy,
   XCircle,
   ChevronDown,
   ChevronUp,
-  Building2,
   Calendar,
   DollarSign,
   Mail,
@@ -23,7 +21,10 @@ import {
   Lock,
   CreditCard,
   Unlock,
+  FileText,
+  CheckCircle,
 } from "lucide-react";
+import { showToast } from "@/components/ui/toast";
 
 type AssignmentStatus = "sent" | "claimed" | "responded" | "won" | "lost";
 
@@ -175,11 +176,12 @@ export default function LeadsPage() {
         if (credits) {
           setCredits({ ...credits, available: json.data?.creditsRemaining ?? credits.available - 1, consumed: credits.consumed + 1 });
         }
+        showToast("success", "Lead Claimed", "You can now view full details and send a proposal.");
       } else {
-        alert(json.error || "Failed to claim lead");
+        showToast("error", "Claim Failed", json.error || "Failed to claim lead");
       }
     } catch {
-      alert("Network error while claiming lead");
+      showToast("error", "Network Error", "Could not connect to server. Please try again.");
     } finally {
       setClaimingId(null);
     }
@@ -230,12 +232,12 @@ export default function LeadsPage() {
         setProposalMsg("");
         setProposalBudget("");
         setProposalTimeline("");
-        alert("Proposal submitted successfully!");
+        showToast("success", "Proposal Sent", "Your proposal has been sent and the client will be notified via email.");
       } else {
-        alert(json.error || "Failed to submit proposal");
+        showToast("error", "Submission Failed", json.error || "Failed to submit proposal");
       }
     } catch {
-      alert("Network error while submitting proposal");
+      showToast("error", "Network Error", "Could not connect to server. Please try again.");
     } finally {
       setSubmittingProposal(false);
     }
@@ -532,79 +534,98 @@ export default function LeadsPage() {
 
                       {/* Proposal Form */}
                       {proposalLeadId === lead.id && (
-                        <div className="mt-4 p-4 bg-white rounded-xl border border-brand/20" onClick={(e) => e.stopPropagation()}>
-                          <h4 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
-                            <Send className="w-4 h-4 text-brand" />
-                            Submit Proposal
-                          </h4>
-                          <div className="space-y-3">
+                        <div className="mt-4 rounded-xl border border-gray-200 overflow-hidden shadow-sm" onClick={(e) => e.stopPropagation()}>
+                          <div className="bg-gradient-to-r from-brand to-blue-600 px-5 py-3">
+                            <h4 className="text-white font-semibold text-sm flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              Submit Your Proposal
+                            </h4>
+                            <p className="text-blue-100 text-xs mt-0.5">Win this project by showcasing your expertise</p>
+                          </div>
+                          <div className="bg-white p-5 space-y-4">
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">
-                                Proposal Message *
+                              <label className="block text-sm font-medium text-navy mb-1.5">
+                                Your Proposal
                               </label>
                               <textarea
                                 value={proposalMsg}
                                 onChange={(e) => setProposalMsg(e.target.value)}
-                                placeholder="Describe your approach, expertise, and why you're the best fit for this project..."
-                                rows={4}
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
+                                placeholder="Introduce yourself, describe your relevant experience, explain your approach to this project, and highlight what makes your agency the right choice..."
+                                rows={5}
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-navy placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none leading-relaxed"
                               />
-                              <p className="text-xs text-gray-400 mt-1">{proposalMsg.length}/5000 characters (min 10)</p>
-                            </div>
-                            <div className="grid sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
-                                  Estimated Budget (optional)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={proposalBudget}
-                                  onChange={(e) => setProposalBudget(e.target.value)}
-                                  placeholder="e.g. $2,000 - $5,000"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
-                                  Estimated Timeline (optional)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={proposalTimeline}
-                                  onChange={(e) => setProposalTimeline(e.target.value)}
-                                  placeholder="e.g. 2-4 weeks"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 pt-2">
-                              <button
-                                onClick={() => submitProposal(lead)}
-                                disabled={submittingProposal || proposalMsg.trim().length < 10}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {submittingProposal ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Send className="w-4 h-4" />
+                              <div className="flex items-center justify-between mt-1.5">
+                                <p className="text-xs text-gray-400">{proposalMsg.length}/5,000 characters</p>
+                                {proposalMsg.length > 0 && proposalMsg.length < 10 && (
+                                  <p className="text-xs text-amber-500">Minimum 10 characters required</p>
                                 )}
-                                {submittingProposal ? "Submitting..." : "Submit Proposal"}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setProposalLeadId(null);
-                                  setProposalMsg("");
-                                  setProposalBudget("");
-                                  setProposalTimeline("");
-                                }}
-                                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-                              >
-                                Cancel
-                              </button>
+                              </div>
                             </div>
-                            <p className="text-xs text-gray-400">
-                              The client will receive an email notification with your proposal.
-                            </p>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-navy mb-1.5">
+                                  Estimated Budget
+                                  <span className="text-gray-400 font-normal ml-1">(optional)</span>
+                                </label>
+                                <div className="relative">
+                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <input
+                                    type="text"
+                                    value={proposalBudget}
+                                    onChange={(e) => setProposalBudget(e.target.value)}
+                                    placeholder="e.g. 2,000 - 5,000"
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-navy mb-1.5">
+                                  Estimated Timeline
+                                  <span className="text-gray-400 font-normal ml-1">(optional)</span>
+                                </label>
+                                <div className="relative">
+                                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                  <input
+                                    type="text"
+                                    value={proposalTimeline}
+                                    onChange={(e) => setProposalTimeline(e.target.value)}
+                                    placeholder="e.g. 2-4 weeks"
+                                    className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-navy focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                              <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Client will be notified via email
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setProposalLeadId(null);
+                                    setProposalMsg("");
+                                    setProposalBudget("");
+                                    setProposalTimeline("");
+                                  }}
+                                  className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-200 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => submitProposal(lead)}
+                                  disabled={submittingProposal || proposalMsg.trim().length < 10}
+                                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-brand text-white hover:bg-brand-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                                >
+                                  {submittingProposal ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
+                                  {submittingProposal ? "Sending..." : "Send Proposal"}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}

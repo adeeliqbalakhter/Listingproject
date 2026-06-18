@@ -74,7 +74,6 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `);
       if ((existingClaim as unknown as Array<Record<string, unknown>>).length > 0) {
-        // Credit already charged — try to fix the status and return success
         try {
           await db.execute(sql`
             UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
@@ -123,34 +122,35 @@ export async function POST(request: NextRequest) {
       return error("No credits remaining. Please upgrade your plan or contact support.", 403);
     }
 
-    // Deduct credit first
+    // Atomic: deduct credit AND update status in a single statement
+    const claimDesc = "Claimed lead: " + leadId;
     try {
       await db.execute(sql`
-        INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-        VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
-      `);
-    } catch (err) {
-      console.error("[CLAIM] Credit deduction error:", err);
-      return error("Failed to deduct credit", 500);
-    }
-
-    // Update assignment status to claimed (best-effort, don't fail if this errors)
-    try {
-      await db.execute(sql`
+        WITH credit AS (
+          INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
+          VALUES (${agencyId}, -1, 'consume', ${claimDesc})
+          RETURNING id
+        )
         UPDATE lead_assignments SET status = 'claimed'
         WHERE id = ${assignmentId}
       `);
     } catch (err) {
-      console.error("[CLAIM] Assignment status update error:", err);
-      // Try alternative approach with explicit cast
+      console.error("[CLAIM] Atomic claim error:", err);
+      // Fallback: try separately
       try {
         await db.execute(sql`
-          UPDATE lead_assignments SET status = 'claimed'::varchar
-          WHERE id = ${assignmentId}::uuid
+          INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
+          VALUES (${agencyId}, -1, 'consume', ${claimDesc})
         `);
       } catch (err2) {
-        console.error("[CLAIM] Assignment status update retry error:", err2);
+        console.error("[CLAIM] Credit insert fallback error:", err2);
+        return error("Failed to deduct credit", 500);
       }
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+        `);
+      } catch { /* best effort */ }
     }
 
     // Update lead status if still 'new'

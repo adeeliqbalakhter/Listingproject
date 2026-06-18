@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
 import OnboardingModal from "@/components/onboarding-modal";
+import { ToastProvider } from "@/components/ui/toast";
 
 const sidebarLinks = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -95,6 +96,7 @@ export default function DashboardLayout({
   const displayName = agencyName || "My Agency";
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col">
@@ -188,5 +190,6 @@ export default function DashboardLayout({
         />
       )}
     </div>
+    </ToastProvider>
   );
 }

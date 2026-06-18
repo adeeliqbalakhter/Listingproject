@@ -79,15 +79,7 @@ export async function GET(request: NextRequest) {
       try {
         const leadsQuery = status
           ? sql`SELECT l.*, json_agg(json_build_object(
-                  'id', la.id, 'agencyId', la.agency_id,
-                  'status', CASE
-                    WHEN la.status = 'sent' AND EXISTS (
-                      SELECT 1 FROM lead_credit_transactions lct
-                      WHERE lct.agency_id = la.agency_id AND lct.type = 'consume'
-                        AND lct.description = 'Claimed lead: ' || l.id::text
-                    ) THEN 'claimed'
-                    ELSE la.status
-                  END
+                  'id', la.id, 'agencyId', la.agency_id, 'status', la.status
                 )) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
@@ -96,15 +88,7 @@ export async function GET(request: NextRequest) {
                 ORDER BY l.created_at DESC
                 LIMIT ${limit} OFFSET ${offset}`
           : sql`SELECT l.*, json_agg(json_build_object(
-                  'id', la.id, 'agencyId', la.agency_id,
-                  'status', CASE
-                    WHEN la.status = 'sent' AND EXISTS (
-                      SELECT 1 FROM lead_credit_transactions lct
-                      WHERE lct.agency_id = la.agency_id AND lct.type = 'consume'
-                        AND lct.description = 'Claimed lead: ' || l.id::text
-                    ) THEN 'claimed'
-                    ELSE la.status
-                  END
+                  'id', la.id, 'agencyId', la.agency_id, 'status', la.status
                 )) as assignments
                 FROM leads l
                 LEFT JOIN lead_assignments la ON l.id = la.lead_id
