@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/guards";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { success, error } from "@/lib/api/response";
 import { z } from "zod";
@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+    const neonSql = getNeonSql();
 
     const body = await request.json();
     const parsed = claimSchema.safeParse(body);
@@ -61,47 +62,15 @@ export async function POST(request: NextRequest) {
       alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
     } catch { /* table may not exist */ }
 
-    // 4. Claim status via UPSERT — avoids standalone UPDATE which fails on Neon.
-    //    INSERT ON CONFLICT uses the primary key; the DO UPDATE SET changes status.
-    let upsertWorked = false;
+    // 4. Claim via Neon HTTP driver (bypasses postgres.js UPDATE bug)
     try {
-      await db.execute(sql`
-        INSERT INTO lead_assignments (id, lead_id, agency_id, status, credits_used, created_at)
-        VALUES (${assignmentId}, ${leadId}, ${agencyId}, 'claimed', 1, NOW())
-        ON CONFLICT (id) DO UPDATE SET status = 'claimed'
-      `);
-      upsertWorked = true;
+      await neonSql`
+        UPDATE lead_assignments SET status = 'claimed'
+        WHERE id = ${assignmentId}
+      `;
     } catch (err) {
-      console.error("[CLAIM] Upsert by PK failed:", err);
-    }
-
-    // Fallback: try upsert on the unique constraint (lead_id, agency_id)
-    if (!upsertWorked) {
-      try {
-        await db.execute(sql`
-          INSERT INTO lead_assignments (lead_id, agency_id, status, credits_used, created_at)
-          VALUES (${leadId}, ${agencyId}, 'claimed', 1, NOW())
-          ON CONFLICT (lead_id, agency_id) DO UPDATE SET status = 'claimed'
-        `);
-        upsertWorked = true;
-      } catch (err) {
-        console.error("[CLAIM] Upsert by UK failed:", err);
-      }
-    }
-
-    // Last resort: try raw UPDATE with RETURNING (different response parsing)
-    if (!upsertWorked) {
-      try {
-        await db.execute(sql`
-          UPDATE lead_assignments SET status = 'claimed'
-          WHERE id = ${assignmentId}
-          RETURNING id
-        `);
-        upsertWorked = true;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return error("All claim methods failed: " + msg, 500);
-      }
+      const msg = err instanceof Error ? err.message : String(err);
+      return error("Claim failed: " + msg, 500);
     }
 
     // 5. Verify
@@ -113,7 +82,7 @@ export async function POST(request: NextRequest) {
       if (row && row.status !== "claimed") {
         return error("Claim did not persist. DB returned status: " + row.status, 500);
       }
-    } catch { /* can't verify but upsert didn't throw */ }
+    } catch { /* can't verify but update didn't throw */ }
 
     // 6. Charge credit
     if (!alreadyCharged) {
@@ -155,13 +124,12 @@ export async function POST(request: NextRequest) {
       } catch { /* default 999 */ }
 
       if (available < 1) {
-        // Revert claim
+        // Revert claim via Neon HTTP
         try {
-          await db.execute(sql`
-            INSERT INTO lead_assignments (id, lead_id, agency_id, status, credits_used, created_at)
-            VALUES (${assignmentId}, ${leadId}, ${agencyId}, 'sent', 1, NOW())
-            ON CONFLICT (id) DO UPDATE SET status = 'sent'
-          `);
+          await neonSql`
+            UPDATE lead_assignments SET status = 'sent'
+            WHERE id = ${assignmentId}
+          `;
         } catch { /* best effort */ }
         return error("No credits remaining. Upgrade your plan.", 403);
       }
@@ -178,12 +146,10 @@ export async function POST(request: NextRequest) {
 
     // 7. Bump lead status
     try {
-      await db.execute(sql`
-        INSERT INTO leads (id, company_name, contact_name, contact_email, project_description, status, created_at, updated_at)
-        VALUES (${leadId}, '', '', '', '', 'viewed', NOW(), NOW())
-        ON CONFLICT (id) DO UPDATE SET status = 'viewed', updated_at = NOW()
-        WHERE leads.status = 'new'
-      `);
+      await neonSql`
+        UPDATE leads SET status = 'viewed', updated_at = NOW()
+        WHERE id = ${leadId} AND status = 'new'
+      `;
     } catch { /* non-critical */ }
 
     return success({ message: "Lead claimed successfully" });
