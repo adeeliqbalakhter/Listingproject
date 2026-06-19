@@ -25,118 +25,117 @@ export async function POST(request: NextRequest) {
 
     const { leadId, assignmentId } = parsed.data;
 
-    // 1. Look up assignment
-    const assignmentRows = await db.execute(sql`
-      SELECT la.id, la.lead_id, la.agency_id, la.status,
-             a.user_id as agency_owner_id
-      FROM lead_assignments la
-      JOIN agencies a ON a.id = la.agency_id
-      WHERE la.id = ${assignmentId} AND la.lead_id = ${leadId}
-    `);
-    const assignment = (assignmentRows as unknown as Array<Record<string, unknown>>)[0];
-    if (!assignment) return error("Assignment not found", 404);
-    if (assignment.agency_owner_id !== user.id) return error("Access denied", 403);
+    // 1. Look up assignment + verify ownership
+    let agencyId: string;
+    let currentStatus: string;
+    try {
+      const rows = await db.execute(sql`
+        SELECT la.agency_id, la.status, a.user_id as owner_id
+        FROM lead_assignments la
+        JOIN agencies a ON a.id = la.agency_id
+        WHERE la.id = ${assignmentId} AND la.lead_id = ${leadId}
+      `);
+      const row = (rows as unknown as Array<Record<string, unknown>>)[0];
+      if (!row) return error("Assignment not found", 404);
+      if (row.owner_id !== user.id) return error("Access denied", 403);
+      agencyId = row.agency_id as string;
+      currentStatus = row.status as string;
+    } catch (err) {
+      return error("DB error: " + (err instanceof Error ? err.message : "lookup failed"), 500);
+    }
 
-    const agencyId = assignment.agency_id as string;
-    const currentStatus = assignment.status as string;
-
-    // 2. Already claimed
+    // 2. Already claimed — done
     if (currentStatus === "claimed" || currentStatus === "responded" || currentStatus === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
 
-    // 3. Ensure credit table exists
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS lead_credit_transactions (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          agency_id UUID NOT NULL,
-          amount INTEGER NOT NULL,
-          type VARCHAR(30) NOT NULL,
-          description TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-    } catch { /* exists */ }
-
-    // 4. Check if already charged (idempotent retry)
+    // 3. Check if credit already charged (retry protection)
     let alreadyCharged = false;
     try {
-      const existing = await db.execute(sql`
-        SELECT id FROM lead_credit_transactions
+      const rows = await db.execute(sql`
+        SELECT 1 FROM lead_credit_transactions
         WHERE agency_id = ${agencyId} AND type = 'consume'
           AND description = ${"Claimed lead: " + leadId}
         LIMIT 1
       `);
-      alreadyCharged = (existing as unknown as Array<Record<string, unknown>>).length > 0;
-    } catch { /* table may not exist */ }
+      alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
+    } catch {
+      // Table may not exist — that's fine, means no charge
+    }
 
     if (alreadyCharged) {
-      // Credit was charged before but status didn't update — fix it now
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed'
-        WHERE id = ${assignmentId} AND status = 'sent'
-      `);
+      // Fix status and return
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+        `);
+      } catch { /* best effort */ }
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
 
-    // 5. Check credits
-    let monthlyCredits = 1;
+    // 4. Check credits available
+    let available = 1;
     try {
-      const planRows = await db.execute(sql`
-        SELECT p.monthly_lead_credits FROM subscriptions s
-        JOIN plans p ON s.plan_id = p.id
-        WHERE s.agency_id = ${agencyId} AND s.status = 'active'
-      `);
-      const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
-      if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
-    } catch { /* default 1 */ }
+      let monthlyCredits = 1;
+      try {
+        const planRows = await db.execute(sql`
+          SELECT p.monthly_lead_credits FROM subscriptions s
+          JOIN plans p ON s.plan_id = p.id
+          WHERE s.agency_id = ${agencyId} AND s.status = 'active'
+        `);
+        const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
+        if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
+      } catch { /* default 1 */ }
 
-    let consumed = 0;
-    try {
-      const usedRows = await db.execute(sql`
-        SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
-        FROM lead_credit_transactions
-        WHERE agency_id = ${agencyId} AND type = 'consume'
-          AND created_at >= date_trunc('month', NOW())
-      `);
-      consumed = Number((usedRows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
-    } catch { /* ignore */ }
+      let consumed = 0;
+      try {
+        const rows = await db.execute(sql`
+          SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
+          FROM lead_credit_transactions
+          WHERE agency_id = ${agencyId} AND type = 'consume'
+            AND created_at >= date_trunc('month', NOW())
+        `);
+        consumed = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
+      } catch { /* 0 */ }
 
-    let granted = 0;
-    try {
-      const grantRows = await db.execute(sql`
-        SELECT COALESCE(SUM(amount), 0) as total
-        FROM lead_credit_transactions
-        WHERE agency_id = ${agencyId} AND type = 'grant'
-      `);
-      granted = Number((grantRows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
-    } catch { /* ignore */ }
+      let granted = 0;
+      try {
+        const rows = await db.execute(sql`
+          SELECT COALESCE(SUM(amount), 0) as total
+          FROM lead_credit_transactions
+          WHERE agency_id = ${agencyId} AND type = 'grant'
+        `);
+        granted = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
+      } catch { /* 0 */ }
 
-    const available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
+      available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
+    } catch { /* default available = 1 */ }
+
     if (available < 1) {
-      return error("No credits remaining. Please upgrade your plan or contact support.", 403);
+      return error("No credits remaining. Upgrade your plan or contact support.", 403);
     }
 
-    // 6. Deduct credit FIRST (permanent record — this is the source of truth)
-    await db.execute(sql`
-      INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-      VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
-    `);
+    // 5. INSERT credit (permanent record — do this first)
+    try {
+      await db.execute(sql`
+        INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
+        VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
+      `);
+    } catch (err) {
+      return error("Credit deduction failed: " + (err instanceof Error ? err.message : "DB error"), 500);
+    }
 
-    // 7. Update status on ALL rows for this agency+lead
-    await db.execute(sql`
-      UPDATE lead_assignments SET status = 'claimed'
-      WHERE lead_id = ${leadId} AND agency_id = ${agencyId} AND status = 'sent'
-    `);
+    // 6. UPDATE status — no status filter, just set it
+    try {
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+      `);
+    } catch (err) {
+      console.error("[CLAIM] Status update failed (credit already charged):", err);
+      // Credit is charged. Status will be fixed on next load or retry.
+    }
 
-    // 8. Also update by specific ID as a safeguard
-    await db.execute(sql`
-      UPDATE lead_assignments SET status = 'claimed'
-      WHERE id = ${assignmentId} AND status = 'sent'
-    `);
-
-    // 9. Bump lead status
+    // 7. Bump lead status (non-critical)
     try {
       await db.execute(sql`
         UPDATE leads SET status = 'viewed', updated_at = NOW()
@@ -150,6 +149,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[CLAIM] Error:", err);
-    return error("Claim failed: " + (err instanceof Error ? err.message : "Unknown error"), 500);
+    return error("Claim failed: " + (err instanceof Error ? err.message : "Unknown"), 500);
   }
 }
