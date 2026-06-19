@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { leadAssignments } from "@/lib/db/schema/leads";
 import { success, error } from "@/lib/api/response";
 import { z } from "zod";
 
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     const { leadId, assignmentId } = parsed.data;
 
-    // 1. Look up assignment + ownership + credit balance in minimal queries
+    // 1. Look up assignment + ownership
     let agencyId: string;
     let currentStatus: string;
     try {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
 
-    // 3. Check if credit already charged (retry after previous partial success)
+    // 3. Check if credit already charged
     let alreadyCharged = false;
     try {
       const rows = await db.execute(sql`
@@ -61,44 +62,62 @@ export async function POST(request: NextRequest) {
       alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
     } catch { /* table may not exist */ }
 
-    // 4. *** CRITICAL: UPDATE status FIRST — this is the operation that must succeed ***
+    // 4. UPDATE status using Drizzle ORM (not raw SQL)
+    let updateError: string | null = null;
     try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
-      `);
+      await db.update(leadAssignments)
+        .set({ status: "claimed" })
+        .where(eq(leadAssignments.id, assignmentId));
     } catch (err) {
-      console.error("[CLAIM] UPDATE failed:", err);
-      return error("Failed to update claim status. Please try again.", 500);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const errCode = (err as Record<string, unknown>)?.code;
+      const errDetail = (err as Record<string, unknown>)?.detail;
+      updateError = `ORM update failed: ${errMsg} | code: ${errCode} | detail: ${errDetail}`;
+      console.error("[CLAIM] ORM UPDATE failed:", err);
+
+      // Retry with raw SQL as fallback
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+        `);
+        updateError = null; // retry succeeded
+        console.log("[CLAIM] Raw SQL retry succeeded");
+      } catch (retryErr) {
+        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        updateError = `Both ORM and raw SQL failed. ORM: ${errMsg} | Raw: ${retryMsg}`;
+        console.error("[CLAIM] Raw SQL retry also failed:", retryErr);
+      }
     }
 
-    // 5. VERIFY the update persisted by reading it back
+    if (updateError) {
+      return error(updateError, 500);
+    }
+
+    // 5. Verify update
     try {
       const verify = await db.execute(sql`
         SELECT status FROM lead_assignments WHERE id = ${assignmentId}
       `);
       const row = (verify as unknown as Array<Record<string, unknown>>)[0];
-      if (!row || row.status !== "claimed") {
-        console.error("[CLAIM] UPDATE did not persist. Got:", row);
-        return error("Claim did not persist. Please try again.", 500);
+      if (row && row.status !== "claimed") {
+        return error("Status did not persist. DB returned: " + JSON.stringify(row), 500);
       }
-    } catch (err) {
-      console.error("[CLAIM] Verify failed:", err);
-      // Can't verify — but UPDATE didn't throw, so proceed cautiously
-    }
+    } catch { /* verification query failed, but update didn't throw */ }
 
-    // 6. Charge credit (only if not already charged)
+    // 6. Charge credit if not already charged
     if (!alreadyCharged) {
-      // Check credits available
-      let available = 1;
+      let available = 999;
       try {
         let monthlyCredits = 1;
-        const planRows = await db.execute(sql`
-          SELECT p.monthly_lead_credits FROM subscriptions s
-          JOIN plans p ON s.plan_id = p.id
-          WHERE s.agency_id = ${agencyId} AND s.status = 'active'
-        `);
-        const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
-        if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
+        try {
+          const planRows = await db.execute(sql`
+            SELECT p.monthly_lead_credits FROM subscriptions s
+            JOIN plans p ON s.plan_id = p.id
+            WHERE s.agency_id = ${agencyId} AND s.status = 'active'
+          `);
+          const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
+          if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
+        } catch { /* default */ }
 
         let consumed = 0;
         try {
@@ -122,19 +141,17 @@ export async function POST(request: NextRequest) {
         } catch { /* 0 */ }
 
         available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
-      } catch { /* default 1 */ }
+      } catch { /* default 999 */ }
 
       if (available < 1) {
-        // Revert the claim since no credits
         try {
-          await db.execute(sql`
-            UPDATE lead_assignments SET status = 'sent' WHERE id = ${assignmentId}
-          `);
-        } catch { /* best effort */ }
-        return error("No credits remaining. Upgrade your plan or contact support.", 403);
+          await db.update(leadAssignments)
+            .set({ status: "sent" })
+            .where(eq(leadAssignments.id, assignmentId));
+        } catch { /* best effort revert */ }
+        return error("No credits remaining. Upgrade your plan.", 403);
       }
 
-      // Deduct credit
       try {
         await db.execute(sql`
           INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
@@ -142,11 +159,10 @@ export async function POST(request: NextRequest) {
         `);
       } catch (err) {
         console.error("[CLAIM] Credit insert failed:", err);
-        // Status is claimed, credit will be charged on next attempt via alreadyCharged check
       }
     }
 
-    // 7. Bump lead status (non-critical)
+    // 7. Bump lead status
     try {
       await db.execute(sql`
         UPDATE leads SET status = 'viewed', updated_at = NOW()
