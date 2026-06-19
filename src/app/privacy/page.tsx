@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "AgencyHub privacy policy — how we collect, use, and protect your data.",
+  title: "Privacy Policy - How AgencyHub Protects Your Data",
+  description:
+    "AgencyHub privacy policy — how we collect, use, and protect your data on our marketing agency directory platform.",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 export default function PrivacyPage() {

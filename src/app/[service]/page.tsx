@@ -205,6 +205,14 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
       title: `${service.title} | AgencyHub`,
       description: service.description,
     },
+    twitter: {
+      card: "summary_large_image" as const,
+      title: `${service.title} | AgencyHub`,
+      description: service.description,
+    },
+    alternates: {
+      canonical: `/${serviceSlug}`,
+    },
   };
 }
 
@@ -242,6 +250,18 @@ export default async function ServicePage({ params }: { params: Params }) {
         url: `${baseUrl}/agencies/${agency.slug}`,
       })),
     },
+    {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      name: service.name,
+      description: service.description,
+      provider: {
+        "@type": "Organization",
+        name: "AgencyHub",
+        url: baseUrl,
+      },
+      areaServed: { "@type": "Place", name: "Global" },
+    },
   ];
 
   const breadcrumbJsonLd = {
@@ -250,7 +270,7 @@ export default async function ServicePage({ params }: { params: Params }) {
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Home", item: baseUrl },
       { "@type": "ListItem", position: 2, name: "Services", item: `${baseUrl}/services` },
-      { "@type": "ListItem", position: 3, name: service.name },
+      { "@type": "ListItem", position: 3, name: service.name, item: `${baseUrl}/${serviceSlug}` },
     ],
   };
 

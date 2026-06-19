@@ -3,9 +3,14 @@ import { Calendar, Clock, ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Blog - Marketing Agency Insights & Industry News",
+  title: "AgencyHub Blog - Marketing Agency Insights & Tips",
   description:
     "Expert insights on hiring marketing agencies, industry trends, case studies, and tips for growing your business with the right agency partner.",
+  openGraph: {
+    title: "AgencyHub Blog - Marketing Agency Insights & Tips",
+    description:
+      "Expert insights on hiring marketing agencies and industry trends.",
+  },
   alternates: {
     canonical: "/blog",
   },

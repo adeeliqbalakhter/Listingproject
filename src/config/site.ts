@@ -1,8 +1,8 @@
 export const siteConfig = {
   name: "AgencyHub",
   description: "Find and hire the best marketing agencies worldwide. Compare reviews, portfolios, and pricing from top-rated agencies across SEO, PPC, social media, web design, and more.",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  ogImage: "/og-image.png",
+  url: process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com",
+  ogImage: `${process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com"}/og-image.png`,
   links: {
     twitter: "https://twitter.com/agencyhub",
     linkedin: "https://linkedin.com/company/agencyhub",

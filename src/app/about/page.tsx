@@ -3,9 +3,14 @@ import { Globe, Shield, Users, Target, Award, Heart } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About Us",
+  title: "About AgencyHub - The Leading Marketing Agency Directory",
   description:
-    "AgencyHub is the world's largest marketing agency directory. We help businesses find and hire the perfect marketing agency for their needs.",
+    "AgencyHub is the world's largest marketing agency directory. Browse 10,000+ verified agencies, read 50,000+ reviews, and get free quotes.",
+  openGraph: {
+    title: "About AgencyHub - The Leading Marketing Agency Directory",
+    description:
+      "Learn about the mission behind AgencyHub and how we connect businesses with top marketing agencies worldwide.",
+  },
   alternates: {
     canonical: "/about",
   },

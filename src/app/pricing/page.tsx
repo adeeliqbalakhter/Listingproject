@@ -138,11 +138,24 @@ const faqStructuredData = {
 };
 
 export default function PricingPage() {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://agencyhub.com";
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: baseUrl },
+      { "@type": "ListItem", position: 2, name: "Pricing", item: `${baseUrl}/pricing` },
+    ],
+  };
   return (
     <div className="bg-gray-50">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       {/* Header */}
       <section className="bg-navy py-16">

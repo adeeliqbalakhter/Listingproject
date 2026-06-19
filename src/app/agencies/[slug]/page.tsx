@@ -258,11 +258,11 @@ export async function generateMetadata({
       description: `Read ${agency.total_reviews ?? 0} verified reviews for ${agency.name}${location ? `, a top-rated agency in ${location}` : ""}.`,
       type: "website",
       images: agency.logo
-        ? [{ url: agency.logo, width: 128, height: 128, alt: agency.name }]
+        ? [{ url: agency.logo, width: 1200, height: 630, alt: `${agency.name} - Marketing Agency on AgencyHub` }]
         : undefined,
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description: `Read ${agency.total_reviews ?? 0} verified reviews for ${agency.name}.`,
     },
@@ -487,33 +487,56 @@ export default async function AgencyProfilePage({
     ],
   };
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: agency.name,
-    description: agency.tagline || agency.description || "",
-    url: agency.website || undefined,
-    logo: agency.logo || undefined,
-    foundingDate: agency.founded_year ? String(agency.founded_year) : undefined,
-    address: location
-      ? {
-          "@type": "PostalAddress",
-          addressLocality: cityName || undefined,
-          addressCountry: countryName || undefined,
-        }
-      : undefined,
-    aggregateRating:
-      reviewCount > 0
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "ProfessionalService",
+      name: agency.name,
+      description: agency.tagline || agency.description || "",
+      url: agency.website || `${baseUrl}/agencies/${agency.slug}`,
+      logo: agency.logo || undefined,
+      image: agency.logo || agency.cover_image || undefined,
+      telephone: agency.phone || undefined,
+      email: agency.email || undefined,
+      foundingDate: agency.founded_year ? String(agency.founded_year) : undefined,
+      address: location
         ? {
-            "@type": "AggregateRating",
-            ratingValue: rating,
-            reviewCount,
-            bestRating: 5,
-            worstRating: 1,
+            "@type": "PostalAddress",
+            addressLocality: cityName || undefined,
+            addressCountry: countryName || undefined,
           }
         : undefined,
-    sameAs: Object.values(socialLinks).filter(Boolean),
-  };
+      geo:
+        agency.latitude && agency.longitude
+          ? {
+              "@type": "GeoCoordinates",
+              latitude: Number(agency.latitude),
+              longitude: Number(agency.longitude),
+            }
+          : undefined,
+      aggregateRating:
+        reviewCount > 0
+          ? {
+              "@type": "AggregateRating",
+              ratingValue: rating,
+              reviewCount,
+              bestRating: 5,
+              worstRating: 1,
+            }
+          : undefined,
+      priceRange: agency.hourly_rate || undefined,
+      sameAs: Object.values(socialLinks).filter(Boolean),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: agency.name,
+      url: agency.website || `${baseUrl}/agencies/${agency.slug}`,
+      logo: agency.logo || undefined,
+      foundingDate: agency.founded_year ? String(agency.founded_year) : undefined,
+      sameAs: Object.values(socialLinks).filter(Boolean),
+    },
+  ];
 
   return (
     <>
