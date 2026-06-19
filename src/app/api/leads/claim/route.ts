@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const { leadId, assignmentId } = parsed.data;
 
-    // 1. Look up assignment + verify ownership
+    // 1. Look up assignment + ownership + credit balance in minimal queries
     let agencyId: string;
     let currentStatus: string;
     try {
@@ -41,15 +41,15 @@ export async function POST(request: NextRequest) {
       agencyId = row.agency_id as string;
       currentStatus = row.status as string;
     } catch (err) {
-      return error("DB error: " + (err instanceof Error ? err.message : "lookup failed"), 500);
+      return error("Lookup failed: " + (err instanceof Error ? err.message : "DB error"), 500);
     }
 
-    // 2. Already claimed — done
+    // 2. Already claimed
     if (currentStatus === "claimed" || currentStatus === "responded" || currentStatus === "won") {
       return success({ message: "Already claimed", alreadyClaimed: true });
     }
 
-    // 3. Check if credit already charged (retry protection)
+    // 3. Check if credit already charged (retry after previous partial success)
     let alreadyCharged = false;
     try {
       const rows = await db.execute(sql`
@@ -59,25 +59,39 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `);
       alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
-    } catch {
-      // Table may not exist — that's fine, means no charge
-    }
+    } catch { /* table may not exist */ }
 
-    if (alreadyCharged) {
-      // Fix status and return
-      try {
-        await db.execute(sql`
-          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
-        `);
-      } catch { /* best effort */ }
-      return success({ message: "Already claimed", alreadyClaimed: true });
-    }
-
-    // 4. Check credits available
-    let available = 1;
+    // 4. *** CRITICAL: UPDATE status FIRST — this is the operation that must succeed ***
     try {
-      let monthlyCredits = 1;
+      await db.execute(sql`
+        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+      `);
+    } catch (err) {
+      console.error("[CLAIM] UPDATE failed:", err);
+      return error("Failed to update claim status. Please try again.", 500);
+    }
+
+    // 5. VERIFY the update persisted by reading it back
+    try {
+      const verify = await db.execute(sql`
+        SELECT status FROM lead_assignments WHERE id = ${assignmentId}
+      `);
+      const row = (verify as unknown as Array<Record<string, unknown>>)[0];
+      if (!row || row.status !== "claimed") {
+        console.error("[CLAIM] UPDATE did not persist. Got:", row);
+        return error("Claim did not persist. Please try again.", 500);
+      }
+    } catch (err) {
+      console.error("[CLAIM] Verify failed:", err);
+      // Can't verify — but UPDATE didn't throw, so proceed cautiously
+    }
+
+    // 6. Charge credit (only if not already charged)
+    if (!alreadyCharged) {
+      // Check credits available
+      let available = 1;
       try {
+        let monthlyCredits = 1;
         const planRows = await db.execute(sql`
           SELECT p.monthly_lead_credits FROM subscriptions s
           JOIN plans p ON s.plan_id = p.id
@@ -85,54 +99,51 @@ export async function POST(request: NextRequest) {
         `);
         const plan = (planRows as unknown as Array<Record<string, unknown>>)[0];
         if (plan) monthlyCredits = Number(plan.monthly_lead_credits) || 1;
+
+        let consumed = 0;
+        try {
+          const rows = await db.execute(sql`
+            SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
+            FROM lead_credit_transactions
+            WHERE agency_id = ${agencyId} AND type = 'consume'
+              AND created_at >= date_trunc('month', NOW())
+          `);
+          consumed = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
+        } catch { /* 0 */ }
+
+        let granted = 0;
+        try {
+          const rows = await db.execute(sql`
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM lead_credit_transactions
+            WHERE agency_id = ${agencyId} AND type = 'grant'
+          `);
+          granted = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
+        } catch { /* 0 */ }
+
+        available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
       } catch { /* default 1 */ }
 
-      let consumed = 0;
+      if (available < 1) {
+        // Revert the claim since no credits
+        try {
+          await db.execute(sql`
+            UPDATE lead_assignments SET status = 'sent' WHERE id = ${assignmentId}
+          `);
+        } catch { /* best effort */ }
+        return error("No credits remaining. Upgrade your plan or contact support.", 403);
+      }
+
+      // Deduct credit
       try {
-        const rows = await db.execute(sql`
-          SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
-          FROM lead_credit_transactions
-          WHERE agency_id = ${agencyId} AND type = 'consume'
-            AND created_at >= date_trunc('month', NOW())
+        await db.execute(sql`
+          INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
+          VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
         `);
-        consumed = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
-      } catch { /* 0 */ }
-
-      let granted = 0;
-      try {
-        const rows = await db.execute(sql`
-          SELECT COALESCE(SUM(amount), 0) as total
-          FROM lead_credit_transactions
-          WHERE agency_id = ${agencyId} AND type = 'grant'
-        `);
-        granted = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
-      } catch { /* 0 */ }
-
-      available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
-    } catch { /* default available = 1 */ }
-
-    if (available < 1) {
-      return error("No credits remaining. Upgrade your plan or contact support.", 403);
-    }
-
-    // 5. INSERT credit (permanent record — do this first)
-    try {
-      await db.execute(sql`
-        INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-        VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
-      `);
-    } catch (err) {
-      return error("Credit deduction failed: " + (err instanceof Error ? err.message : "DB error"), 500);
-    }
-
-    // 6. UPDATE status — no status filter, just set it
-    try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
-      `);
-    } catch (err) {
-      console.error("[CLAIM] Status update failed (credit already charged):", err);
-      // Credit is charged. Status will be fixed on next load or retry.
+      } catch (err) {
+        console.error("[CLAIM] Credit insert failed:", err);
+        // Status is claimed, credit will be charged on next attempt via alreadyCharged check
+      }
     }
 
     // 7. Bump lead status (non-critical)
@@ -143,10 +154,7 @@ export async function POST(request: NextRequest) {
       `);
     } catch { /* non-critical */ }
 
-    return success({
-      message: "Lead claimed successfully",
-      creditsRemaining: available - 1,
-    });
+    return success({ message: "Lead claimed successfully" });
   } catch (err) {
     console.error("[CLAIM] Error:", err);
     return error("Claim failed: " + (err instanceof Error ? err.message : "Unknown"), 500);
