@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     const result = await runMigrations();
     return success(result);
   } catch (err) {
-    return serverError(err);
+    console.error("[MIGRATE] Error:", err);
+    return Response.json({ error: "Migration failed: " + (err instanceof Error ? err.message : "Unknown") }, { status: 500 });
   }
 }

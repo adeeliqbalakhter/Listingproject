@@ -611,36 +611,69 @@ export async function runMigrations() {
     )
   `);
 
-  // ─── Deduplicate lead_assignments, keeping the most-progressed row per
-  //     (lead_id, agency_id). Required before the UNIQUE constraint below and
-  //     fixes any historical duplicates that caused claims to appear to revert.
-  await db.execute(sql`
-    DELETE FROM lead_assignments
-    WHERE id IN (
-      SELECT id FROM (
-        SELECT id, ROW_NUMBER() OVER (
-          PARTITION BY lead_id, agency_id
-          ORDER BY (CASE status
-              WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
-              WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END) DESC,
-            created_at ASC, id ASC
-        ) AS rn
-        FROM lead_assignments
-      ) ranked
-      WHERE rn > 1
-    )
-  `);
+  // ─── Deduplicate lead_assignments if any exist, keeping one row per
+  //     (lead_id, agency_id) — the one with the most-progressed status.
+  try {
+    await db.execute(sql`
+      DELETE FROM lead_assignments a
+      USING lead_assignments b
+      WHERE a.lead_id = b.lead_id
+        AND a.agency_id = b.agency_id
+        AND a.id <> b.id
+        AND (
+          (CASE a.status
+            WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
+            WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END)
+          <
+          (CASE b.status
+            WHEN 'won' THEN 5 WHEN 'responded' THEN 4 WHEN 'claimed' THEN 3
+            WHEN 'lost' THEN 2 WHEN 'viewed' THEN 1 ELSE 0 END)
+        )
+    `);
+  } catch (err) {
+    console.error("[MIGRATE] Dedupe step 1 error (non-fatal):", err);
+  }
 
-  // ─── Enforce one assignment per (lead, agency) so ON CONFLICT works and
-  //     duplicate rows can never desync claim state again.
-  await db.execute(sql`
-    DO $$ BEGIN
-      ALTER TABLE lead_assignments
-        ADD CONSTRAINT uq_lead_assignments_lead_agency UNIQUE (lead_id, agency_id);
-    EXCEPTION WHEN duplicate_table THEN NULL;
-    WHEN duplicate_object THEN NULL;
-    END $$;
-  `);
+  // Remove any remaining dupes (same status) — keep earliest created
+  try {
+    await db.execute(sql`
+      DELETE FROM lead_assignments a
+      USING lead_assignments b
+      WHERE a.lead_id = b.lead_id
+        AND a.agency_id = b.agency_id
+        AND a.id <> b.id
+        AND a.created_at > b.created_at
+    `);
+  } catch (err) {
+    console.error("[MIGRATE] Dedupe step 2 error (non-fatal):", err);
+  }
+
+  // Last resort: if still dupes with same timestamps, keep lower id
+  try {
+    await db.execute(sql`
+      DELETE FROM lead_assignments a
+      USING lead_assignments b
+      WHERE a.lead_id = b.lead_id
+        AND a.agency_id = b.agency_id
+        AND a.id > b.id
+    `);
+  } catch (err) {
+    console.error("[MIGRATE] Dedupe step 3 error (non-fatal):", err);
+  }
+
+  // ─── Enforce one assignment per (lead, agency)
+  try {
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE lead_assignments
+          ADD CONSTRAINT uq_lead_assignments_lead_agency UNIQUE (lead_id, agency_id);
+      EXCEPTION WHEN duplicate_table THEN NULL;
+      WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+  } catch (err) {
+    console.error("[MIGRATE] Unique constraint error (non-fatal):", err);
+  }
 
   // ─── Ensure messages table exists ───
   await db.execute(sql`
