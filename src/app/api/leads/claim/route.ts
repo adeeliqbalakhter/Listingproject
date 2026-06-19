@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/guards";
 import { hasDb, getDb } from "@/lib/db";
-import { sql, eq } from "drizzle-orm";
-import { leadAssignments } from "@/lib/db/schema/leads";
+import { sql } from "drizzle-orm";
 import { success, error } from "@/lib/api/response";
 import { z } from "zod";
 
@@ -62,49 +61,61 @@ export async function POST(request: NextRequest) {
       alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
     } catch { /* table may not exist */ }
 
-    // 4. UPDATE status using Drizzle ORM (not raw SQL)
-    let updateError: string | null = null;
+    // 4. Claim status via UPSERT — avoids standalone UPDATE which fails on Neon.
+    //    INSERT ON CONFLICT uses the primary key; the DO UPDATE SET changes status.
+    let upsertWorked = false;
     try {
-      await db.update(leadAssignments)
-        .set({ status: "claimed" })
-        .where(eq(leadAssignments.id, assignmentId));
+      await db.execute(sql`
+        INSERT INTO lead_assignments (id, lead_id, agency_id, status, credits_used, created_at)
+        VALUES (${assignmentId}, ${leadId}, ${agencyId}, 'claimed', 1, NOW())
+        ON CONFLICT (id) DO UPDATE SET status = 'claimed'
+      `);
+      upsertWorked = true;
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      const errCode = (err as Record<string, unknown>)?.code;
-      const errDetail = (err as Record<string, unknown>)?.detail;
-      updateError = `ORM update failed: ${errMsg} | code: ${errCode} | detail: ${errDetail}`;
-      console.error("[CLAIM] ORM UPDATE failed:", err);
+      console.error("[CLAIM] Upsert by PK failed:", err);
+    }
 
-      // Retry with raw SQL as fallback
+    // Fallback: try upsert on the unique constraint (lead_id, agency_id)
+    if (!upsertWorked) {
       try {
         await db.execute(sql`
-          UPDATE lead_assignments SET status = 'claimed' WHERE id = ${assignmentId}
+          INSERT INTO lead_assignments (lead_id, agency_id, status, credits_used, created_at)
+          VALUES (${leadId}, ${agencyId}, 'claimed', 1, NOW())
+          ON CONFLICT (lead_id, agency_id) DO UPDATE SET status = 'claimed'
         `);
-        updateError = null; // retry succeeded
-        console.log("[CLAIM] Raw SQL retry succeeded");
-      } catch (retryErr) {
-        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        updateError = `Both ORM and raw SQL failed. ORM: ${errMsg} | Raw: ${retryMsg}`;
-        console.error("[CLAIM] Raw SQL retry also failed:", retryErr);
+        upsertWorked = true;
+      } catch (err) {
+        console.error("[CLAIM] Upsert by UK failed:", err);
       }
     }
 
-    if (updateError) {
-      return error(updateError, 500);
+    // Last resort: try raw UPDATE with RETURNING (different response parsing)
+    if (!upsertWorked) {
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET status = 'claimed'
+          WHERE id = ${assignmentId}
+          RETURNING id
+        `);
+        upsertWorked = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return error("All claim methods failed: " + msg, 500);
+      }
     }
 
-    // 5. Verify update
+    // 5. Verify
     try {
       const verify = await db.execute(sql`
         SELECT status FROM lead_assignments WHERE id = ${assignmentId}
       `);
       const row = (verify as unknown as Array<Record<string, unknown>>)[0];
       if (row && row.status !== "claimed") {
-        return error("Status did not persist. DB returned: " + JSON.stringify(row), 500);
+        return error("Claim did not persist. DB returned status: " + row.status, 500);
       }
-    } catch { /* verification query failed, but update didn't throw */ }
+    } catch { /* can't verify but upsert didn't throw */ }
 
-    // 6. Charge credit if not already charged
+    // 6. Charge credit
     if (!alreadyCharged) {
       let available = 999;
       try {
@@ -144,11 +155,14 @@ export async function POST(request: NextRequest) {
       } catch { /* default 999 */ }
 
       if (available < 1) {
+        // Revert claim
         try {
-          await db.update(leadAssignments)
-            .set({ status: "sent" })
-            .where(eq(leadAssignments.id, assignmentId));
-        } catch { /* best effort revert */ }
+          await db.execute(sql`
+            INSERT INTO lead_assignments (id, lead_id, agency_id, status, credits_used, created_at)
+            VALUES (${assignmentId}, ${leadId}, ${agencyId}, 'sent', 1, NOW())
+            ON CONFLICT (id) DO UPDATE SET status = 'sent'
+          `);
+        } catch { /* best effort */ }
         return error("No credits remaining. Upgrade your plan.", 403);
       }
 
@@ -165,8 +179,10 @@ export async function POST(request: NextRequest) {
     // 7. Bump lead status
     try {
       await db.execute(sql`
-        UPDATE leads SET status = 'viewed', updated_at = NOW()
-        WHERE id = ${leadId} AND status = 'new'
+        INSERT INTO leads (id, company_name, contact_name, contact_email, project_description, status, created_at, updated_at)
+        VALUES (${leadId}, '', '', '', '', 'viewed', NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET status = 'viewed', updated_at = NOW()
+        WHERE leads.status = 'new'
       `);
     } catch { /* non-critical */ }
 
