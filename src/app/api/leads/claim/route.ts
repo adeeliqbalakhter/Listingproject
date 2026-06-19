@@ -53,13 +53,14 @@ export async function POST(request: NextRequest) {
     // 3. Check if credit already charged
     let alreadyCharged = false;
     try {
-      const rows = await db.execute(sql`
+      const desc = "Claimed lead: " + leadId;
+      const rows = await neonSql`
         SELECT 1 FROM lead_credit_transactions
         WHERE agency_id = ${agencyId} AND type = 'consume'
-          AND description = ${"Claimed lead: " + leadId}
+          AND description = ${desc}
         LIMIT 1
-      `);
-      alreadyCharged = (rows as unknown as Array<unknown>).length > 0;
+      `;
+      alreadyCharged = rows.length > 0;
     } catch { /* table may not exist */ }
 
     // 4. Claim via Neon HTTP driver (bypasses postgres.js UPDATE bug)
@@ -101,23 +102,23 @@ export async function POST(request: NextRequest) {
 
         let consumed = 0;
         try {
-          const rows = await db.execute(sql`
+          const rows = await neonSql`
             SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
             FROM lead_credit_transactions
             WHERE agency_id = ${agencyId} AND type = 'consume'
               AND created_at >= date_trunc('month', NOW())
-          `);
-          consumed = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
+          `;
+          consumed = Number(rows[0]?.used ?? 0);
         } catch { /* 0 */ }
 
         let granted = 0;
         try {
-          const rows = await db.execute(sql`
+          const rows = await neonSql`
             SELECT COALESCE(SUM(amount), 0) as total
             FROM lead_credit_transactions
             WHERE agency_id = ${agencyId} AND type = 'grant'
-          `);
-          granted = Number((rows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
+          `;
+          granted = Number(rows[0]?.total ?? 0);
         } catch { /* 0 */ }
 
         available = (monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed;
@@ -135,10 +136,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        await db.execute(sql`
+        const desc = "Claimed lead: " + leadId;
+        await neonSql`
           INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-          VALUES (${agencyId}, -1, 'consume', ${"Claimed lead: " + leadId})
-        `);
+          VALUES (${agencyId}, -1, 'consume', ${desc})
+        `;
       } catch (err) {
         console.error("[CLAIM] Credit insert failed:", err);
       }

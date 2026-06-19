@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
 import { z } from "zod";
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+    const neonSql = getNeonSql();
 
     const body = await request.json();
     const parsed = assignSchema.safeParse(body);
@@ -40,14 +41,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // -1 means unlimited
         if (monthlyCredits !== -1) {
-          const usedRows = await db.execute(sql`
+          const usedRows = await neonSql`
             SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
             FROM lead_credit_transactions
             WHERE agency_id = ${agencyId}
               AND type = 'consume'
               AND created_at >= date_trunc('month', NOW())
-          `);
-          const used = Number((usedRows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
+          `;
+          const used = Number(usedRows[0]?.used ?? 0);
 
           if (used >= monthlyCredits) {
             agenciesWithoutCredits.push(agencyId);
@@ -80,10 +81,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           results.push(row);
           // Record credit consumption for successful assignment
           try {
-            await db.execute(sql`
+            const desc = 'Lead assignment: ' + id;
+            await neonSql`
               INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-              VALUES (${agencyId}, -1, 'consume', ${'Lead assignment: ' + id})
-            `);
+              VALUES (${agencyId}, -1, 'consume', ${desc})
+            `;
           } catch {
             // Credit tracking table may not exist
           }

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/guards";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { success, error, serverError } from "@/lib/api/response";
 
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+    const neonSql = getNeonSql();
 
     // Get user's agency
     const agencyRows = await db.execute(sql`
@@ -35,23 +36,23 @@ export async function GET(request: NextRequest) {
 
     let consumed = 0;
     try {
-      const usedRows = await db.execute(sql`
+      const usedRows = await neonSql`
         SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) as used
         FROM lead_credit_transactions
         WHERE agency_id = ${agencyId} AND type = 'consume'
           AND created_at >= date_trunc('month', NOW())
-      `);
-      consumed = Number((usedRows as unknown as Array<Record<string, unknown>>)[0]?.used ?? 0);
+      `;
+      consumed = Number(usedRows[0]?.used ?? 0);
     } catch { /* table may not exist */ }
 
     let granted = 0;
     try {
-      const grantRows = await db.execute(sql`
+      const grantRows = await neonSql`
         SELECT COALESCE(SUM(amount), 0) as total
         FROM lead_credit_transactions
         WHERE agency_id = ${agencyId} AND type = 'grant'
-      `);
-      granted = Number((grantRows as unknown as Array<Record<string, unknown>>)[0]?.total ?? 0);
+      `;
+      granted = Number(grantRows[0]?.total ?? 0);
     } catch { /* table may not exist */ }
 
     const available = Math.max((monthlyCredits === -1 ? 999999 : monthlyCredits) + granted - consumed, 0);
