@@ -597,6 +597,14 @@ export async function runMigrations() {
     )
   `);
 
+  // ─── Ensure assignment_status enum includes 'claimed' ───
+  try {
+    await db.execute(sql`ALTER TYPE assignment_status ADD VALUE IF NOT EXISTS 'claimed'`);
+  } catch { /* enum may not exist or value already present */ }
+  try {
+    await db.execute(sql`ALTER TYPE assignment_status ADD VALUE IF NOT EXISTS 'viewed'`);
+  } catch { /* enum may not exist or value already present */ }
+
   // ─── Ensure lead_assignments table exists ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS lead_assignments (
