@@ -58,8 +58,7 @@ export async function GET(
     return Response.json({ data: agency });
   } catch (error: unknown) {
     console.error("GET /api/agencies/[id] error:", error);
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: "Internal server error", details: msg }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -186,8 +185,7 @@ export async function PATCH(
     return Response.json({ data: updated });
   } catch (error: unknown) {
     console.error("PATCH /api/agencies/[id] error:", error);
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: "Internal server error", details: msg }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -232,7 +230,6 @@ export async function DELETE(
     return Response.json({ message: "Agency permanently deleted" });
   } catch (error: unknown) {
     console.error("DELETE /api/agencies/[id] error:", error);
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: "Internal server error", details: msg }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }

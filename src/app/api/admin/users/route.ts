@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
-import { paginated, error } from "@/lib/api/response";
+import { paginated, error, serverError } from "@/lib/api/response";
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +57,6 @@ export async function GET(request: NextRequest) {
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {
     console.error("[ADMIN-USERS] Error:", err);
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return error(`Server error: ${msg}`, 500);
+    return serverError(err);
   }
 }

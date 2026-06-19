@@ -38,11 +38,13 @@ export async function GET(request: NextRequest) {
     const { agencyId, page, limit, sortBy } = params.data;
     const offset = (page - 1) * limit;
 
-    let orderClause = "ORDER BY r.created_at DESC";
-    if (sortBy === "oldest") orderClause = "ORDER BY r.created_at ASC";
-    else if (sortBy === "highest") orderClause = "ORDER BY r.overall_rating DESC";
-    else if (sortBy === "lowest") orderClause = "ORDER BY r.overall_rating ASC";
-    else if (sortBy === "helpful") orderClause = "ORDER BY r.helpful_count DESC NULLS LAST";
+    const VALID_ORDERS: Record<string, string> = {
+      oldest: "ORDER BY r.created_at ASC",
+      highest: "ORDER BY r.overall_rating DESC",
+      lowest: "ORDER BY r.overall_rating ASC",
+      helpful: "ORDER BY r.helpful_count DESC NULLS LAST",
+    };
+    const orderClause = VALID_ORDERS[sortBy ?? ""] ?? "ORDER BY r.created_at DESC";
 
     const results = await db.execute(
       sql`SELECT r.*, u.name as user_name, u.image as user_image

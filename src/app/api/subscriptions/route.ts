@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     console.error("GET /api/subscriptions error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
-      { error: "Internal server error", details: msg },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/subscriptions error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
-      { error: "Internal server error", details: msg },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

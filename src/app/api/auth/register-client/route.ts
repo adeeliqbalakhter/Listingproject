@@ -90,14 +90,14 @@ export async function POST(request: NextRequest) {
     response.cookies.set("access_token", accessToken, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 15 * 60,
     });
     response.cookies.set("refresh_token", refresh.token, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 30 * 24 * 60 * 60,
     });

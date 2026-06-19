@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
-import { paginated, error } from "@/lib/api/response";
+import { paginated, error, serverError } from "@/lib/api/response";
 
+// Frozen constant — never derived from user input
 const AGENCY_COLS = `a.id, a.name, a.slug, a.email, a.status, a.is_verified, a.is_featured, a.is_premium,
-       a.average_rating, a.total_reviews, a.created_at, u.name as owner_name, u.email as owner_email`;
+       a.average_rating, a.total_reviews, a.created_at, u.name as owner_name, u.email as owner_email` as const;
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,8 +49,6 @@ export async function GET(request: NextRequest) {
 
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {
-    console.error("[ADMIN-AGENCIES] Error:", err);
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return error(`Server error: ${msg}`, 500);
+    return serverError(err);
   }
 }

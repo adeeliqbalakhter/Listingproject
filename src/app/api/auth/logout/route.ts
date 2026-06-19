@@ -37,14 +37,14 @@ export async function POST(request: NextRequest) {
     response.cookies.set("access_token", "", {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 0,
     });
     response.cookies.set("refresh_token", "", {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 0,
     });

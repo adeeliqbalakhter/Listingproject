@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[SEND-SIGNUP-OTP] Error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return error(`Server error: ${message}`, 500);
+    return serverError(err);
   }
 }

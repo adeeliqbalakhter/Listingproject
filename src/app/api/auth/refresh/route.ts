@@ -34,7 +34,20 @@ export async function POST(request: NextRequest) {
     if (!row) return error("Invalid or expired refresh token", 401);
     if (!row.is_active) return error("Account is deactivated", 403);
 
-    // Revoke old token (rotation)
+    const currentUa = request.headers.get("user-agent") || "";
+    const storedDevice = row.device_info as string | null;
+    if (storedDevice) {
+      try {
+        const parsed = JSON.parse(storedDevice);
+        if (parsed.userAgent && currentUa && parsed.userAgent !== currentUa) {
+          await db.execute(
+            sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ${tokenHash}`
+          );
+          return error("Session expired. Please sign in again.", 401);
+        }
+      } catch { /* device_info not JSON */ }
+    }
+
     await db.execute(
       sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ${tokenHash}`
     );
@@ -50,11 +63,10 @@ export async function POST(request: NextRequest) {
 
     const newRefresh = await generateRefreshToken();
     const ip = getClientIp(request);
-    const ua = request.headers.get("user-agent") || "";
 
     await db.execute(sql`
       INSERT INTO refresh_tokens (user_id, token_hash, device_info, ip_address, expires_at)
-      VALUES (${row.uid}, ${newRefresh.hash}, ${JSON.stringify({ userAgent: ua })}, ${ip}, ${newRefresh.expiresAt})
+      VALUES (${row.uid}, ${newRefresh.hash}, ${JSON.stringify({ userAgent: currentUa })}, ${ip}, ${newRefresh.expiresAt})
     `);
 
     const response = NextResponse.json({
@@ -75,16 +87,16 @@ export async function POST(request: NextRequest) {
     response.cookies.set("access_token", accessToken, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: 15 * 60,
     });
     response.cookies.set("refresh_token", newRefresh.token, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: 30 * 24 * 60 * 60,
     });
 
     return response;

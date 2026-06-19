@@ -28,10 +28,12 @@ export async function GET(request: NextRequest) {
     const { page, limit, query, sortBy } = params.data;
     const offset = (page - 1) * limit;
 
-    let orderClause = "ORDER BY created_at DESC";
-    if (sortBy === "rating") orderClause = "ORDER BY average_rating DESC NULLS LAST";
-    else if (sortBy === "reviews") orderClause = "ORDER BY total_reviews DESC NULLS LAST";
-    else if (sortBy === "name") orderClause = "ORDER BY name ASC";
+    const VALID_ORDERS: Record<string, string> = {
+      rating: "ORDER BY average_rating DESC NULLS LAST",
+      reviews: "ORDER BY total_reviews DESC NULLS LAST",
+      name: "ORDER BY name ASC",
+    };
+    const orderClause = VALID_ORDERS[sortBy ?? ""] ?? "ORDER BY created_at DESC";
 
     let results;
     let total;
@@ -60,8 +62,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("GET /api/agencies error:", error);
-    const msg = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: "Internal server error", details: msg }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
       );
     }
     return Response.json(
-      { error: "Internal server error", details: msg },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

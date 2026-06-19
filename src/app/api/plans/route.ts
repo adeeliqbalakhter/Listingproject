@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       return Response.json({ data: [] });
     }
     return Response.json(
-      { error: "Internal server error", details: msg },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

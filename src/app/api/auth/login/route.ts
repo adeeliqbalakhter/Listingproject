@@ -46,7 +46,11 @@ export async function POST(request: NextRequest) {
     const validPassword = await verifyPassword(password, user.password_hash as string);
     if (!validPassword) {
       const attempts = ((user.failed_login_attempts as number) || 0) + 1;
-      const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+      let lockDurationMs = 0;
+      if (attempts >= 10) lockDurationMs = 24 * 60 * 60 * 1000;
+      else if (attempts >= 7) lockDurationMs = 2 * 60 * 60 * 1000;
+      else if (attempts >= 5) lockDurationMs = 30 * 60 * 1000;
+      const lockUntil = lockDurationMs > 0 ? new Date(Date.now() + lockDurationMs).toISOString() : null;
 
       await db.execute(sql`
         UPDATE users SET failed_login_attempts = ${attempts},
@@ -107,22 +111,20 @@ export async function POST(request: NextRequest) {
     response.cookies.set("access_token", accessToken, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 15 * 60, // 15 minutes
     });
     response.cookies.set("refresh_token", refresh.token, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
 
     return response;
   } catch (err) {
-    console.error("[LOGIN] Error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return error(`Server error: ${message}`, 500);
+    return serverError(err);
   }
 }

@@ -378,6 +378,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("POST /api/setup error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: "Setup failed", details: msg }, { status: 500 });
+    return Response.json({ error: "Setup failed" }, { status: 500 });
   }
 }

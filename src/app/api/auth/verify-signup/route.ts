@@ -153,14 +153,14 @@ export async function POST(request: NextRequest) {
     response.cookies.set("access_token", accessToken, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 15 * 60, // 15 minutes
     });
     response.cookies.set("refresh_token", refresh.token, {
       httpOnly: true,
       secure: secureCookie,
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
     });
@@ -168,13 +168,6 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err: unknown) {
     console.error("[VERIFY-SIGNUP] Error:", err);
-    const e = err as Record<string, unknown>;
-    const detail = {
-      message: e?.message ?? "Unknown",
-      code: e?.code ?? null,
-      detail: e?.detail ?? null,
-      cause: e?.cause ? String(e.cause) : null,
-    };
-    return NextResponse.json({ error: "Signup verification failed", debug: detail }, { status: 500 });
+    return NextResponse.json({ error: "Signup verification failed" }, { status: 500 });
   }
 }

@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       ...diagnostics,
       send_success: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: "Failed to send email",
     });
   }
 }
