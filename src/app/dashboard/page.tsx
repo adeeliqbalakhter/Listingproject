@@ -7,9 +7,9 @@ import {
   Star,
   TrendingUp,
   ArrowUpRight,
-  Loader2,
   Inbox,
 } from "lucide-react";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
 
 interface AgencyData {
   id: string;
@@ -118,11 +118,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const stats = [
@@ -149,7 +145,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div>
+    <div className="animate-in fade-in duration-500">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
         <p className="mt-1 text-gray-500">
@@ -164,7 +160,7 @@ export default function DashboardPage() {
           return (
             <div
               key={stat.label}
-              className="bg-white rounded-xl border border-gray-200 p-5"
+              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">

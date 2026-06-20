@@ -6,14 +6,27 @@ import {
   Search,
   MousePointerClick,
   Users,
-  ArrowUpRight,
-  ArrowDownRight,
   TrendingUp,
   BarChart3,
-  PieChart,
-  Loader2,
+  PieChart as PieChartIcon,
   Inbox,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+import { AnalyticsSkeleton } from "@/components/ui/skeleton";
 
 interface DailyStats {
   date: string;
@@ -55,12 +68,26 @@ const dateRanges = [
   { key: "90d", label: "90 days", days: 90 },
 ] as const;
 
+const LEAD_COLORS: Record<string, string> = {
+  new: "#2563EB",
+  sent: "#6366F1",
+  claimed: "#8B5CF6",
+  viewed: "#F59E0B",
+  responded: "#10B981",
+  won: "#059669",
+  lost: "#6B7280",
+};
+
 function sumDaily(stats: DailyStats[], key: keyof Omit<DailyStats, "date">): number {
   return stats.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
 }
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
+}
+
+function formatDateShort(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export default function AnalyticsPage() {
@@ -70,7 +97,6 @@ export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [agencyId, setAgencyId] = useState<string | null>(null);
 
-  // Fetch agency ID on mount
   useEffect(() => {
     async function fetchAgency() {
       try {
@@ -96,7 +122,6 @@ export default function AnalyticsPage() {
     fetchAgency();
   }, []);
 
-  // Fetch analytics when agencyId or range changes
   useEffect(() => {
     if (!agencyId) return;
 
@@ -123,11 +148,7 @@ export default function AnalyticsPage() {
   }, [agencyId, range]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-      </div>
-    );
+    return <AnalyticsSkeleton />;
   }
 
   if (error) {
@@ -150,40 +171,29 @@ export default function AnalyticsPage() {
   const totalLeadRequests = sumDaily(daily, "lead_requests");
 
   const statCards = [
-    {
-      label: "Profile Views",
-      value: formatNumber(totalViews),
-      icon: Eye,
-      color: "text-brand",
-      bg: "bg-blue-50",
-    },
-    {
-      label: "Search Impressions",
-      value: formatNumber(totalImpressions),
-      icon: Search,
-      color: "text-purple-600",
-      bg: "bg-purple-50",
-    },
-    {
-      label: "Website Clicks",
-      value: formatNumber(totalWebsiteClicks),
-      icon: MousePointerClick,
-      color: "text-green-600",
-      bg: "bg-green-50",
-    },
-    {
-      label: "Lead Requests",
-      value: formatNumber(totalLeadRequests),
-      icon: Users,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-    },
+    { label: "Profile Views", value: formatNumber(totalViews), icon: Eye, color: "text-brand", bg: "bg-blue-50" },
+    { label: "Search Impressions", value: formatNumber(totalImpressions), icon: Search, color: "text-purple-600", bg: "bg-purple-50" },
+    { label: "Website Clicks", value: formatNumber(totalWebsiteClicks), icon: MousePointerClick, color: "text-green-600", bg: "bg-green-50" },
+    { label: "Lead Requests", value: formatNumber(totalLeadRequests), icon: Users, color: "text-orange-500", bg: "bg-orange-50" },
   ];
+
+  const chartData = daily.map((d) => ({
+    date: formatDateShort(d.date),
+    views: Number(d.profile_views) || 0,
+    impressions: Number(d.search_impressions) || 0,
+    clicks: Number(d.website_clicks) || 0,
+  }));
+
+  const pieData = leadsByStatus.map((item) => ({
+    name: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+    value: Number(item.count) || 0,
+    color: LEAD_COLORS[item.status] || "#9CA3AF",
+  }));
 
   const totalLeadCount = leadsByStatus.reduce((sum, l) => sum + (Number(l.count) || 0), 0);
 
   return (
-    <div>
+    <div className="animate-in fade-in duration-500">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Analytics</h1>
@@ -210,17 +220,16 @@ export default function AnalyticsPage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map((stat) => {
+        {statCards.map((stat, idx) => {
           const Icon = stat.icon;
           return (
             <div
               key={stat.label}
-              className="bg-white rounded-xl border border-gray-200 p-5"
+              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow"
+              style={{ animationDelay: `${idx * 50}ms` }}
             >
               <div className="flex items-center justify-between mb-3">
-                <div
-                  className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center`}
-                >
+                <div className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center`}>
                   <Icon className={`w-5 h-5 ${stat.color}`} />
                 </div>
               </div>
@@ -233,81 +242,74 @@ export default function AnalyticsPage() {
 
       {/* Chart Sections */}
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        {/* Views Over Time */}
+        {/* Views Over Time - Area Chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 lg:col-span-2">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-navy">Views Over Time</h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Profile views in the last {range === "7d" ? "7" : range === "30d" ? "30" : "90"} days
+                Profile views &amp; website clicks in the last {range === "7d" ? "7" : range === "30d" ? "30" : "90"} days
               </p>
             </div>
             <TrendingUp className="w-5 h-5 text-gray-300" />
           </div>
-          {daily.length > 0 ? (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {daily.map((day) => {
-                const views = Number(day.profile_views) || 0;
-                const maxViews = Math.max(...daily.map((d) => Number(d.profile_views) || 0), 1);
-                const pct = Math.round((views / maxViews) * 100);
-                return (
-                  <div key={day.date} className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-500 w-24 shrink-0 text-xs">
-                      {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                      <div
-                        className="bg-brand/70 h-full rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-navy font-medium w-12 text-right text-xs">
-                      {formatNumber(views)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="clicksGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9CA3AF" }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: "12px", border: "1px solid #E5E7EB", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)", fontSize: "13px" }}
+                  labelStyle={{ fontWeight: 600, color: "#1B2A4A" }}
+                />
+                <Area type="monotone" dataKey="views" stroke="#2563EB" strokeWidth={2} fill="url(#viewsGradient)" name="Profile Views" />
+                <Area type="monotone" dataKey="clicks" stroke="#10B981" strokeWidth={2} fill="url(#clicksGradient)" name="Website Clicks" />
+              </AreaChart>
+            </ResponsiveContainer>
           ) : (
             <div className="h-64 bg-gradient-to-b from-blue-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
               <div className="text-center">
                 <BarChart3 className="w-10 h-10 text-gray-200 mx-auto mb-2" />
                 <p className="text-sm text-gray-400 font-medium">No data yet</p>
-                <p className="text-xs text-gray-300 mt-1">
-                  Views will appear here as your profile gets traffic
-                </p>
+                <p className="text-xs text-gray-300 mt-1">Views will appear here as your profile gets traffic</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Daily Impressions */}
+        {/* Daily Impressions - Bar Chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-navy">Daily Impressions</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Search impressions by day
-              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Search impressions by day</p>
             </div>
             <Search className="w-5 h-5 text-gray-300" />
           </div>
-          {daily.length > 0 ? (
-            <div className="space-y-2 max-h-56 overflow-y-auto">
-              {daily.map((day) => {
-                const impressions = Number(day.search_impressions) || 0;
-                return (
-                  <div key={day.date} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate mr-4">
-                      {new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <span className="text-navy font-medium whitespace-nowrap">
-                      {formatNumber(impressions)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9CA3AF" }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(chartData.length / 7) - 1)} />
+                <YAxis tick={{ fontSize: 11, fill: "#9CA3AF" }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: "12px", border: "1px solid #E5E7EB", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)", fontSize: "13px" }}
+                  labelStyle={{ fontWeight: 600, color: "#1B2A4A" }}
+                />
+                <Bar dataKey="impressions" fill="#8B5CF6" radius={[4, 4, 0, 0]} name="Impressions" />
+              </BarChart>
+            </ResponsiveContainer>
           ) : (
             <div className="h-56 bg-gradient-to-b from-purple-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
               <div className="text-center">
@@ -318,37 +320,54 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Lead Status Breakdown */}
+        {/* Lead Status Breakdown - Pie Chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-navy">Lead Status Breakdown</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Distribution of leads by status
-              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Distribution of leads by status</p>
             </div>
-            <PieChart className="w-5 h-5 text-gray-300" />
+            <PieChartIcon className="w-5 h-5 text-gray-300" />
           </div>
-          {leadsByStatus.length > 0 ? (
-            <div className="space-y-2">
-              {leadsByStatus.map((item) => {
-                const count = Number(item.count) || 0;
-                const pct = totalLeadCount > 0 ? Math.round((count / totalLeadCount) * 100) : 0;
-                return (
-                  <div key={item.status} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 capitalize">{item.status}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-navy font-medium">{count}</span>
-                      <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
-                    </div>
-                  </div>
-                );
-              })}
+          {pieData.length > 0 ? (
+            <div className="flex flex-col items-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: "12px", border: "1px solid #E5E7EB", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)", fontSize: "13px" }}
+                    formatter={(value) => {
+                      const v = Number(value) || 0;
+                      return [`${v} (${totalLeadCount > 0 ? Math.round((v / totalLeadCount) * 100) : 0}%)`, ""];
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    formatter={(value: string) => <span className="text-xs text-gray-600">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <p className="text-center text-sm text-gray-500 mt-2">
+                <span className="font-semibold text-navy">{totalLeadCount}</span> total leads
+              </p>
             </div>
           ) : (
             <div className="h-56 bg-gradient-to-b from-green-50/50 to-transparent rounded-lg border border-dashed border-gray-200 flex items-center justify-center">
               <div className="text-center">
-                <PieChart className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                <PieChartIcon className="w-10 h-10 text-gray-200 mx-auto mb-2" />
                 <p className="text-sm text-gray-400 font-medium">No leads yet</p>
               </div>
             </div>
@@ -360,20 +379,14 @@ export default function AnalyticsPage() {
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-navy">Overview</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Aggregate agency stats
-          </p>
+          <p className="text-xs text-gray-400 mt-0.5">Aggregate agency stats</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">
-                  Metric
-                </th>
-                <th className="text-right text-xs font-medium text-gray-500 px-6 py-3">
-                  Value
-                </th>
+                <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Metric</th>
+                <th className="text-right text-xs font-medium text-gray-500 px-6 py-3">Value</th>
               </tr>
             </thead>
             <tbody>

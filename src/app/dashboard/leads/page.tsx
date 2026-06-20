@@ -25,6 +25,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { showToast } from "@/components/ui/toast";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 
 type AssignmentStatus = "sent" | "claimed" | "responded" | "won" | "lost";
 
@@ -267,8 +268,32 @@ export default function LeadsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      <div className="animate-in fade-in duration-300">
+        <div className="mb-8">
+          <Skeleton className="h-7 w-24 mb-2" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <div>
+                    <Skeleton className="h-4 w-28 mb-1.5" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-24 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

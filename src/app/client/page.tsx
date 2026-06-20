@@ -28,6 +28,7 @@ import {
   Shield,
 } from "lucide-react";
 import { showToast } from "@/components/ui/toast";
+import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 
 interface Agency {
   assignmentId: string;
@@ -199,8 +200,32 @@ export default function ClientProjectsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 text-brand animate-spin" />
+      <div className="max-w-5xl mx-auto animate-in fade-in duration-300">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Skeleton className="h-7 w-32 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-10 w-32 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5">
+              <Skeleton className="h-5 w-40 mb-2" />
+              <Skeleton className="h-4 w-full mb-3" />
+              <div className="flex gap-4">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -210,7 +235,7 @@ export default function ClientProjectsPage() {
   const completedCount = projects.filter((p) => p.agencies.some((a) => a.assignmentStatus === "won")).length;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
