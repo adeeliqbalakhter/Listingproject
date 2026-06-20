@@ -14,9 +14,15 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  Plus,
+  X,
+  Mail,
+  User,
+  Copy,
+  CheckCircle,
 } from "lucide-react";
 
-type UserRole = "user" | "agency_owner" | "admin";
+type UserRole = "user" | "agency_owner" | "admin" | "super_admin";
 
 interface PlatformUser {
   id: string;
@@ -28,6 +34,12 @@ interface PlatformUser {
   login_count: number;
   last_login_at: string | null;
   created_at: string;
+}
+
+interface CreateUserForm {
+  name: string;
+  email: string;
+  role: UserRole;
 }
 
 interface PaginationInfo {
@@ -42,6 +54,7 @@ const roleTabs = [
   { label: "Users", value: "user" },
   { label: "Agency Owners", value: "agency_owner" },
   { label: "Admins", value: "admin" },
+  { label: "Super Admins", value: "super_admin" },
 ];
 
 const ITEMS_PER_PAGE = 10;
@@ -56,6 +69,11 @@ export default function AdminUsersPage() {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateUserForm>({ name: "", email: "", role: "admin" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<{ inviteUrl: string; email: string } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -106,11 +124,13 @@ export default function AdminUsersPage() {
       user: "bg-gray-100 text-gray-700",
       agency_owner: "bg-blue-50 text-brand",
       admin: "bg-purple-50 text-purple-700",
+      super_admin: "bg-red-50 text-red-700",
     };
     const labels: Record<string, string> = {
       user: "User",
       agency_owner: "Agency Owner",
       admin: "Admin",
+      super_admin: "Super Admin",
     };
     return (
       <span
@@ -171,13 +191,52 @@ export default function AdminUsersPage() {
       .toUpperCase();
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.name || !createForm.email) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to create user");
+      setCreateSuccess({ inviteUrl: json.data.inviteUrl, email: createForm.email });
+      setCreateForm({ name: "", email: "", role: "admin" });
+      fetchUsers();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setCreateForm({ name: "", email: "", role: "admin" });
+    setCreateError(null);
+    setCreateSuccess(null);
+  };
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-navy">Users Management</h1>
-        <p className="mt-1 text-gray-500">
-          Manage platform users, roles, and permissions.
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Users Management</h1>
+          <p className="mt-1 text-gray-500">
+            Manage platform users, roles, and permissions.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Create User
+        </button>
       </div>
 
       {/* Filters */}
@@ -404,6 +463,158 @@ export default function AdminUsersPage() {
           </>
         )}
       </div>
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={closeCreateModal} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                <h2 className="text-lg font-bold text-navy">Create New User</h2>
+                <button onClick={closeCreateModal} className="p-1 hover:bg-gray-100 rounded-md transition-colors">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {createSuccess ? (
+                <div className="p-6">
+                  <div className="text-center mb-5">
+                    <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle className="w-7 h-7 text-emerald-500" />
+                    </div>
+                    <h3 className="font-semibold text-navy text-lg">User Created!</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      An invitation email has been sent to <strong>{createSuccess.email}</strong>
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <p className="text-xs font-medium text-gray-500 mb-2">Invitation Link</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={createSuccess.inviteUrl}
+                        className="flex-1 text-xs bg-white border border-gray-200 rounded px-3 py-2 text-gray-600 truncate"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(createSuccess.inviteUrl);
+                        }}
+                        className="flex-shrink-0 p-2 bg-white border border-gray-200 rounded hover:bg-gray-50 transition-colors"
+                        title="Copy link"
+                      >
+                        <Copy className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">This link expires in 7 days. You can share it manually if the email doesn&apos;t arrive.</p>
+                  </div>
+
+                  <button
+                    onClick={closeCreateModal}
+                    className="w-full py-2.5 bg-brand text-white rounded-lg font-medium text-sm hover:bg-brand/90 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleCreateUser} className="p-5 space-y-4">
+                  {createError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      <p className="text-sm text-red-700">{createError}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        required
+                        value={createForm.name}
+                        onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                        placeholder="John Doe"
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="email"
+                        required
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                        placeholder="john@example.com"
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
+                    <select
+                      value={createForm.role}
+                      onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-white"
+                    >
+                      <option value="user">User</option>
+                      <option value="agency_owner">Agency Owner</option>
+                      <option value="admin">Admin</option>
+                      <option value="super_admin">Super Admin</option>
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      {createForm.role === "super_admin" && "Full platform access including user management"}
+                      {createForm.role === "admin" && "Access to admin panel and moderation tools"}
+                      {createForm.role === "agency_owner" && "Can create and manage an agency profile"}
+                      {createForm.role === "user" && "Standard user account"}
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <p className="text-xs text-blue-700">
+                      An invitation email will be sent with a link to set their password. The link expires in 7 days.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeCreateModal}
+                      className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating || !createForm.name || !createForm.email}
+                      className="flex-1 py-2.5 bg-brand text-white rounded-lg font-medium text-sm hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {creating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-4 h-4" />
+                          Create & Send Invite
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
