@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       newStatus = "active";
       isVerified = true;
     } else if (action === "reject") {
-      newStatus = "rejected";
+      newStatus = "archived";
     } else if (action === "suspend") {
       newStatus = "suspended";
     } else if (action === "verify") {

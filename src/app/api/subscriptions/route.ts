@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     // Get usage stats
     const portfolioRows = await db.execute(
-      sql`SELECT count(*) as count FROM portfolio_items WHERE agency_id = ${agencyId} AND deleted_at IS NULL`
+      sql`SELECT count(*) as count FROM agency_portfolio WHERE agency_id = ${agencyId} AND deleted_at IS NULL`
     );
     const portfolioCount = Number(
       (portfolioRows as unknown as Array<{ count: string }>)[0]?.count ?? 0

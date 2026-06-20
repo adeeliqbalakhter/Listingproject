@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         SELECT COALESCE(SUM(amount), 0) as total
         FROM lead_credit_transactions
         WHERE agency_id = ${agencyId} AND type = 'grant'
+          AND created_at >= date_trunc('month', NOW())
       `;
       granted = Number(grantRows[0]?.total ?? 0);
     } catch { /* table may not exist */ }

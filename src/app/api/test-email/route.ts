@@ -2,8 +2,12 @@ import { NextRequest } from "next/server";
 import { sendEmail, buildOTPEmail } from "@/lib/services/email";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { requireRole } from "@/lib/auth/guards";
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireRole(request, "super_admin");
+  if ("error" in authResult) return authResult.error;
+
   const email = request.nextUrl.searchParams.get("email");
   const mode = request.nextUrl.searchParams.get("mode") || "test";
 

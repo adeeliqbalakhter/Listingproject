@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       SELECT
         rr.*,
         rev.rating AS review_rating,
-        rev.comment AS review_comment,
+        rev.content AS review_comment,
         rev.status AS review_status,
         reporter.name AS reporter_name,
         reporter.email AS reporter_email,
