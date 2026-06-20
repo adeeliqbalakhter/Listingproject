@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await db.execute(sql`UPDATE reviews SET status = ${newStatus}, updated_at = NOW() WHERE id = ${id}`);
 
-    if (action === "approve") {
+    if (action === "approve" || action === "reject") {
       const reviewData = await db.execute(sql`SELECT agency_id, overall_rating FROM reviews WHERE id = ${id}`);
       const r = (reviewData as unknown as Array<Record<string, unknown>>)[0];
       if (r) {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await createAuditLog({
       userId: user.id,
-      action: `review_${action}d`,
+      action: action === "reject" ? "review_rejected" : `review_${action}d`,
       entityType: "review",
       entityId: id,
       oldValues: { status: review.status },

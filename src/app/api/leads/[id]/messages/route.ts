@@ -51,6 +51,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const assignmentId = searchParams.get("assignmentId");
     if (!assignmentId) return error("assignmentId required", 400);
 
+    // Validate assignment belongs to this lead
+    const assignmentCheck = await db.execute(sql`
+      SELECT id FROM lead_assignments WHERE id = ${assignmentId} AND lead_id = ${id}
+    `);
+    if ((assignmentCheck as unknown as Array<unknown>).length === 0) {
+      return error("Assignment does not belong to this lead", 400);
+    }
+
     const rows = await db.execute(sql`
       SELECT m.*, u.name as sender_name
       FROM messages m
@@ -97,19 +105,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const parsed = messageSchema.safeParse(body);
     if (!parsed.success) return error("Validation failed", 400, parsed.error.format());
 
+    // Validate assignment belongs to this lead
+    const assignmentCheck = await db.execute(sql`
+      SELECT id FROM lead_assignments WHERE id = ${parsed.data.assignmentId} AND lead_id = ${id}
+    `);
+    if ((assignmentCheck as unknown as Array<unknown>).length === 0) {
+      return error("Assignment does not belong to this lead", 400);
+    }
+
     const rows = await db.execute(sql`
       INSERT INTO messages (lead_assignment_id, sender_id, content)
       VALUES (${parsed.data.assignmentId}, ${user.id}, ${parsed.data.content})
       RETURNING *
     `);
 
-    // Update assignment responded_at if this is agency's first response (don't overwrite won/lost)
-    try {
-      await db.execute(sql`
-        UPDATE lead_assignments SET responded_at = COALESCE(responded_at, NOW()), status = 'responded'
-        WHERE id = ${parsed.data.assignmentId} AND status IN ('sent', 'claimed')
-      `);
-    } catch { /* non-critical */ }
+    // Update assignment responded_at only if an agency user sends a message (not the lead owner/client)
+    if (user.id !== lead.user_id) {
+      try {
+        await db.execute(sql`
+          UPDATE lead_assignments SET responded_at = COALESCE(responded_at, NOW()), status = 'responded'
+          WHERE id = ${parsed.data.assignmentId} AND status IN ('sent', 'claimed')
+        `);
+      } catch { /* non-critical */ }
+    }
 
     return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {

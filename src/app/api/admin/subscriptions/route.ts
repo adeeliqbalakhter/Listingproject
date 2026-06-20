@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
 import { paginated, success, error, serverError } from "@/lib/api/response";
@@ -67,6 +67,7 @@ export async function PATCH(request: NextRequest) {
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+    const neonSql = getNeonSql();
 
     const body = await request.json();
     const { agencyId, planId } = body as { agencyId?: string; planId?: string };
@@ -92,29 +93,29 @@ export async function PATCH(request: NextRequest) {
       let subscriptionRow;
 
       if (existing) {
-        // Update existing subscription
-        const updated = await db.execute(sql`
+        // Update existing subscription via Neon HTTP driver
+        const updated = await neonSql`
           UPDATE subscriptions
           SET plan_id = ${planId}, updated_at = NOW()
           WHERE id = ${existing.id}
           RETURNING *
-        `);
-        subscriptionRow = (updated as unknown as Array<Record<string, unknown>>)[0];
+        `;
+        subscriptionRow = updated[0];
       } else {
-        // Create new subscription
-        const inserted = await db.execute(sql`
+        // Create new subscription via Neon HTTP driver
+        const inserted = await neonSql`
           INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
           VALUES (${agencyId}, ${planId}, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 month')
           RETURNING *
-        `);
-        subscriptionRow = (inserted as unknown as Array<Record<string, unknown>>)[0];
+        `;
+        subscriptionRow = inserted[0];
       }
 
-      // Grant monthly credits
-      await db.execute(sql`
+      // Grant monthly credits via Neon HTTP driver
+      await neonSql`
         INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
         VALUES (${agencyId}, ${plan.monthly_lead_credits}, 'grant', 'Monthly credits from plan change')
-      `);
+      `;
 
       return success(subscriptionRow);
     } catch (tableErr) {

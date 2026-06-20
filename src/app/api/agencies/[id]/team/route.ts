@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAgencyAccess } from "@/lib/auth/guards";
 import { z } from "zod";
@@ -78,10 +78,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       RETURNING *
     `);
 
-    // Update user role if they're a regular user
-    await db.execute(sql`
-      UPDATE users SET role = 'agency_team_member' WHERE id = ${targetUser.id} AND role = 'user'
-    `);
+    // Role change deferred until invite is accepted
+    // await db.execute(sql`
+    //   UPDATE users SET role = 'agency_team_member' WHERE id = ${targetUser.id} AND role = 'user'
+    // `);
 
     await createAuditLog({
       userId: user.id,
@@ -111,10 +111,25 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { searchParams } = request.nextUrl;
     const memberId = searchParams.get("memberId");
     if (!memberId) return error("memberId query parameter required", 400);
+    const neonSql = getNeonSql();
+
+    // Get the user_id before deleting so we can revert their role
+    const memberRows = await db.execute(sql`
+      SELECT user_id FROM agency_team_members WHERE id = ${memberId} AND agency_id = ${id}
+    `);
+    const member = (memberRows as unknown as Array<Record<string, unknown>>)[0];
+    const userId = member?.user_id as string | undefined;
 
     await db.execute(sql`
       DELETE FROM agency_team_members WHERE id = ${memberId} AND agency_id = ${id}
     `);
+
+    // Revert the user's role back to 'user'
+    if (userId) {
+      await neonSql`
+        UPDATE users SET role = 'user' WHERE id = ${userId}
+      `;
+    }
 
     await createAuditLog({
       userId: user.id,

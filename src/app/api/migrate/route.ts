@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const hasSecretBypass = migrationSecret && authHeader === `Bearer ${migrationSecret}`;
     const migrate = await needsMigration();
 
-    if (!hasSecretBypass && !migrate) {
+    if (!hasSecretBypass) {
       const authResult = await requireRole(request, "super_admin");
       if ("error" in authResult) return authResult.error;
     }

@@ -194,7 +194,6 @@ export async function POST(request: NextRequest) {
 
     return Response.json({ data: (rows as unknown as Array<Record<string, unknown>>)[0] }, { status: 201 });
   } catch (err: unknown) {
-    console.error("POST /api/reviews error:", err);
     const e = err as Record<string, unknown>;
     const detail = {
       message: e?.message ?? "Unknown",
@@ -203,6 +202,7 @@ export async function POST(request: NextRequest) {
       constraint: e?.constraint ?? null,
       cause: e?.cause ? String(e.cause) : null,
     };
-    return Response.json({ error: "Review submission failed", debug: detail }, { status: 500 });
+    console.error("POST /api/reviews error:", detail);
+    return Response.json({ error: "Review submission failed" }, { status: 500 });
   }
 }

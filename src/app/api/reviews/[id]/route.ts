@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       FROM reviews r
       LEFT JOIN users u ON u.id = r.user_id
       LEFT JOIN agencies a ON a.id = r.agency_id
-      WHERE r.id = ${id} AND r.deleted_at IS NULL
+      WHERE r.id = ${id} AND r.deleted_at IS NULL AND r.status = 'approved'
     `);
     const review = (rows as unknown as Array<Record<string, unknown>>)[0];
     if (!review) return notFound("Review not found");

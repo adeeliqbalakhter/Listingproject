@@ -93,10 +93,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch { /* skip invalid */ }
     }
 
-    await db.execute(sql`
-      INSERT INTO lead_activity_logs (lead_id, user_id, action, details)
-      VALUES (${id}, ${user.id}, 'assigned', ${JSON.stringify({ agencyIds: parsed.data.agencyIds })})
-    `);
+    try {
+      await db.execute(sql`
+        INSERT INTO lead_activity_logs (lead_id, user_id, action, details)
+        VALUES (${id}, ${user.id}, 'assigned', ${JSON.stringify({ agencyIds: parsed.data.agencyIds })})
+      `);
+    } catch { /* lead_activity_logs table may not exist */ }
 
     await createAuditLog({
       userId: user.id,

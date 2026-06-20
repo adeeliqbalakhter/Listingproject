@@ -43,6 +43,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const db = getDb();
 
     // Hard delete: remove related data then the user
+    await db.execute(sql`DELETE FROM otp_tokens WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM agency_team_members WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM audit_logs WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM messages WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM review_votes WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM review_responses WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM review_reports WHERE reporter_id = ${id}`);
+    await db.execute(sql`DELETE FROM files WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM notifications WHERE user_id = ${id}`);
+    await db.execute(sql`DELETE FROM search_logs WHERE user_id = ${id}`);
     await db.execute(sql`DELETE FROM notification_preferences WHERE user_id = ${id}`);
     await db.execute(sql`DELETE FROM user_profiles WHERE user_id = ${id}`);
     await db.execute(sql`DELETE FROM refresh_tokens WHERE user_id = ${id}`);

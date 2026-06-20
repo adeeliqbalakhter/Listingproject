@@ -17,6 +17,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/SessionProvider";
 
 const sidebarLinks = [
@@ -36,8 +37,22 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy"></div>
+      </div>
+    );
+  }
+
+  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
+    router.push("/");
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -166,11 +181,11 @@ export default function AdminLayout({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-navy rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">SA</span>
+                <span className="text-white text-xs font-bold">{user.name?.substring(0, 2).toUpperCase() || "AD"}</span>
               </div>
               <div className="hidden sm:block">
-                <p className="text-sm font-medium text-navy">Super Admin</p>
-                <p className="text-xs text-gray-500">admin@agencyhub.com</p>
+                <p className="text-sm font-medium text-navy">{user.name || "Admin"}</p>
+                <p className="text-xs text-gray-500">{user.email}</p>
               </div>
             </div>
           </div>

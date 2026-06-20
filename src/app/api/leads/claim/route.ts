@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // 6. Charge credit
     if (!alreadyCharged) {
-      let available = 999;
+      let available = 0;
       try {
         let monthlyCredits = 1;
         try {
@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
             SELECT COALESCE(SUM(amount), 0) as total
             FROM lead_credit_transactions
             WHERE agency_id = ${agencyId} AND type = 'grant'
+              AND created_at >= date_trunc('month', NOW())
           `;
           granted = Number(rows[0]?.total ?? 0);
         } catch { /* 0 */ }
@@ -133,16 +134,6 @@ export async function POST(request: NextRequest) {
           `;
         } catch { /* best effort */ }
         return error("No credits remaining. Upgrade your plan.", 403);
-      }
-
-      try {
-        const desc = "Claimed lead: " + leadId;
-        await neonSql`
-          INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-          VALUES (${agencyId}, -1, 'consume', ${desc})
-        `;
-      } catch (err) {
-        console.error("[CLAIM] Credit insert failed:", err);
       }
     }
 
