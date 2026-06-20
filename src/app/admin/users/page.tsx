@@ -74,6 +74,9 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<{ inviteUrl: string; email: string } | null>(null);
+  const [editRoleUser, setEditRoleUser] = useState<PlatformUser | null>(null);
+  const [editRoleValue, setEditRoleValue] = useState<UserRole>("user");
+  const [editingRole, setEditingRole] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -220,6 +223,34 @@ export default function AdminUsersPage() {
     setCreateError(null);
     setCreateSuccess(null);
   };
+
+  const openEditRole = (user: PlatformUser) => {
+    setEditRoleUser(user);
+    setEditRoleValue(user.role);
+    setOpenDropdown(null);
+  };
+
+  const handleEditRole = async () => {
+    if (!editRoleUser) return;
+    setEditingRole(true);
+    try {
+      const res = await fetch(`/api/users/${editRoleUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: editRoleValue }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update role");
+      setEditRoleUser(null);
+      fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setEditingRole(false);
+    }
+  };
+
+  const isAdminRole = (role: string) => role === "admin" || role === "super_admin";
 
   return (
     <div>
@@ -374,23 +405,23 @@ export default function AdminUsersPage() {
                           </button>
                           {openDropdown === user.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                              <button onClick={() => alert("Feature coming soon")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                              <button onClick={() => openEditRole(user)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                 <UserCog className="w-4 h-4" />
                                 Edit Role
                               </button>
-                              {user.role !== "admin" && (
+                              {user.is_active ? (
+                                <button onClick={() => handleSuspendToggle(user.id, false)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50">
+                                  <Ban className="w-4 h-4" />
+                                  Suspend
+                                </button>
+                              ) : (
+                                <button onClick={() => handleSuspendToggle(user.id, true)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50">
+                                  <Shield className="w-4 h-4" />
+                                  Reactivate
+                                </button>
+                              )}
+                              {isAdminRole(user.role) && (
                                 <>
-                                  {user.is_active ? (
-                                    <button onClick={() => handleSuspendToggle(user.id, false)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-600 hover:bg-amber-50">
-                                      <Ban className="w-4 h-4" />
-                                      Suspend
-                                    </button>
-                                  ) : (
-                                    <button onClick={() => handleSuspendToggle(user.id, true)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50">
-                                      <Shield className="w-4 h-4" />
-                                      Reactivate
-                                    </button>
-                                  )}
                                   <div className="border-t border-gray-100 my-1" />
                                   <button onClick={() => handleDelete(user.id)} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50">
                                     <Trash2 className="w-4 h-4" />
@@ -611,6 +642,80 @@ export default function AdminUsersPage() {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Edit Role Modal */}
+      {editRoleUser && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setEditRoleUser(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                <h2 className="text-lg font-bold text-navy">Edit User Role</h2>
+                <button onClick={() => setEditRoleUser(null)} className="p-1 hover:bg-gray-100 rounded-md transition-colors">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                  <div className="w-10 h-10 bg-navy rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-white">{getAvatar(editRoleUser.name || "?")}</span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-navy text-sm">{editRoleUser.name}</p>
+                    <p className="text-xs text-gray-500">{editRoleUser.email}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
+                  <select
+                    value={editRoleValue}
+                    onChange={(e) => setEditRoleValue(e.target.value as UserRole)}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-white"
+                  >
+                    <option value="user">User</option>
+                    <option value="agency_owner">Agency Owner</option>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </div>
+
+                {editRoleValue !== editRoleUser.role && (
+                  <div className="bg-amber-50 rounded-lg p-3">
+                    <p className="text-xs text-amber-700">
+                      Role will be changed from <strong>{({ user: "User", agency_owner: "Agency Owner", admin: "Admin", super_admin: "Super Admin" } as Record<string,string>)[editRoleUser.role]}</strong> to <strong>{({ user: "User", agency_owner: "Agency Owner", admin: "Admin", super_admin: "Super Admin" } as Record<string,string>)[editRoleValue]}</strong>
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditRoleUser(null)}
+                    className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditRole}
+                    disabled={editingRole || editRoleValue === editRoleUser.role}
+                    className="flex-1 py-2.5 bg-brand text-white rounded-lg font-medium text-sm hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {editingRole ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Role"
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </>
