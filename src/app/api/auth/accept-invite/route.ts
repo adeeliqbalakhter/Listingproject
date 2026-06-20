@@ -11,6 +11,13 @@ const acceptInviteSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
+async function ensureInviteColumns(db: ReturnType<typeof getDb>) {
+  try {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token TEXT`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMPTZ`);
+  } catch { /* columns may already exist */ }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const token = request.nextUrl.searchParams.get("token");
@@ -18,6 +25,7 @@ export async function GET(request: NextRequest) {
 
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
+    await ensureInviteColumns(db);
 
     const rows = await db.execute(sql`
       SELECT id, name, email, role, invite_token_expires_at
@@ -54,6 +62,7 @@ export async function POST(request: NextRequest) {
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
     const neonSql = getNeonSql();
+    await ensureInviteColumns(db);
 
     const rows = await db.execute(sql`
       SELECT id, name, email, role, invite_token_expires_at

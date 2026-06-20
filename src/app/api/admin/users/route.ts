@@ -81,6 +81,11 @@ export async function POST(request: NextRequest) {
     const tempPassword = randomBytes(16).toString("hex");
     const passwordHash = await hashPassword(tempPassword);
 
+    try {
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token_expires_at TIMESTAMPTZ`);
+    } catch { /* columns may already exist */ }
+
     const rows = await db.execute(sql`
       INSERT INTO users (name, email, password_hash, role, is_active, invite_token, invite_token_expires_at)
       VALUES (${name}, ${email}, ${passwordHash}, ${role}, true, ${inviteToken}, ${inviteExpiry.toISOString()})
