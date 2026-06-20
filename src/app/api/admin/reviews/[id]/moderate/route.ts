@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/guards";
 import { createAuditLog, getClientIp } from "@/lib/services/audit";
@@ -30,19 +30,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const review = (rows as unknown as Array<Record<string, unknown>>)[0];
     if (!review) return error("Review not found", 404);
 
-    await db.execute(sql`UPDATE reviews SET status = ${newStatus}, updated_at = NOW() WHERE id = ${id}`);
+    const neonSql = getNeonSql();
+    await neonSql`UPDATE reviews SET status = ${newStatus}, updated_at = NOW() WHERE id = ${id}`;
 
     if (action === "approve" || action === "reject") {
       const reviewData = await db.execute(sql`SELECT agency_id, overall_rating FROM reviews WHERE id = ${id}`);
       const r = (reviewData as unknown as Array<Record<string, unknown>>)[0];
       if (r) {
-        await db.execute(sql`
+        await neonSql`
           UPDATE agencies SET
-            average_rating = (SELECT AVG(overall_rating) FROM reviews WHERE agency_id = ${r.agency_id} AND status = 'approved' AND deleted_at IS NULL),
-            total_reviews = (SELECT COUNT(*) FROM reviews WHERE agency_id = ${r.agency_id} AND status = 'approved' AND deleted_at IS NULL),
+            average_rating = (SELECT AVG(overall_rating) FROM reviews WHERE agency_id = ${r.agency_id as string} AND status = 'approved' AND deleted_at IS NULL),
+            total_reviews = (SELECT COUNT(*) FROM reviews WHERE agency_id = ${r.agency_id as string} AND status = 'approved' AND deleted_at IS NULL),
             updated_at = NOW()
-          WHERE id = ${r.agency_id}
-        `);
+          WHERE id = ${r.agency_id as string}
+        `;
       }
     }
 

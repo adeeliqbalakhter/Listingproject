@@ -63,7 +63,7 @@ function mapApiReview(raw: Record<string, unknown>): Review {
     id: raw.id as number,
     reviewer: reviewerLabel,
     agency: (raw.agency_name as string) || "Unknown Agency",
-    rating: raw.overall_rating as number,
+    rating: Number(raw.overall_rating) || 0,
     budgetRating: (raw.budget_rating as number) ?? null,
     qualityRating: (raw.quality_rating as number) ?? null,
     scheduleRating: (raw.schedule_rating as number) ?? null,

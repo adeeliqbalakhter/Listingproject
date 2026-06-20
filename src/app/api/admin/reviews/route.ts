@@ -18,23 +18,18 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
     const status = searchParams.get("status") || "";
 
-    const selectCols = sql.raw(`r.*, u.name as user_name, u.email as user_email, a.name as agency_name, r.reviewer_name as guest_name, r.reviewer_email as guest_email`);
-
-    let countQuery;
-    let dataQuery;
+    let countResult;
+    let rows;
 
     if (status) {
-      countQuery = sql`SELECT count(*) as count FROM reviews r WHERE r.deleted_at IS NULL AND r.status = ${status}`;
-      dataQuery = sql`SELECT ${selectCols} FROM reviews r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN agencies a ON a.id = r.agency_id WHERE r.deleted_at IS NULL AND r.status = ${status} ORDER BY r.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      countResult = await db.execute(sql`SELECT count(*) as count FROM reviews r WHERE r.deleted_at IS NULL AND r.status = ${status}`);
+      rows = await db.execute(sql`SELECT r.*, u.name as user_name, u.email as user_email, a.name as agency_name, r.reviewer_name as guest_name, r.reviewer_email as guest_email FROM reviews r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN agencies a ON a.id = r.agency_id WHERE r.deleted_at IS NULL AND r.status = ${status} ORDER BY r.created_at DESC LIMIT ${limit} OFFSET ${offset}`);
     } else {
-      countQuery = sql`SELECT count(*) as count FROM reviews r WHERE r.deleted_at IS NULL`;
-      dataQuery = sql`SELECT ${selectCols} FROM reviews r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN agencies a ON a.id = r.agency_id WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      countResult = await db.execute(sql`SELECT count(*) as count FROM reviews r WHERE r.deleted_at IS NULL`);
+      rows = await db.execute(sql`SELECT r.*, u.name as user_name, u.email as user_email, a.name as agency_name, r.reviewer_name as guest_name, r.reviewer_email as guest_email FROM reviews r LEFT JOIN users u ON u.id = r.user_id LEFT JOIN agencies a ON a.id = r.agency_id WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT ${limit} OFFSET ${offset}`);
     }
 
-    const countResult = await db.execute(countQuery);
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
-
-    const rows = await db.execute(dataQuery);
 
     return paginated(rows as unknown as Array<Record<string, unknown>>, { page, limit, total });
   } catch (err) {
