@@ -173,7 +173,13 @@ export default function SignUpPage() {
       }
       // Success — redirect based on role
       const userRole = result.data?.user?.role;
-      window.location.href = userRole === "client" ? "/client" : "/dashboard";
+      if (userRole === 'super_admin' || userRole === 'admin') {
+        window.location.href = '/admin';
+      } else if (userRole === 'agency_owner' || userRole === 'agency_team_member') {
+        window.location.href = '/dashboard';
+      } else {
+        window.location.href = '/client';
+      }
     } catch {
       setOtpError("Something went wrong. Please try again.");
     } finally {

@@ -42,8 +42,12 @@ export default function AdminLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && (!user || (user.role !== "admin" && user.role !== "super_admin"))) {
-      router.replace("/");
+    if (loading || !user) return;
+    if (user.role === "admin" || user.role === "super_admin") return;
+    if (user.role === "agency_owner" || user.role === "agency_team_member") {
+      router.replace("/dashboard");
+    } else {
+      router.replace("/client");
     }
   }, [user, loading, router]);
 

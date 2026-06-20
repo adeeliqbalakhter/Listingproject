@@ -59,7 +59,13 @@ export default function SignInPage() {
         window.location.href = `/auth/verify-email?email=${encodeURIComponent(email)}`;
       } else {
         const role = result.data?.user?.role;
-        window.location.href = role === 'client' ? '/client' : '/dashboard';
+        if (role === 'super_admin' || role === 'admin') {
+          window.location.href = '/admin';
+        } else if (role === 'agency_owner' || role === 'agency_team_member') {
+          window.location.href = '/dashboard';
+        } else {
+          window.location.href = '/client';
+        }
       }
     } catch {
       setErrors({ email: 'Something went wrong. Please try again.' });

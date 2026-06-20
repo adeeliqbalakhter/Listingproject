@@ -52,11 +52,13 @@ export default function DashboardLayout({
     }
     if (user.role === "client" || user.role === "user") {
       router.replace("/client");
+    } else if (user.role === "super_admin" || user.role === "admin") {
+      router.replace("/admin");
     }
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (!user || user.role === "client" || user.role === "user") return;
+    if (!user || user.role === "client" || user.role === "user" || user.role === "super_admin" || user.role === "admin") return;
     async function fetchAgency() {
       try {
         const res = await fetch("/api/agencies/mine");
@@ -85,7 +87,7 @@ export default function DashboardLayout({
     fetchAgency();
   }, [user]);
 
-  if (loading || !user || user.role === "client" || user.role === "user") {
+  if (loading || !user || user.role === "client" || user.role === "user" || user.role === "super_admin" || user.role === "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-brand animate-spin" />
