@@ -80,12 +80,13 @@ async function fetchReviews(agencyId: string) {
     if (reviewRows.length === 0) return [];
 
     try {
-      const reviewIds = reviewRows.map((r: any) => r.id);
+      const reviewIds = reviewRows.map((r: any) => r.id as string);
+      const idList = sql.join(reviewIds.map((id: string) => sql`${id}`), sql`, `);
       const responses = await db.execute(sql`
         SELECT rr.*, a.name as agency_name
         FROM review_responses rr
         LEFT JOIN agencies a ON a.user_id = rr.user_id
-        WHERE rr.review_id = ANY(${reviewIds})
+        WHERE rr.review_id IN (${idList})
         ORDER BY rr.created_at ASC
       `);
       const respArr = responses as any[];

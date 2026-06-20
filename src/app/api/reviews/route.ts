@@ -60,13 +60,14 @@ export async function GET(request: NextRequest) {
     let reviewsWithResponses = reviewRows;
     if (reviewRows.length > 0) {
       const reviewIds = reviewRows.map((r) => r.id as string);
+      const idList = sql.join(reviewIds.map((id) => sql`${id}`), sql`, `);
       try {
         const responsesResult = await db.execute(sql`
           SELECT rr.*, u.name as user_name, a.name as agency_name
           FROM review_responses rr
           LEFT JOIN users u ON u.id = rr.user_id
           LEFT JOIN agencies a ON a.user_id = rr.user_id
-          WHERE rr.review_id = ANY(${reviewIds})
+          WHERE rr.review_id IN (${idList})
           ORDER BY rr.created_at ASC
         `);
         const responses = responsesResult as unknown as Array<Record<string, unknown>>;
@@ -80,7 +81,8 @@ export async function GET(request: NextRequest) {
           ...r,
           review_responses: responsesByReview.get(r.id as string) || [],
         }));
-      } catch {
+      } catch (e) {
+        console.error("[REVIEWS] Failed to fetch responses:", e);
         reviewsWithResponses = reviewRows.map((r) => ({ ...r, review_responses: [] }));
       }
     }
