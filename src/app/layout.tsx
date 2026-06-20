@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import LayoutShell from "@/components/layout/LayoutShell";
 import SessionProvider from "@/components/providers/SessionProvider";
 import "./globals.css";
 
@@ -76,9 +75,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.className} h-full`}>
       <body className="min-h-full flex flex-col">
         <SessionProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <LayoutShell>{children}</LayoutShell>
         </SessionProvider>
       </body>
     </html>
