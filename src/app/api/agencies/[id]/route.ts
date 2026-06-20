@@ -107,32 +107,38 @@ export async function PATCH(
 
     const hasSocial = Object.keys(socialLinks).length > 0;
 
-    await db.execute(sql`
-      UPDATE agencies SET
-        name = COALESCE(${updateFields.name ?? null}, name),
-        tagline = COALESCE(${updateFields.tagline ?? null}, tagline),
-        description = COALESCE(${updateFields.description ?? null}, description),
-        website = COALESCE(${updateFields.website === "" ? null : (updateFields.website ?? null)}, website),
-        email = COALESCE(${updateFields.email === "" ? null : (updateFields.email ?? null)}, email),
-        phone = COALESCE(${updateFields.phone ?? null}, phone),
-        logo = COALESCE(${updateFields.logo ?? null}, logo),
-        cover_image = COALESCE(${updateFields.coverImage ?? null}, cover_image),
-        founded_year = COALESCE(${updateFields.foundedYear ?? null}, founded_year),
-        company_size = COALESCE(${updateFields.companySize ?? null}, company_size),
-        hourly_rate = COALESCE(${updateFields.hourlyRate ?? null}, hourly_rate),
-        min_project_size = COALESCE(${updateFields.minProjectSize ?? null}, min_project_size),
-        country_id = COALESCE(${updateFields.countryId ?? null}, country_id),
-        city_id = COALESCE(${updateFields.cityId ?? null}, city_id),
-        address = COALESCE(${updateFields.address ?? null}, address),
-        latitude = COALESCE(${updateFields.latitude ?? null}, latitude),
-        longitude = COALESCE(${updateFields.longitude ?? null}, longitude),
-        social_links = COALESCE(${hasSocial ? JSON.stringify(socialLinks) : null}, social_links),
-        meta_title = COALESCE(${updateFields.metaTitle ?? null}, meta_title),
-        meta_description = COALESCE(${updateFields.metaDescription ?? null}, meta_description),
-        status = COALESCE(${status ?? null}, status),
-        updated_at = NOW()
-      WHERE id = ${id}
-    `);
+    // Build SET clauses dynamically — only update fields explicitly provided in the request body
+    // This allows clearing nullable fields by sending null, unlike COALESCE which prevents clearing
+    type SqlChunk = ReturnType<typeof sql>;
+    const setClauses: SqlChunk[] = [];
+
+    if ("name" in updateFields) setClauses.push(sql`name = ${updateFields.name ?? null}`);
+    if ("tagline" in updateFields) setClauses.push(sql`tagline = ${updateFields.tagline ?? null}`);
+    if ("description" in updateFields) setClauses.push(sql`description = ${updateFields.description ?? null}`);
+    if ("website" in updateFields) setClauses.push(sql`website = ${updateFields.website === "" ? null : (updateFields.website ?? null)}`);
+    if ("email" in updateFields) setClauses.push(sql`email = ${updateFields.email === "" ? null : (updateFields.email ?? null)}`);
+    if ("phone" in updateFields) setClauses.push(sql`phone = ${updateFields.phone ?? null}`);
+    if ("logo" in updateFields) setClauses.push(sql`logo = ${updateFields.logo ?? null}`);
+    if ("coverImage" in updateFields) setClauses.push(sql`cover_image = ${updateFields.coverImage ?? null}`);
+    if ("foundedYear" in updateFields) setClauses.push(sql`founded_year = ${updateFields.foundedYear ?? null}`);
+    if ("companySize" in updateFields) setClauses.push(sql`company_size = ${updateFields.companySize ?? null}`);
+    if ("hourlyRate" in updateFields) setClauses.push(sql`hourly_rate = ${updateFields.hourlyRate ?? null}`);
+    if ("minProjectSize" in updateFields) setClauses.push(sql`min_project_size = ${updateFields.minProjectSize ?? null}`);
+    if ("countryId" in updateFields) setClauses.push(sql`country_id = ${updateFields.countryId ?? null}`);
+    if ("cityId" in updateFields) setClauses.push(sql`city_id = ${updateFields.cityId ?? null}`);
+    if ("address" in updateFields) setClauses.push(sql`address = ${updateFields.address ?? null}`);
+    if ("latitude" in updateFields) setClauses.push(sql`latitude = ${updateFields.latitude ?? null}`);
+    if ("longitude" in updateFields) setClauses.push(sql`longitude = ${updateFields.longitude ?? null}`);
+    if (hasSocial || "linkedinUrl" in data || "twitterUrl" in data || "facebookUrl" in data || "instagramUrl" in data) {
+      setClauses.push(sql`social_links = ${hasSocial ? JSON.stringify(socialLinks) : null}`);
+    }
+    if ("metaTitle" in updateFields) setClauses.push(sql`meta_title = ${updateFields.metaTitle ?? null}`);
+    if ("metaDescription" in updateFields) setClauses.push(sql`meta_description = ${updateFields.metaDescription ?? null}`);
+    if (status !== undefined) setClauses.push(sql`status = ${status}`);
+
+    setClauses.push(sql`updated_at = NOW()`);
+
+    await db.execute(sql`UPDATE agencies SET ${sql.join(setClauses, sql`, `)} WHERE id = ${id}`);
 
     // Update agency services if provided
     if (serviceIds) {

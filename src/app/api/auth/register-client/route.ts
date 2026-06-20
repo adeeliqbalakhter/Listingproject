@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       data: {
         user: { id: user.id, name: user.name, email: user.email, role: "client" },
+        accessToken,
+        refreshToken: refresh.token,
         message: "Account created successfully",
       },
     });

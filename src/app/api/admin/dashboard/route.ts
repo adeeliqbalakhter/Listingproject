@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         db.execute(sql`SELECT count(*) as count FROM agencies WHERE deleted_at IS NULL`),
         db.execute(sql`SELECT count(*) as count FROM reviews WHERE deleted_at IS NULL`),
         db.execute(sql`SELECT count(*) as count FROM leads`),
-        db.execute(sql`SELECT count(*) as count FROM agencies WHERE status = 'draft' AND deleted_at IS NULL`),
+        db.execute(sql`SELECT count(*) as count FROM agencies WHERE status = 'pending' AND deleted_at IS NULL`),
         db.execute(sql`SELECT count(*) as count FROM reviews WHERE status = 'pending' AND deleted_at IS NULL`),
         db.execute(sql`SELECT id, name, email, role, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10`),
       ]);

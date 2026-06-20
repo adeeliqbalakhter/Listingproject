@@ -61,6 +61,8 @@ const ADMIN_PERMISSIONS: Permission[] = [
   { resource: "content", action: "manage", condition: "any" },
   { resource: "seo", action: "manage", condition: "any" },
   { resource: "files", action: "manage", condition: "any" },
+  { resource: "users", action: "delete", condition: "any" },
+  { resource: "billing", action: "read", condition: "any" },
 ];
 
 const AGENCY_OWNER_PERMISSIONS: Permission[] = [

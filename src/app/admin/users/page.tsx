@@ -49,12 +49,25 @@ const ITEMS_PER_PAGE = 10;
 export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [users, setUsers] = useState<PlatformUser[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = () => setOpenDropdown(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [openDropdown]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -64,7 +77,7 @@ export default function AdminUsersPage() {
       params.set("page", String(currentPage));
       params.set("limit", String(ITEMS_PER_PAGE));
       if (roleFilter) params.set("role", roleFilter);
-      if (searchQuery) params.set("query", searchQuery);
+      if (debouncedQuery) params.set("query", debouncedQuery);
 
       const res = await fetch(`/api/admin/users?${params}`);
       if (!res.ok) {
@@ -79,7 +92,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, roleFilter, searchQuery]);
+  }, [currentPage, roleFilter, debouncedQuery]);
 
   useEffect(() => {
     fetchUsers();
@@ -138,6 +151,7 @@ export default function AdminUsersPage() {
   };
 
   const handleDelete = async (userId: string) => {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
     try {
       const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete user");
@@ -289,18 +303,19 @@ export default function AdminUsersPage() {
                       <td className="px-5 py-3.5 text-right">
                         <div className="relative inline-block">
                           <button
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setOpenDropdown(
                                 openDropdown === user.id ? null : user.id
-                              )
-                            }
+                              );
+                            }}
                             className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
                           >
                             <MoreHorizontal className="w-4 h-4 text-gray-500" />
                           </button>
                           {openDropdown === user.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                              <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                              <button onClick={() => alert("Feature coming soon")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                 <UserCog className="w-4 h-4" />
                                 Edit Role
                               </button>

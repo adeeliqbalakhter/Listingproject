@@ -76,7 +76,7 @@ function mapApiReview(raw: Record<string, unknown>): Review {
       year: "numeric",
     }),
     status: raw.status as ReviewStatus,
-    flagReason: undefined,
+    flagReason: (raw.flag_reason as string) ?? undefined,
     wouldRecommend: (raw.would_recommend as boolean) ?? null,
     reviewerJobTitle: (raw.reviewer_job_title as string) ?? null,
     companyIndustry: (raw.reviewer_company_industry as string) ?? null,
@@ -302,7 +302,7 @@ export default function AdminReviewsPage() {
                       ))}
                     </div>
                     <span className="text-sm font-medium text-navy">
-                      {review.rating}.0
+                      {review.rating.toFixed(1)}
                     </span>
                   </div>
 

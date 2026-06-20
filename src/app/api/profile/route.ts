@@ -48,25 +48,43 @@ export async function PATCH(request: NextRequest) {
       await db.execute(sql`UPDATE users SET name = ${data.name}, updated_at = NOW() WHERE id = ${user.id}`);
     }
 
-    // Upsert profile
+    // Upsert profile — only update fields explicitly provided in the request body
+    // This allows clearing nullable fields by sending null
+    type SqlChunk = ReturnType<typeof sql>;
+    const insertCols: SqlChunk[] = [sql`user_id`];
+    const insertVals: SqlChunk[] = [sql`${user.id}`];
+    const updateClauses: SqlChunk[] = [];
+
+    const profileFields: Array<{ key: string; column: string; value: unknown }> = [
+      { key: "bio", column: "bio", value: data.bio },
+      { key: "phone", column: "phone", value: data.phone },
+      { key: "companyName", column: "company_name", value: data.companyName },
+      { key: "jobTitle", column: "job_title", value: data.jobTitle },
+      { key: "website", column: "website", value: data.website },
+      { key: "avatarUrl", column: "avatar_url", value: data.avatarUrl },
+      { key: "timezone", column: "timezone", value: data.timezone },
+      { key: "language", column: "language", value: data.language },
+    ];
+
+    for (const field of profileFields) {
+      insertCols.push(sql.raw(field.column));
+      if (field.key in data) {
+        insertVals.push(sql`${field.value ?? null}`);
+        updateClauses.push(sql`${sql.raw(field.column)} = EXCLUDED.${sql.raw(field.column)}`);
+      } else {
+        insertVals.push(sql`NULL`);
+      }
+    }
+
+    insertCols.push(sql`updated_at`);
+    insertVals.push(sql`NOW()`);
+    updateClauses.push(sql`updated_at = NOW()`);
+
     await db.execute(sql`
-      INSERT INTO user_profiles (user_id, bio, phone, company_name, job_title, website, avatar_url, timezone, language, updated_at)
-      VALUES (
-        ${user.id},
-        ${data.bio ?? null}, ${data.phone ?? null}, ${data.companyName ?? null},
-        ${data.jobTitle ?? null}, ${data.website ?? null}, ${data.avatarUrl ?? null},
-        ${data.timezone ?? null}, ${data.language ?? null}, NOW()
-      )
+      INSERT INTO user_profiles (${sql.join(insertCols, sql`, `)})
+      VALUES (${sql.join(insertVals, sql`, `)})
       ON CONFLICT (user_id) DO UPDATE SET
-        bio = COALESCE(EXCLUDED.bio, user_profiles.bio),
-        phone = COALESCE(EXCLUDED.phone, user_profiles.phone),
-        company_name = COALESCE(EXCLUDED.company_name, user_profiles.company_name),
-        job_title = COALESCE(EXCLUDED.job_title, user_profiles.job_title),
-        website = COALESCE(EXCLUDED.website, user_profiles.website),
-        avatar_url = COALESCE(EXCLUDED.avatar_url, user_profiles.avatar_url),
-        timezone = COALESCE(EXCLUDED.timezone, user_profiles.timezone),
-        language = COALESCE(EXCLUDED.language, user_profiles.language),
-        updated_at = NOW()
+        ${sql.join(updateClauses, sql`, `)}
     `);
 
     await createAuditLog({

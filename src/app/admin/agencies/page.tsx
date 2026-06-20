@@ -56,6 +56,7 @@ const ITEMS_PER_PAGE = 10;
 export default function AdminAgenciesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -63,6 +64,18 @@ export default function AdminAgenciesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = () => setOpenDropdown(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [openDropdown]);
 
   const fetchAgencies = useCallback(async () => {
     try {
@@ -72,7 +85,7 @@ export default function AdminAgenciesPage() {
       params.set("page", String(currentPage));
       params.set("limit", String(ITEMS_PER_PAGE));
       if (statusFilter) params.set("status", statusFilter);
-      if (searchQuery) params.set("query", searchQuery);
+      if (debouncedQuery) params.set("query", debouncedQuery);
 
       const res = await fetch(`/api/admin/agencies?${params}`);
       if (!res.ok) {
@@ -87,7 +100,7 @@ export default function AdminAgenciesPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, statusFilter, searchQuery]);
+  }, [currentPage, statusFilter, debouncedQuery]);
 
   useEffect(() => {
     fetchAgencies();
@@ -309,11 +322,12 @@ export default function AdminAgenciesPage() {
                       <td className="px-5 py-3.5 text-right">
                         <div className="relative inline-block">
                           <button
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setOpenDropdown(
                                 openDropdown === agency.id ? null : agency.id
-                              )
-                            }
+                              );
+                            }}
                             className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
                           >
                             <MoreHorizontal className="w-4 h-4 text-gray-500" />

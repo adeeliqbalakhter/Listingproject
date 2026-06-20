@@ -5,7 +5,6 @@ const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/svg+xml",
 ];
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       return Response.json(
-        { error: "Invalid file type. Only JPEG, PNG, WebP, and SVG are allowed." },
+        { error: "Invalid file type. Only JPEG, PNG, and WebP are allowed." },
         { status: 400 }
       );
     }

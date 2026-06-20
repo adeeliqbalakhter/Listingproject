@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     const { agencyId, amount, description } = parsed.data;
 
     // Verify agency exists
-    const agencyRows = await db.execute(sql`SELECT id, name FROM agencies WHERE id = ${agencyId}`);
+    const agencyRows = await db.execute(sql`SELECT id, name FROM agencies WHERE id = ${agencyId} AND deleted_at IS NULL`);
     const agency = (agencyRows as unknown as Array<Record<string, unknown>>)[0];
     if (!agency) return error("Agency not found", 404);
 

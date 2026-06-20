@@ -6,6 +6,28 @@ import { success, error, serverError } from "@/lib/api/response";
 import { sendEmail } from "@/lib/services/email";
 import { z } from "zod";
 
+let _proposalsTableEnsured = false;
+async function ensureProposalsTable(db: ReturnType<typeof getDb>) {
+  if (_proposalsTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS lead_proposals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lead_id UUID NOT NULL,
+        assignment_id UUID NOT NULL,
+        agency_id UUID NOT NULL,
+        message TEXT NOT NULL,
+        estimated_budget VARCHAR(255),
+        estimated_timeline VARCHAR(255),
+        status VARCHAR(30) DEFAULT 'pending' NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+  } catch { /* table already exists */ }
+  _proposalsTableEnsured = true;
+}
+
 const proposalSchema = z.object({
   assignmentId: z.string().uuid(),
   message: z.string().min(10).max(5000),
@@ -62,23 +84,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch { /* ignore */ }
     }
 
-    // Ensure proposals table exists
-    try {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS lead_proposals (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          lead_id UUID NOT NULL,
-          assignment_id UUID NOT NULL,
-          agency_id UUID NOT NULL,
-          message TEXT NOT NULL,
-          estimated_budget VARCHAR(255),
-          estimated_timeline VARCHAR(255),
-          status VARCHAR(30) DEFAULT 'pending' NOT NULL,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-    } catch { /* exists */ }
+    // Ensure proposals table exists (runs once per cold start)
+    await ensureProposalsTable(db);
 
     // Insert proposal
     let proposalRows;

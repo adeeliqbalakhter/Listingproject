@@ -23,29 +23,34 @@ const portfolioSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 }).passthrough();
 
+let _portfolioTableEnsured = false;
 async function ensurePortfolioTable() {
+  if (_portfolioTableEnsured) return;
   const db = getDb();
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS agency_portfolio (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
-      title VARCHAR(255) NOT NULL,
-      description TEXT,
-      image_url TEXT,
-      project_url TEXT,
-      client_name VARCHAR(255),
-      sort_order INTEGER DEFAULT 0,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS client_logo TEXT`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_schedule VARCHAR(255)`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_size VARCHAR(100)`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS challenge TEXT`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS approach TEXT`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS results TEXT`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS services_provided TEXT`);
-  await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS agency_portfolio (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        project_url TEXT,
+        client_name VARCHAR(255),
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS client_logo TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_schedule VARCHAR(255)`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS project_size VARCHAR(100)`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS challenge TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS approach TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS results TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS services_provided TEXT`);
+    await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  } catch { /* table already exists */ }
+  _portfolioTableEnsured = true;
 }
 
 function logErr(label: string, err: unknown) {
@@ -149,23 +154,29 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!parsed.success) return error("Validation failed", 400, parsed.error.format());
 
     const data = parsed.data;
-    await db.execute(sql`
-      UPDATE agency_portfolio SET
-        title = COALESCE(${data.title ?? null}, title),
-        description = COALESCE(${data.description ?? null}, description),
-        image_url = COALESCE(${data.imageUrl ?? null}, image_url),
-        project_url = COALESCE(${data.projectUrl ?? null}, project_url),
-        client_name = COALESCE(${data.clientName ?? null}, client_name),
-        client_logo = COALESCE(${data.clientLogo ?? null}, client_logo),
-        project_schedule = COALESCE(${data.projectSchedule ?? null}, project_schedule),
-        project_size = COALESCE(${data.projectSize ?? null}, project_size),
-        challenge = COALESCE(${data.challenge ?? null}, challenge),
-        approach = COALESCE(${data.approach ?? null}, approach),
-        results = COALESCE(${data.results ?? null}, results),
-        services_provided = COALESCE(${data.servicesProvided ?? null}, services_provided),
-        sort_order = COALESCE(${data.sortOrder ?? null}, sort_order)
-      WHERE id = ${itemId} AND agency_id = ${id}
-    `);
+
+    // Build SET clauses dynamically — only update fields explicitly provided
+    // This allows clearing nullable fields by sending null
+    type SqlChunk = ReturnType<typeof sql>;
+    const setClauses: SqlChunk[] = [];
+
+    if ("title" in data) setClauses.push(sql`title = ${data.title ?? null}`);
+    if ("description" in data) setClauses.push(sql`description = ${data.description ?? null}`);
+    if ("imageUrl" in data) setClauses.push(sql`image_url = ${data.imageUrl ?? null}`);
+    if ("projectUrl" in data) setClauses.push(sql`project_url = ${data.projectUrl ?? null}`);
+    if ("clientName" in data) setClauses.push(sql`client_name = ${data.clientName ?? null}`);
+    if ("clientLogo" in data) setClauses.push(sql`client_logo = ${data.clientLogo ?? null}`);
+    if ("projectSchedule" in data) setClauses.push(sql`project_schedule = ${data.projectSchedule ?? null}`);
+    if ("projectSize" in data) setClauses.push(sql`project_size = ${data.projectSize ?? null}`);
+    if ("challenge" in data) setClauses.push(sql`challenge = ${data.challenge ?? null}`);
+    if ("approach" in data) setClauses.push(sql`approach = ${data.approach ?? null}`);
+    if ("results" in data) setClauses.push(sql`results = ${data.results ?? null}`);
+    if ("servicesProvided" in data) setClauses.push(sql`services_provided = ${data.servicesProvided ?? null}`);
+    if ("sortOrder" in data) setClauses.push(sql`sort_order = ${data.sortOrder ?? null}`);
+
+    if (setClauses.length > 0) {
+      await db.execute(sql`UPDATE agency_portfolio SET ${sql.join(setClauses, sql`, `)} WHERE id = ${itemId} AND agency_id = ${id}`);
+    }
 
     const updated = await db.execute(sql`SELECT * FROM agency_portfolio WHERE id = ${itemId}`);
     await revalidateAgency(id);

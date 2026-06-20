@@ -20,34 +20,19 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get("role") || "";
     const status = searchParams.get("status") || "";
 
-    let countQuery;
-    let dataQuery;
-
-    if (query && role && status === "active") {
+    const conditions = [sql`u.deleted_at IS NULL`];
+    if (query) {
       const pattern = `%${query}%`;
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern}) AND u.role = ${role} AND u.is_active = true`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern}) AND u.role = ${role} AND u.is_active = true ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else if (query && role) {
-      const pattern = `%${query}%`;
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern}) AND u.role = ${role}`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern}) AND u.role = ${role} ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else if (query) {
-      const pattern = `%${query}%`;
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern})`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND (u.name ILIKE ${pattern} OR u.email ILIKE ${pattern}) ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else if (role) {
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND u.role = ${role}`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND u.role = ${role} ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else if (status === "active") {
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND u.is_active = true`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND u.is_active = true ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else if (status === "inactive") {
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL AND u.is_active = false`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL AND u.is_active = false ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
-    } else {
-      countQuery = sql`SELECT count(*) as count FROM users u WHERE u.deleted_at IS NULL`;
-      dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE u.deleted_at IS NULL ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      conditions.push(sql`(u.name ILIKE ${pattern} OR u.email ILIKE ${pattern})`);
     }
+    if (role) conditions.push(sql`u.role = ${role}`);
+    if (status === "active") conditions.push(sql`u.is_active = true`);
+    if (status === "inactive") conditions.push(sql`u.is_active = false`);
+
+    const whereClause = sql.join(conditions, sql` AND `);
+
+    const countQuery = sql`SELECT count(*) as count FROM users u WHERE ${whereClause}`;
+    const dataQuery = sql`SELECT u.id, u.name, u.email, u.role, u.is_active, u.email_verified, u.last_login_at, u.login_count, u.created_at FROM users u WHERE ${whereClause} ORDER BY u.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const countResult = await db.execute(countQuery);
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);

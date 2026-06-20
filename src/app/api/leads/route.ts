@@ -205,6 +205,9 @@ export async function POST(request: NextRequest) {
     }
 
     const { user } = await authenticateRequest(request);
+    if (!user) {
+      return Response.json({ error: "Authentication required" }, { status: 401 });
+    }
 
     const body = await request.json();
     const parsed = createLeadSchema.safeParse(body);
@@ -256,12 +259,15 @@ export async function POST(request: NextRequest) {
     if (data.agencyIds?.length) {
       for (const agencyId of data.agencyIds) {
         try {
-          await db.execute(
-            sql`INSERT INTO lead_assignments (lead_id, agency_id, status) VALUES (${leadId}, ${agencyId}, 'sent') ON CONFLICT DO NOTHING`
+          const insertResult = await db.execute(
+            sql`INSERT INTO lead_assignments (lead_id, agency_id, status) VALUES (${leadId}, ${agencyId}, 'sent') ON CONFLICT DO NOTHING RETURNING id`
           );
-          await db.execute(
-            sql`UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agencyId}`
-          );
+          const inserted = (insertResult as unknown as Array<Record<string, unknown>>);
+          if (inserted.length > 0) {
+            await db.execute(
+              sql`UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agencyId}`
+            );
+          }
         } catch { /* skip invalid agency */ }
       }
     } else {

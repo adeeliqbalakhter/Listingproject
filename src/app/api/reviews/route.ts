@@ -4,6 +4,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { createReviewSchema } from "@/lib/validations";
+import { error as errorResponse } from "@/lib/api/response";
 
 const reviewQuerySchema = z.object({
   agencyId: z.string().uuid(),
@@ -21,10 +22,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!params.success) {
-      return Response.json({
-        data: [],
-        pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
-      });
+      return errorResponse("agencyId is required", 400);
     }
 
     if (!hasDb()) {

@@ -35,18 +35,6 @@ export async function POST(request: NextRequest) {
     if (!row.is_active) return error("Account is deactivated", 403);
 
     const currentUa = request.headers.get("user-agent") || "";
-    const storedDevice = row.device_info as string | null;
-    if (storedDevice) {
-      try {
-        const parsed = JSON.parse(storedDevice);
-        if (parsed.userAgent && currentUa && parsed.userAgent !== currentUa) {
-          await db.execute(
-            sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ${tokenHash}`
-          );
-          return error("Session expired. Please sign in again.", 401);
-        }
-      } catch { /* device_info not JSON */ }
-    }
 
     await db.execute(
       sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ${tokenHash}`
