@@ -22,6 +22,7 @@ import {
   Building2,
   ThumbsUp,
   CheckCircle2,
+  MessageSquare,
 } from "lucide-react";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -75,7 +76,28 @@ async function fetchReviews(agencyId: string) {
           WHERE r.agency_id = ${agencyId} AND r.status = 'approved' AND r.deleted_at IS NULL
           ORDER BY r.created_at DESC LIMIT 5`
     );
-    return rows as any[];
+    const reviewRows = rows as any[];
+    if (reviewRows.length === 0) return [];
+
+    try {
+      const reviewIds = reviewRows.map((r: any) => r.id);
+      const responses = await db.execute(sql`
+        SELECT rr.*, a.name as agency_name
+        FROM review_responses rr
+        LEFT JOIN agencies a ON a.user_id = rr.user_id
+        WHERE rr.review_id = ANY(${reviewIds})
+        ORDER BY rr.created_at ASC
+      `);
+      const respArr = responses as any[];
+      const byReview = new Map<string, any[]>();
+      for (const resp of respArr) {
+        if (!byReview.has(resp.review_id)) byReview.set(resp.review_id, []);
+        byReview.get(resp.review_id)!.push(resp);
+      }
+      return reviewRows.map((r: any) => ({ ...r, review_responses: byReview.get(r.id) || [] }));
+    } catch {
+      return reviewRows.map((r: any) => ({ ...r, review_responses: [] }));
+    }
   } catch {
     return [];
   }
@@ -991,6 +1013,24 @@ export default async function AgencyProfilePage({
                                     <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-medium">
                                       <ThumbsUp className="w-3 h-3" />
                                       {name.split(" ")[0]} recommends this agency
+                                    </div>
+                                  )}
+
+                                  {/* Agency Response */}
+                                  {review.review_responses?.length > 0 && (
+                                    <div className="mt-4 bg-blue-50/60 rounded-lg p-4 border-l-4 border-brand">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 bg-brand rounded-full flex items-center justify-center">
+                                          <MessageSquare className="w-3 h-3 text-white" />
+                                        </div>
+                                        <p className="text-xs font-semibold text-navy">
+                                          {review.review_responses[0].agency_name || agency.name}
+                                        </p>
+                                        <span className="text-xs text-gray-400">responded</span>
+                                      </div>
+                                      <p className="text-sm text-gray-600 leading-relaxed">
+                                        {review.review_responses[0].content}
+                                      </p>
                                     </div>
                                   )}
                                 </div>

@@ -55,6 +55,7 @@ export default function ReviewsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [responseText, setResponseText] = useState("");
+  const [submittingResponse, setSubmittingResponse] = useState(false);
   const [reviews, setReviews] = useState<ReviewData[]>([]);
 
   useEffect(() => {
@@ -120,27 +121,43 @@ export default function ReviewsPage() {
     return getStatus(r) === activeTab;
   });
 
-  const handleSubmitResponse = (reviewId: string) => {
-    // Optimistically update local state
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === reviewId
-          ? {
-              ...r,
-              review_responses: [
-                ...r.review_responses,
-                {
-                  id: `temp-${Date.now()}`,
-                  content: responseText,
-                  created_at: new Date().toISOString(),
-                },
-              ],
-            }
-          : r
-      )
-    );
-    setRespondingTo(null);
-    setResponseText("");
+  const handleSubmitResponse = async (reviewId: string) => {
+    if (!responseText.trim() || submittingResponse) return;
+    setSubmittingResponse(true);
+    try {
+      const res = await fetch(`/api/reviews/${reviewId}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: responseText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to submit response");
+
+      const newResponse = json.data;
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === reviewId
+            ? {
+                ...r,
+                review_responses: [
+                  ...r.review_responses,
+                  {
+                    id: newResponse.id,
+                    content: newResponse.content,
+                    created_at: newResponse.created_at,
+                  },
+                ],
+              }
+            : r
+        )
+      );
+      setRespondingTo(null);
+      setResponseText("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit response");
+    } finally {
+      setSubmittingResponse(false);
+    }
   };
 
   // Compute stats from real data
@@ -411,11 +428,15 @@ export default function ReviewsPage() {
                   <div className="flex justify-end mt-3">
                     <button
                       onClick={() => handleSubmitResponse(review.id)}
-                      disabled={!responseText.trim()}
+                      disabled={!responseText.trim() || submittingResponse}
                       className="flex items-center gap-1.5 bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50"
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      Submit Response
+                      {submittingResponse ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      {submittingResponse ? "Submitting..." : "Submit Response"}
                     </button>
                   </div>
                 </div>

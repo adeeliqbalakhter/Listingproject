@@ -55,6 +55,36 @@ export async function GET(request: NextRequest) {
           LIMIT ${limit} OFFSET ${offset}`
     );
 
+    const reviewRows = results as unknown as Array<Record<string, unknown>>;
+
+    let reviewsWithResponses = reviewRows;
+    if (reviewRows.length > 0) {
+      const reviewIds = reviewRows.map((r) => r.id as string);
+      try {
+        const responsesResult = await db.execute(sql`
+          SELECT rr.*, u.name as user_name, a.name as agency_name
+          FROM review_responses rr
+          LEFT JOIN users u ON u.id = rr.user_id
+          LEFT JOIN agencies a ON a.user_id = rr.user_id
+          WHERE rr.review_id = ANY(${reviewIds})
+          ORDER BY rr.created_at ASC
+        `);
+        const responses = responsesResult as unknown as Array<Record<string, unknown>>;
+        const responsesByReview = new Map<string, Array<Record<string, unknown>>>();
+        for (const resp of responses) {
+          const rid = resp.review_id as string;
+          if (!responsesByReview.has(rid)) responsesByReview.set(rid, []);
+          responsesByReview.get(rid)!.push(resp);
+        }
+        reviewsWithResponses = reviewRows.map((r) => ({
+          ...r,
+          review_responses: responsesByReview.get(r.id as string) || [],
+        }));
+      } catch {
+        reviewsWithResponses = reviewRows.map((r) => ({ ...r, review_responses: [] }));
+      }
+    }
+
     const countResult = await db.execute(
       sql`SELECT count(*) as count FROM reviews
           WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL`
@@ -62,7 +92,7 @@ export async function GET(request: NextRequest) {
     const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
     return Response.json({
-      data: results,
+      data: reviewsWithResponses,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
