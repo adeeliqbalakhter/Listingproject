@@ -41,21 +41,13 @@ export default function AdminLayout({
   const { user, loading, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy"></div>
-      </div>
-    );
-  }
-
   useEffect(() => {
     if (!loading && (!user || (user.role !== "admin" && user.role !== "super_admin"))) {
       router.replace("/");
     }
   }, [user, loading, router]);
 
-  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
+  if (loading || !user || (user.role !== "admin" && user.role !== "super_admin")) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy"></div>
