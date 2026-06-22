@@ -521,37 +521,33 @@ export async function POST(request: Request) {
     const existingCountries = await db.select({ id: countries.id }).from(countries).limit(1);
     if (existingCountries.length === 0 || force) {
       try {
-        const inserted = await db
-          .insert(countries)
-          .values(
-            COUNTRIES.map((c) => ({
-              name: c.name,
-              slug: toSlug(c.name),
-              code: c.code,
-              continent: c.continent,
-            }))
-          )
-          .onConflictDoNothing()
-          .returning();
-        results.countries = `${inserted.length} inserted`;
+        for (const c of COUNTRIES) {
+          await db.execute(sql`
+            INSERT INTO countries (name, slug, code, continent)
+            VALUES (${c.name}, ${toSlug(c.name)}, ${c.code}, ${c.continent})
+            ON CONFLICT (slug) DO NOTHING
+          `);
+        }
+        results.countries = `${COUNTRIES.length} processed`;
 
-        const countryMap = new Map(inserted.length > 0
-          ? inserted.map((c) => [c.code, c.id])
-          : (await db.select().from(countries)).map((c) => [c.code, c.id])
-        );
+        const allCountries = await db.select().from(countries);
+        const countryMap = new Map(allCountries.map((c) => [c.code, c.id]));
 
-        const cityValues: { name: string; slug: string; countryId: string; stateProvince: string | null }[] = [];
+        let cityCount = 0;
         for (const [code, cityNames] of Object.entries(CITIES_BY_COUNTRY)) {
           const countryId = countryMap.get(code);
           if (!countryId) continue;
           for (const name of cityNames) {
-            cityValues.push({ name, slug: toSlug(name), countryId, stateProvince: null });
+            const slug = `${toSlug(name)}-${code.toLowerCase()}`;
+            await db.execute(sql`
+              INSERT INTO cities (name, slug, country_id)
+              VALUES (${name}, ${slug}, ${countryId})
+              ON CONFLICT (slug) DO NOTHING
+            `);
+            cityCount++;
           }
         }
-        if (cityValues.length > 0) {
-          await db.insert(cities).values(cityValues).onConflictDoNothing();
-        }
-        results.cities = `${cityValues.length} processed`;
+        results.cities = `${cityCount} processed`;
       } catch (e: unknown) {
         results.countries = `error: ${e instanceof Error ? e.message : String(e)}`;
       }
