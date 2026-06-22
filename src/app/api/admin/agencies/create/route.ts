@@ -15,16 +15,20 @@ const createUnclaimedSchema = z.object({
   foundedYear: z.coerce.number().int().min(1900).max(2030).optional(),
   companySize: z.string().max(50).optional(),
   hourlyRate: z.string().max(50).optional(),
+  minProjectSize: z.coerce.number().min(0).optional(),
+  countryId: z.string().uuid().optional(),
+  cityId: z.string().uuid().optional(),
   address: z.string().optional(),
   logo: z.string().optional(),
   coverImage: z.string().optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal("")),
-  socialLinks: z.object({
-    linkedin: z.string().optional(),
-    twitter: z.string().optional(),
-    facebook: z.string().optional(),
-    instagram: z.string().optional(),
-  }).optional(),
+  linkedinUrl: z.string().max(500).optional().or(z.literal("")),
+  twitterUrl: z.string().max(500).optional().or(z.literal("")),
+  facebookUrl: z.string().max(500).optional().or(z.literal("")),
+  instagramUrl: z.string().max(500).optional().or(z.literal("")),
+  metaTitle: z.string().max(70).optional(),
+  metaDescription: z.string().max(160).optional(),
+  serviceIds: z.array(z.string().uuid()).optional(),
+  industryIds: z.array(z.string().uuid()).optional(),
 });
 
 async function ensureClaimColumns(db: ReturnType<typeof getDb>) {
@@ -55,28 +59,60 @@ export async function POST(request: NextRequest) {
     const baseSlug = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const slug = `${baseSlug}-${Date.now().toString(36)}`;
 
-    const socialLinks = d.socialLinks || {};
+    const socialLinks: Record<string, string> = {};
     if (d.linkedinUrl) socialLinks.linkedin = d.linkedinUrl;
+    if (d.twitterUrl) socialLinks.twitter = d.twitterUrl;
+    if (d.facebookUrl) socialLinks.facebook = d.facebookUrl;
+    if (d.instagramUrl) socialLinks.instagram = d.instagramUrl;
     const socialJson = Object.keys(socialLinks).length > 0 ? JSON.stringify(socialLinks) : null;
 
     const rows = await db.execute(sql`
       INSERT INTO agencies (
         user_id, name, slug, tagline, description, website, email, phone,
-        founded_year, company_size, hourly_rate, address, logo, cover_image,
-        linkedin_url, social_links, status, claim_status, is_verified
+        founded_year, company_size, hourly_rate, min_project_size,
+        country_id, city_id, address, logo, cover_image,
+        linkedin_url, social_links, meta_title, meta_description,
+        status, claim_status, is_verified
       ) VALUES (
         NULL, ${d.name}, ${slug}, ${d.tagline ?? null}, ${d.description ?? null},
         ${d.website || null}, ${d.email || null}, ${d.phone ?? null},
         ${d.foundedYear ?? null}, ${d.companySize ?? null}, ${d.hourlyRate ?? null},
-        ${d.address ?? null}, ${d.logo ?? null}, ${d.coverImage ?? null},
+        ${d.minProjectSize ?? null},
+        ${d.countryId ?? null}, ${d.cityId ?? null}, ${d.address ?? null},
+        ${d.logo ?? null}, ${d.coverImage ?? null},
         ${d.linkedinUrl || null},
         ${socialJson ? sql`${socialJson}::jsonb` : sql`NULL`},
+        ${d.metaTitle ?? null}, ${d.metaDescription ?? null},
         'active', 'unclaimed', false
       )
       RETURNING id, name, slug, claim_status, status
     `);
 
     const agency = (rows as unknown as Array<Record<string, unknown>>)[0];
+    const agencyId = agency.id as string;
+
+    if (d.serviceIds?.length) {
+      for (const svcId of d.serviceIds) {
+        try {
+          await db.execute(sql`
+            INSERT INTO agency_services (agency_id, service_id) VALUES (${agencyId}, ${svcId})
+            ON CONFLICT DO NOTHING
+          `);
+        } catch { /* ignore */ }
+      }
+    }
+
+    if (d.industryIds?.length) {
+      for (const indId of d.industryIds) {
+        try {
+          await db.execute(sql`
+            INSERT INTO agency_industries (agency_id, industry_id) VALUES (${agencyId}, ${indId})
+            ON CONFLICT DO NOTHING
+          `);
+        } catch { /* ignore */ }
+      }
+    }
+
     return success({ agency, message: "Unclaimed agency profile created" }, 201);
   } catch (err) {
     console.error("[ADMIN-CREATE-AGENCY] Error:", err);

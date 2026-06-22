@@ -32,6 +32,25 @@ const SOCIAL_PLATFORMS = [
   { key: "instagramUrl", label: "Instagram", placeholder: "https://instagram.com/..." },
 ] as const;
 
+const PHONE_CODES: Record<string, string> = {
+  AF: "+93", AL: "+355", DZ: "+213", AR: "+54", AU: "+61", AT: "+43",
+  BD: "+880", BE: "+32", BR: "+55", BG: "+359", KH: "+855", CA: "+1",
+  CL: "+56", CN: "+86", CO: "+57", CR: "+506", HR: "+385", CZ: "+420",
+  DK: "+45", DO: "+1", EC: "+593", EG: "+20", EE: "+372", ET: "+251",
+  FI: "+358", FR: "+33", DE: "+49", GH: "+233", GR: "+30", GT: "+502",
+  HK: "+852", HU: "+36", IS: "+354", IN: "+91", ID: "+62", IR: "+98",
+  IQ: "+964", IE: "+353", IL: "+972", IT: "+39", JM: "+1", JP: "+81",
+  JO: "+962", KZ: "+7", KE: "+254", KW: "+965", LV: "+371", LB: "+961",
+  LT: "+370", LU: "+352", MY: "+60", MX: "+52", MA: "+212", MM: "+95",
+  NP: "+977", NL: "+31", NZ: "+64", NG: "+234", NO: "+47", OM: "+968",
+  PK: "+92", PA: "+507", PE: "+51", PH: "+63", PL: "+48", PT: "+351",
+  QA: "+974", RO: "+40", RU: "+7", SA: "+966", RS: "+381", SG: "+65",
+  SK: "+421", SI: "+386", ZA: "+27", KR: "+82", ES: "+34", LK: "+94",
+  SE: "+46", CH: "+41", TW: "+886", TZ: "+255", TH: "+66", TN: "+216",
+  TR: "+90", UA: "+380", AE: "+971", GB: "+44", US: "+1", UY: "+598",
+  VE: "+58", VN: "+84",
+};
+
 type SocialLink = { platform: string; url: string };
 
 export default function ProfilePage() {
@@ -43,6 +62,12 @@ export default function ProfilePage() {
   const [existingAgencyId, setExistingAgencyId] = useState<string | null>(null);
   const [agencyStatus, setAgencyStatus] = useState<string | null>(null);
   const [agencySlug, setAgencySlug] = useState<string | null>(null);
+
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerifying, setEmailVerifying] = useState(false);
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailOtpCode, setEmailOtpCode] = useState("");
+  const [emailVerifyError, setEmailVerifyError] = useState<string | null>(null);
 
   const [countries, setCountries] = useState<LocationItem[]>([]);
   const [citiesList, setCitiesList] = useState<LocationItem[]>([]);
@@ -152,6 +177,8 @@ export default function ProfilePage() {
             }
           }
 
+          if (agency.email) setEmailVerified(true);
+
           // Load cities for the saved country
           if (agency.country_id) {
             fetch(`/api/locations?countryId=${agency.country_id}`)
@@ -180,6 +207,50 @@ export default function ProfilePage() {
     if (form.countryId) loadCities(form.countryId);
   }, [form.countryId, loadCities]);
 
+  const handleSendEmailOtp = async () => {
+    if (!form.email.trim() || !form.name.trim()) {
+      setEmailVerifyError("Please enter agency name and email first.");
+      return;
+    }
+    setEmailVerifying(true);
+    setEmailVerifyError(null);
+    try {
+      const res = await fetch("/api/agencies/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email, agencyName: form.name }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to send code");
+      setEmailOtpSent(true);
+    } catch (err) {
+      setEmailVerifyError(err instanceof Error ? err.message : "Failed to send code");
+    } finally {
+      setEmailVerifying(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (emailOtpCode.length !== 6) return;
+    setEmailVerifying(true);
+    setEmailVerifyError(null);
+    try {
+      const res = await fetch("/api/agencies/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email, code: emailOtpCode }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Verification failed");
+      setEmailVerified(true);
+      setEmailOtpSent(false);
+    } catch (err) {
+      setEmailVerifyError(err instanceof Error ? err.message : "Verification failed");
+    } finally {
+      setEmailVerifying(false);
+    }
+  };
+
   const autoSeo = useCallback(() => {
     const title = form.tagline
       ? `${form.name} - ${form.tagline}`.slice(0, 70)
@@ -201,6 +272,12 @@ export default function ProfilePage() {
     setForm((prev) => ({ ...prev, [name]: value }));
     if (name === "countryId") {
       setForm((prev) => ({ ...prev, cityId: "" }));
+    }
+    if (name === "email") {
+      setEmailVerified(false);
+      setEmailOtpSent(false);
+      setEmailOtpCode("");
+      setEmailVerifyError(null);
     }
   };
 
@@ -314,6 +391,10 @@ export default function ProfilePage() {
 
   const handleSubmitForReview = async () => {
     if (!existingAgencyId) return;
+    if (form.email && !emailVerified) {
+      setMessage({ type: "error", text: "Please verify your company email before submitting for review." });
+      return;
+    }
     setSubmittingForReview(true);
     setMessage(null);
     try {
@@ -567,31 +648,99 @@ export default function ProfilePage() {
               placeholder="https://yourwebsite.com"
             />
           </div>
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <Mail className="w-3.5 h-3.5 inline mr-1" />
-              Email
+              Company Email *
             </label>
-            <input
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
-              placeholder="contact@agency.com"
-            />
+            <div className="flex gap-2">
+              <input
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
+                placeholder="contact@agency.com"
+              />
+              {form.email && !emailVerified && !emailOtpSent && (
+                <button
+                  type="button"
+                  onClick={handleSendEmailOtp}
+                  disabled={emailVerifying}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {emailVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Verify
+                </button>
+              )}
+              {emailVerified && (
+                <span className="inline-flex items-center gap-1 px-3 bg-green-50 text-green-700 rounded-lg text-sm font-medium border border-green-200 shrink-0">
+                  <CheckCircle2 className="w-4 h-4" /> Verified
+                </span>
+              )}
+            </div>
+            {emailOtpSent && !emailVerified && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700 mb-2">Verification code sent to <strong>{form.email}</strong></p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={emailOtpCode}
+                    onChange={(e) => setEmailOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    maxLength={6}
+                    className="w-32 border border-blue-300 rounded-lg px-3 py-2 text-sm text-center tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyEmailOtp}
+                    disabled={emailVerifying || emailOtpCode.length !== 6}
+                    className="px-4 py-2 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {emailVerifying ? "Verifying..." : "Confirm"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendEmailOtp}
+                    disabled={emailVerifying}
+                    className="px-3 py-2 text-sm text-brand hover:text-brand-dark font-medium"
+                  >
+                    Resend
+                  </button>
+                </div>
+              </div>
+            )}
+            {emailVerifyError && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {emailVerifyError}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">Company email must be verified before submitting for review.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <Phone className="w-3.5 h-3.5 inline mr-1" />
               Phone
             </label>
-            <input
-              name="phone"
-              value={form.phone}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
-              placeholder="+1 (555) 000-0000"
-            />
+            {(() => {
+              const selCountry = countries.find((c) => c.id === form.countryId);
+              const pCode = selCountry?.code ? PHONE_CODES[selCountry.code] : "";
+              return (
+                <div className="flex gap-2">
+                  {pCode && (
+                    <span className="inline-flex items-center px-3 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600 font-mono">
+                      {pCode}
+                    </span>
+                  )}
+                  <input
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
+                    placeholder={pCode ? `${pCode} XXX XXX XXXX` : "+1 (555) 000-0000"}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </div>
       </section>
