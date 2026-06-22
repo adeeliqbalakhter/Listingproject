@@ -532,6 +532,30 @@ export async function runMigrations() {
   await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS services_provided TEXT`);
   await db.execute(sql`ALTER TABLE agency_portfolio ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
 
+  // ─── Agency claim system ───
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS claim_status VARCHAR(20) DEFAULT 'claimed'`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS claimed_by UUID`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS linkedin_url TEXT`);
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE agencies ALTER COLUMN user_id DROP NOT NULL;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS claim_verifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      agency_id UUID NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      code VARCHAR(6) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      attempts INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // ─── SEO metadata ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS seo_metadata (

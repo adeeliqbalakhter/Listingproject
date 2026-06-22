@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { paginated, error, serverError } from "@/lib/api/response";
 
 // Frozen constant — never derived from user input
-const AGENCY_COLS = `a.id, a.name, a.slug, a.email, a.status, a.is_verified, a.is_featured, a.is_premium,
+const AGENCY_COLS = `a.id, a.name, a.slug, a.email, a.status, a.claim_status, a.is_verified, a.is_featured, a.is_premium,
        a.average_rating, a.total_reviews, a.created_at, u.name as owner_name, u.email as owner_email` as const;
 
 export async function GET(request: NextRequest) {

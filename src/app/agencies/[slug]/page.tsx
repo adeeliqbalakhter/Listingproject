@@ -671,6 +671,14 @@ export default async function AgencyProfilePage({
                   <Phone className="w-4 h-4" /> {agency.phone}
                 </a>
               )}
+              {agency.claim_status === "unclaimed" && (
+                <Link
+                  href={`/agencies/${agency.slug}/claim`}
+                  className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-600 transition-colors text-sm"
+                >
+                  <BadgeCheck className="w-4 h-4" /> Claim This Agency
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -750,12 +758,21 @@ export default async function AgencyProfilePage({
       {/* Mobile CTA (sticky bottom bar) */}
       {/* ---------------------------------------------------------------- */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 px-4 py-3 flex gap-3">
-        <Link
-          href={`/get-quotes?agency=${agency.slug}`}
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-brand text-white py-2.5 rounded-xl font-medium text-sm hover:bg-brand-dark transition-colors"
-        >
-          Get a Free Quote
-        </Link>
+        {agency.claim_status === "unclaimed" ? (
+          <Link
+            href={`/agencies/${agency.slug}/claim`}
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 text-white py-2.5 rounded-xl font-medium text-sm hover:bg-emerald-600 transition-colors"
+          >
+            <BadgeCheck className="w-4 h-4" /> Claim This Agency
+          </Link>
+        ) : (
+          <Link
+            href={`/get-quotes?agency=${agency.slug}`}
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-brand text-white py-2.5 rounded-xl font-medium text-sm hover:bg-brand-dark transition-colors"
+          >
+            Get a Free Quote
+          </Link>
+        )}
         {agency.phone && (
           <a
             href={`tel:${agency.phone}`}

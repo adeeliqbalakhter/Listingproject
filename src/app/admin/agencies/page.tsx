@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   CheckCircle2,
@@ -16,6 +17,8 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  Plus,
+  UserPlus,
 } from "lucide-react";
 
 type AgencyStatus = "active" | "draft" | "pending" | "rejected" | "suspended";
@@ -26,6 +29,7 @@ interface Agency {
   slug: string;
   email: string;
   status: AgencyStatus;
+  claim_status: "claimed" | "unclaimed" | null;
   is_verified: boolean;
   is_featured: boolean;
   is_premium: boolean;
@@ -168,11 +172,19 @@ export default function AdminAgenciesPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-navy">Agencies Management</h1>
-        <p className="mt-1 text-gray-500">
-          Review, approve, and manage all agencies on the platform.
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Agencies Management</h1>
+          <p className="mt-1 text-gray-500">
+            Review, approve, and manage all agencies on the platform.
+          </p>
+        </div>
+        <Link
+          href="/admin/agencies/create"
+          className="inline-flex items-center gap-2 bg-brand text-white px-4 py-2.5 rounded-lg font-medium hover:bg-brand-dark transition-colors text-sm shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Create Agency
+        </Link>
       </div>
 
       {/* Filters */}
@@ -253,6 +265,9 @@ export default function AdminAgenciesPage() {
                     <th className="text-left px-5 py-3 font-medium text-gray-500">
                       Status
                     </th>
+                    <th className="text-left px-5 py-3 font-medium text-gray-500 hidden md:table-cell">
+                      Claim
+                    </th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500 hidden lg:table-cell">
                       Rating
                     </th>
@@ -299,6 +314,17 @@ export default function AdminAgenciesPage() {
                         <p className="text-xs text-gray-400">{agency.owner_email ?? ""}</p>
                       </td>
                       <td className="px-5 py-3.5">{statusBadge(agency.status)}</td>
+                      <td className="px-5 py-3.5 hidden md:table-cell">
+                        {agency.claim_status === "unclaimed" ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                            <UserPlus className="w-3 h-3" /> Unclaimed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                            <CheckCircle2 className="w-3 h-3" /> Claimed
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5 hidden lg:table-cell">
                         {agency.average_rating && agency.average_rating > 0 ? (
                           <div className="flex items-center gap-1">
@@ -422,7 +448,7 @@ export default function AdminAgenciesPage() {
                   ))}
                   {agencies.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
+                      <td colSpan={8} className="px-5 py-12 text-center text-gray-400">
                         No agencies found matching your criteria.
                       </td>
                     </tr>
