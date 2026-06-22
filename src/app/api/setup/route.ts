@@ -521,11 +521,12 @@ export async function POST(request: Request) {
     const existingCountries = await db.select({ id: countries.id }).from(countries).limit(1);
     if (existingCountries.length === 0 || force) {
       try {
+        await db.execute(sql`ALTER TABLE countries ADD CONSTRAINT IF NOT EXISTS countries_code_unique UNIQUE (code)`).catch(() => {});
         for (const c of COUNTRIES) {
           await db.execute(sql`
             INSERT INTO countries (name, slug, code, continent)
             VALUES (${c.name}, ${toSlug(c.name)}, ${c.code}, ${c.continent})
-            ON CONFLICT (slug) DO NOTHING
+            ON CONFLICT DO NOTHING
           `);
         }
         results.countries = `${COUNTRIES.length} processed`;
@@ -539,12 +540,14 @@ export async function POST(request: Request) {
           if (!countryId) continue;
           for (const name of cityNames) {
             const slug = `${toSlug(name)}-${code.toLowerCase()}`;
-            await db.execute(sql`
-              INSERT INTO cities (name, slug, country_id)
-              VALUES (${name}, ${slug}, ${countryId})
-              ON CONFLICT (slug) DO NOTHING
-            `);
-            cityCount++;
+            try {
+              await db.execute(sql`
+                INSERT INTO cities (name, slug, country_id)
+                VALUES (${name}, ${slug}, ${countryId})
+                ON CONFLICT DO NOTHING
+              `);
+              cityCount++;
+            } catch { /* skip duplicates */ }
           }
         }
         results.cities = `${cityCount} processed`;
