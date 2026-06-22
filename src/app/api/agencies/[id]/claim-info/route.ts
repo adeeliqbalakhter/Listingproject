@@ -12,12 +12,20 @@ export async function GET(
     if (!hasDb()) return error("Database not available", 503);
     const db = getDb();
 
-    const rows = await db.execute(sql`
-      SELECT id, name, slug, website, claim_status
-      FROM agencies
-      WHERE (slug = ${slugOrId} OR id = ${slugOrId}) AND deleted_at IS NULL
-      LIMIT 1
-    `);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
+    const rows = isUuid
+      ? await db.execute(sql`
+          SELECT id, name, slug, website, claim_status
+          FROM agencies
+          WHERE (slug = ${slugOrId} OR id = ${slugOrId}) AND deleted_at IS NULL
+          LIMIT 1
+        `)
+      : await db.execute(sql`
+          SELECT id, name, slug, website, claim_status
+          FROM agencies
+          WHERE slug = ${slugOrId} AND deleted_at IS NULL
+          LIMIT 1
+        `);
     const agency = (rows as unknown as Array<Record<string, unknown>>)[0];
     if (!agency) return error("Agency not found", 404);
 
