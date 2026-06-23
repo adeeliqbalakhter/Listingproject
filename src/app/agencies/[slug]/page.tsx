@@ -20,6 +20,9 @@ import {
   Share2,
   ChevronRight,
   Building2,
+  Wrench,
+  HelpCircle,
+  Sparkles,
 } from "lucide-react";
 import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
@@ -162,6 +165,23 @@ async function fetchPortfolio(agencyId: string) {
     return rows as any[];
   } catch (err) {
     console.error("[AGENCY-PROFILE] fetchPortfolio error:", err);
+    return [];
+  }
+}
+
+async function resolveServiceFocus(items: ServiceFocusItem[]): Promise<ServiceFocusItem[]> {
+  if (items.length === 0) return [];
+  try {
+    const db = getDb();
+    const ids = items.map((i) => i.serviceId);
+    const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+    const rows = await db.execute(sql`SELECT id, name FROM services WHERE id IN (${idList})`);
+    const nameMap = new Map<string, string>();
+    for (const r of rows as any[]) nameMap.set(r.id, r.name);
+    return items
+      .map((i) => ({ ...i, serviceName: nameMap.get(i.serviceId) || undefined }))
+      .filter((i) => i.serviceName);
+  } catch {
     return [];
   }
 }
@@ -452,6 +472,57 @@ function parseLocations(raw: unknown): ParsedLocation[] {
     });
 }
 
+interface ServiceFocusItem {
+  serviceId: string;
+  percentage: number;
+  serviceName?: string;
+}
+
+interface TeamInfoData {
+  story?: string;
+  teamPhoto?: string;
+  videoUrl?: string;
+  setsApart?: string[];
+  quickFacts?: string[];
+  tools?: string[];
+  faq?: Array<{ question: string; answer: string }>;
+}
+
+function parseServiceFocus(raw: unknown): ServiceFocusItem[] {
+  const val = parseJsonValue(raw);
+  if (!Array.isArray(val)) return [];
+  return val
+    .filter((v) => v && typeof v === "object" && (v as Record<string, unknown>).serviceId)
+    .map((v) => {
+      const o = v as Record<string, unknown>;
+      return { serviceId: String(o.serviceId), percentage: Number(o.percentage || 0) };
+    });
+}
+
+function parseTeamInfo(raw: unknown): TeamInfoData | null {
+  const val = parseJsonValue(raw);
+  if (!val || typeof val !== "object") return null;
+  const o = val as Record<string, unknown>;
+  const info: TeamInfoData = {};
+  if (o.story) info.story = String(o.story);
+  if (o.teamPhoto) info.teamPhoto = String(o.teamPhoto);
+  if (o.videoUrl) info.videoUrl = String(o.videoUrl);
+  if (Array.isArray(o.setsApart)) info.setsApart = o.setsApart.map(String).filter(Boolean);
+  if (Array.isArray(o.quickFacts)) info.quickFacts = o.quickFacts.map(String).filter(Boolean);
+  if (Array.isArray(o.tools)) info.tools = o.tools.map(String).filter(Boolean);
+  if (Array.isArray(o.faq)) {
+    info.faq = o.faq
+      .filter((f: unknown) => f && typeof f === "object")
+      .map((f: unknown) => {
+        const faq = f as Record<string, unknown>;
+        return { question: String(faq.question || ""), answer: String(faq.answer || "") };
+      })
+      .filter((f) => f.question && f.answer);
+  }
+  const hasContent = info.story || (info.setsApart && info.setsApart.length > 0) || (info.tools && info.tools.length > 0) || (info.faq && info.faq.length > 0) || info.teamPhoto || info.videoUrl;
+  return hasContent ? info : null;
+}
+
 function parseSocialLinks(raw: unknown): Record<string, string> {
   if (!raw) return {};
   if (typeof raw === "string") {
@@ -607,12 +678,58 @@ function RatingBar({
 // Tab IDs
 // ---------------------------------------------------------------------------
 
+const PIE_COLORS = [
+  "#1e40af", "#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa",
+  "#7dd3fc", "#155e75", "#0e7490", "#0891b2", "#06b6d4",
+  "#059669", "#10b981", "#34d399", "#6ee7b7", "#a78bfa",
+  "#8b5cf6", "#7c3aed", "#f59e0b", "#f97316", "#ef4444",
+];
+
+function ServiceFocusPie({ items }: { items: ServiceFocusItem[] }) {
+  const valid = items.filter((i) => i.percentage > 0);
+  if (valid.length === 0) return <div className="w-48 h-48 rounded-full bg-gray-100 mx-auto" />;
+
+  let cumulative = 0;
+  const slices: Array<{ startAngle: number; endAngle: number; color: string; pct: number }> = [];
+  valid.forEach((item, i) => {
+    const start = cumulative;
+    cumulative += item.percentage;
+    slices.push({ startAngle: start * 3.6, endAngle: cumulative * 3.6, color: PIE_COLORS[i % PIE_COLORS.length], pct: item.percentage });
+  });
+
+  const toRad = (deg: number) => (deg - 90) * (Math.PI / 180);
+  const cx = 100, cy = 100, r = 90;
+
+  return (
+    <svg viewBox="0 0 200 200" className="w-48 h-48 mx-auto">
+      {slices.map((s, i) => {
+        const largeArc = s.endAngle - s.startAngle > 180 ? 1 : 0;
+        const x1 = cx + r * Math.cos(toRad(s.startAngle));
+        const y1 = cy + r * Math.sin(toRad(s.startAngle));
+        const x2 = cx + r * Math.cos(toRad(s.endAngle));
+        const y2 = cy + r * Math.sin(toRad(s.endAngle));
+        const midAngle = toRad((s.startAngle + s.endAngle) / 2);
+        const labelR = 55;
+        const lx = cx + labelR * Math.cos(midAngle);
+        const ly = cy + labelR * Math.sin(midAngle);
+        return (
+          <g key={i}>
+            <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`} fill={s.color} stroke="white" strokeWidth="2" />
+            {s.pct >= 8 && <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="14" fontWeight="bold">{s.pct}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "pricing", label: "Pricing" },
   { id: "portfolio", label: "Portfolio" },
   { id: "services", label: "Services" },
   { id: "industries", label: "Industries" },
+  { id: "team", label: "Team" },
   { id: "reviews", label: "Reviews" },
 ] as const;
 
@@ -704,6 +821,13 @@ export default async function AgencyProfilePage({
   const languages = parseStringArray(agency.languages);
   const timezones = parseStringArray(agency.timezones);
 
+  // Service focus (pie chart data)
+  const serviceFocusRaw = parseServiceFocus(agency.service_focus);
+  const serviceFocus = await resolveServiceFocus(serviceFocusRaw);
+
+  // Team info
+  const teamInfo = parseTeamInfo(agency.team_info);
+
   // Multi-location list with fallback to the agency's single registered address
   let locations = parseLocations(agency.locations);
 
@@ -732,6 +856,12 @@ export default async function AgencyProfilePage({
       },
     ];
   }
+
+  // Determine display location: prefer HQ office location, fall back to agency-level location
+  const hqOffice = locations.find((l) => l.isHeadquarters) || locations[0];
+  const displayLocation = hqOffice
+    ? [hqOffice.city, hqOffice.country].filter(Boolean).join(", ")
+    : location;
 
   const socialLinks = parseSocialLinks(agency.social_links);
   const rating = agency.average_rating ? Number(agency.average_rating) : 0;
@@ -1132,8 +1262,33 @@ export default async function AgencyProfilePage({
                 </div>
               )}
 
-              {/* ---- Services ---- */}
-              {services.length > 0 && (
+              {/* ---- Service Lines (pie chart) ---- */}
+              {serviceFocus.length > 0 && (
+                <div id="services" className="scroll-mt-24">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                    <h2 className="text-xl font-bold text-navy">Service Lines</h2>
+                    <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
+                      {/* Pie chart */}
+                      <div className="shrink-0">
+                        <ServiceFocusPie items={serviceFocus} />
+                      </div>
+                      {/* Legend + percentages */}
+                      <div className="flex-1 space-y-3">
+                        {serviceFocus.map((item, i) => (
+                          <div key={item.serviceId} className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                            <span className="flex-1 text-sm font-medium text-gray-800">{item.serviceName}</span>
+                            <span className="text-sm font-semibold text-navy">{item.percentage}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ---- Services (fallback if no focus data) ---- */}
+              {serviceFocus.length === 0 && services.length > 0 && (
                 <div id="services" className="scroll-mt-24">
                   <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
                     <h2 className="text-xl font-bold text-navy">Services</h2>
@@ -1184,6 +1339,110 @@ export default async function AgencyProfilePage({
               {locations.length > 0 && (
                 <div id="location" className="scroll-mt-24">
                   <LocationMap locations={locations} />
+                </div>
+              )}
+
+              {/* ---- About The Team ---- */}
+              {teamInfo && (
+                <div id="team" className="scroll-mt-24">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 space-y-8">
+                    <h2 className="text-xl font-bold text-navy">About The Team</h2>
+
+                    {/* Our Story */}
+                    {teamInfo.story && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-navy mb-3">Our Story</h3>
+                        <div className="text-gray-600 leading-relaxed whitespace-pre-line">{teamInfo.story}</div>
+                      </div>
+                    )}
+
+                    {/* Team Photo */}
+                    {teamInfo.teamPhoto && (
+                      <div>
+                        <img src={teamInfo.teamPhoto} alt="Team" className="w-full max-h-80 object-cover rounded-lg" />
+                      </div>
+                    )}
+
+                    {/* Video */}
+                    {teamInfo.videoUrl && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-navy mb-3">Video</h3>
+                        <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
+                          <iframe
+                            src={teamInfo.videoUrl.replace("watch?v=", "embed/")}
+                            className="w-full h-full"
+                            allowFullScreen
+                            title="Team video"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* What Sets Us Apart */}
+                    {teamInfo.setsApart && teamInfo.setsApart.length > 0 && (
+                      <div>
+                        <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
+                          <Sparkles className="w-5 h-5 text-brand" /> What Sets Us Apart
+                        </h3>
+                        <ul className="space-y-2">
+                          {teamInfo.setsApart.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2 text-gray-700">
+                              <span className="mt-1.5 w-2 h-2 bg-brand rounded-full shrink-0" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Quick Facts */}
+                    {teamInfo.quickFacts && teamInfo.quickFacts.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-navy mb-3">Quick Facts</h3>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {teamInfo.quickFacts.map((fact, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
+                              <span className="w-6 h-6 bg-brand/10 rounded-full flex items-center justify-center text-brand text-xs font-bold shrink-0">{i + 1}</span>
+                              {fact}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tools & Technology */}
+                    {teamInfo.tools && teamInfo.tools.length > 0 && (
+                      <div>
+                        <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
+                          <Wrench className="w-5 h-5 text-brand" /> Tools & Technology
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {teamInfo.tools.map((tool) => (
+                            <span key={tool} className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full">
+                              {tool}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* FAQ */}
+                    {teamInfo.faq && teamInfo.faq.length > 0 && (
+                      <div>
+                        <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
+                          <HelpCircle className="w-5 h-5 text-brand" /> FAQ
+                        </h3>
+                        <div className="space-y-4">
+                          {teamInfo.faq.map((item, i) => (
+                            <div key={i} className="border border-gray-100 rounded-lg p-4">
+                              <p className="font-semibold text-navy">{item.question}</p>
+                              <p className="mt-2 text-gray-600 text-sm">{item.answer}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1271,12 +1530,12 @@ export default async function AgencyProfilePage({
 
                 {/* Quick info */}
                 <div className="mt-6 space-y-4 border-t border-gray-100 pt-6">
-                  {location && (
+                  {displayLocation && (
                     <div className="flex items-start gap-3 text-sm">
                       <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                       <div>
                         <p className="text-gray-500">Location</p>
-                        <p className="font-medium text-gray-800">{location}</p>
+                        <p className="font-medium text-gray-800">{displayLocation}</p>
                       </div>
                     </div>
                   )}
