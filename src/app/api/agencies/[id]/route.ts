@@ -29,6 +29,25 @@ const updateAgencySchema = z.object({
   instagramUrl: z.string().max(500).optional().nullable(),
   metaTitle: z.string().max(70).optional().nullable(),
   metaDescription: z.string().max(160).optional().nullable(),
+  languages: z.array(z.string().max(60)).max(30).optional().nullable(),
+  timezones: z.array(z.string().max(60)).max(30).optional().nullable(),
+  locations: z
+    .array(
+      z.object({
+        label: z.string().max(120).optional(),
+        address: z.string().max(300).optional(),
+        city: z.string().max(120).optional(),
+        country: z.string().max(120).optional(),
+        phone: z.string().max(60).optional(),
+        teamSize: z.string().max(60).optional(),
+        latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+        longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
+        isHeadquarters: z.boolean().optional(),
+      })
+    )
+    .max(50)
+    .optional()
+    .nullable(),
   serviceIds: z.array(z.string().uuid()).optional(),
   industryIds: z.array(z.string().uuid()).optional(),
   status: z.enum(["draft", "pending"]).optional(),
@@ -134,6 +153,9 @@ export async function PATCH(
     }
     if ("metaTitle" in updateFields) setClauses.push(sql`meta_title = ${updateFields.metaTitle ?? null}`);
     if ("metaDescription" in updateFields) setClauses.push(sql`meta_description = ${updateFields.metaDescription ?? null}`);
+    if ("languages" in updateFields) setClauses.push(sql`languages = ${updateFields.languages ? JSON.stringify(updateFields.languages) : null}`);
+    if ("timezones" in updateFields) setClauses.push(sql`timezones = ${updateFields.timezones ? JSON.stringify(updateFields.timezones) : null}`);
+    if ("locations" in updateFields) setClauses.push(sql`locations = ${updateFields.locations ? JSON.stringify(updateFields.locations) : null}`);
     if (status !== undefined) setClauses.push(sql`status = ${status}`);
 
     setClauses.push(sql`updated_at = NOW()`);
