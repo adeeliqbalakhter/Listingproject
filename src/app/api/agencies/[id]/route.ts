@@ -180,16 +180,16 @@ export async function PATCH(
     if ("latitude" in updateFields) setClauses.push(sql`latitude = ${updateFields.latitude ?? null}`);
     if ("longitude" in updateFields) setClauses.push(sql`longitude = ${updateFields.longitude ?? null}`);
     if (hasSocial || "linkedinUrl" in data || "twitterUrl" in data || "facebookUrl" in data || "instagramUrl" in data) {
-      setClauses.push(sql`social_links = ${hasSocial ? JSON.stringify(socialLinks) : null}`);
+      setClauses.push(sql`social_links = ${hasSocial ? JSON.stringify(socialLinks) : null}::jsonb`);
     }
     if ("metaTitle" in updateFields) setClauses.push(sql`meta_title = ${updateFields.metaTitle ?? null}`);
     if ("metaDescription" in updateFields) setClauses.push(sql`meta_description = ${updateFields.metaDescription ?? null}`);
-    if ("languages" in updateFields) setClauses.push(sql`languages = ${updateFields.languages ? JSON.stringify(updateFields.languages) : null}`);
-    if ("timezones" in updateFields) setClauses.push(sql`timezones = ${updateFields.timezones ? JSON.stringify(updateFields.timezones) : null}`);
-    if ("locations" in updateFields) setClauses.push(sql`locations = ${updateFields.locations ? JSON.stringify(updateFields.locations) : null}`);
-    if ("serviceFocus" in updateFields) setClauses.push(sql`service_focus = ${updateFields.serviceFocus ? JSON.stringify(updateFields.serviceFocus) : null}`);
-    if ("packages" in updateFields) setClauses.push(sql`packages = ${updateFields.packages ? JSON.stringify(updateFields.packages) : null}`);
-    if ("teamInfo" in updateFields) setClauses.push(sql`team_info = ${updateFields.teamInfo ? JSON.stringify(updateFields.teamInfo) : null}`);
+    if ("languages" in updateFields) setClauses.push(sql`languages = ${updateFields.languages ? JSON.stringify(updateFields.languages) : null}::jsonb`);
+    if ("timezones" in updateFields) setClauses.push(sql`timezones = ${updateFields.timezones ? JSON.stringify(updateFields.timezones) : null}::jsonb`);
+    if ("locations" in updateFields) setClauses.push(sql`locations = ${updateFields.locations ? JSON.stringify(updateFields.locations) : null}::jsonb`);
+    if ("serviceFocus" in updateFields) setClauses.push(sql`service_focus = ${updateFields.serviceFocus ? JSON.stringify(updateFields.serviceFocus) : null}::jsonb`);
+    if ("packages" in updateFields) setClauses.push(sql`packages = ${updateFields.packages ? JSON.stringify(updateFields.packages) : null}::jsonb`);
+    if ("teamInfo" in updateFields) setClauses.push(sql`team_info = ${updateFields.teamInfo ? JSON.stringify(updateFields.teamInfo) : null}::jsonb`);
     if (status !== undefined) setClauses.push(sql`status = ${status}`);
 
     setClauses.push(sql`updated_at = NOW()`);
