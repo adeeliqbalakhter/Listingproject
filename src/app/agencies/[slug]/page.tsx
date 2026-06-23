@@ -28,6 +28,7 @@ import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { ReviewForm } from "@/components/review-form";
 import { PortfolioSection } from "@/components/portfolio-section";
+import { PricingSnapshot } from "@/components/agencies/PricingSnapshot";
 import { TrackProfileView, TrackClick } from "@/components/analytics/TrackEvent";
 
 // ---------------------------------------------------------------------------
@@ -203,6 +204,97 @@ async function fetchSimilarAgencies(agencyId: string) {
     return result;
   } catch {
     return [];
+  }
+}
+
+// Map a stored project_budget string to one of 4 display buckets:
+// 0: < $49,999 | 1: $50k-$199,999 | 2: $200k-$999,999 | 3: > $1,000,000
+function budgetToBucket(raw: unknown): number {
+  const s = String(raw || "").toLowerCase();
+  if (!s) return -1;
+  if (s.includes("1,000,000") || s.includes("1 million") || s.includes("1m")) return 3;
+  if (s.includes("200,000")) return 2;
+  if (s.includes("50,000")) return 1;
+  if (s.includes("less than $10,000") || s.includes("10,000") || s.includes("under")) return 0;
+  return -1;
+}
+
+async function fetchPricingData(agencyId: string, agencyName: string, minProjectSize: number | null, hourlyRate: string | null) {
+  const BUCKET_LABELS = ["< $49,999", "$50,000–$199,999", "$200,000–$999,999", "> $1,000,000"];
+  const empty = {
+    minProjectSize,
+    hourlyRate,
+    costRating: null as number | null,
+    totalCostReviews: 0,
+    buckets: [0, 0, 0, 0],
+    services: [] as Array<{ name: string; count: number; topBucket: number; buckets: number[] }>,
+    summary: `${agencyName} has not collected enough pricing feedback from reviews yet. As clients share project details, a pricing snapshot will appear here.`,
+  };
+  try {
+    const db = getDb();
+    const rows = (await db.execute(
+      sql`SELECT budget_rating, project_budget, service_provided
+          FROM reviews
+          WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL`
+    )) as unknown as Array<Record<string, unknown>>;
+
+    if (rows.length === 0) return empty;
+
+    // Cost rating = avg budget_rating across reviews that have it
+    const costRatings = rows.map((r) => (r.budget_rating != null ? Number(r.budget_rating) : null)).filter((n): n is number => n != null && !Number.isNaN(n));
+    const costRating = costRatings.length > 0 ? costRatings.reduce((a, b) => a + b, 0) / costRatings.length : null;
+
+    // Overall buckets
+    const buckets = [0, 0, 0, 0];
+    const serviceMap = new Map<string, number[]>();
+    let totalCostReviews = 0;
+
+    for (const r of rows) {
+      const b = budgetToBucket(r.project_budget);
+      if (b < 0) continue;
+      buckets[b]++;
+      totalCostReviews++;
+      const svc = String(r.service_provided || "").trim();
+      if (svc) {
+        if (!serviceMap.has(svc)) serviceMap.set(svc, [0, 0, 0, 0]);
+        serviceMap.get(svc)![b]++;
+      }
+    }
+
+    const services = Array.from(serviceMap.entries())
+      .map(([name, svcBuckets]) => {
+        const count = svcBuckets.reduce((a, b) => a + b, 0);
+        const topBucket = svcBuckets.indexOf(Math.max(...svcBuckets));
+        return { name, count, topBucket, buckets: svcBuckets };
+      })
+      .filter((s) => s.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+
+    // Heuristic "What Clients Have Said" summary
+    let summary: string;
+    if (totalCostReviews === 0) {
+      summary = empty.summary;
+    } else {
+      const topIdx = buckets.indexOf(Math.max(...buckets));
+      const costPhrase =
+        costRating == null
+          ? "value for money"
+          : costRating >= 4.5
+            ? "excellent value for cost"
+            : costRating >= 4
+              ? "good value for cost"
+              : costRating >= 3
+                ? "fair pricing"
+                : "competitive pricing";
+      summary = `${agencyName} offers ${costPhrase}, with most projects falling in the ${BUCKET_LABELS[topIdx]} range based on client reviews.${
+        costRating != null ? ` Clients rated cost satisfaction ${costRating.toFixed(1)} out of 5.` : ""
+      } Project budgets span a range of sizes, reflecting their ability to handle both smaller engagements and larger initiatives.`;
+    }
+
+    return { minProjectSize, hourlyRate, costRating, totalCostReviews, buckets, services, summary };
+  } catch {
+    return empty;
   }
 }
 
@@ -406,6 +498,7 @@ function CategoryRating({ label, rating }: { label: string; rating: number }) {
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "pricing", label: "Pricing" },
   { id: "portfolio", label: "Portfolio" },
   { id: "services", label: "Services" },
   { id: "industries", label: "Industries" },
@@ -474,7 +567,7 @@ export default async function AgencyProfilePage({
   }
 
   // Fetch related data in parallel
-  const [services, industries, reviews, ratingBreakdown, similarAgencies, portfolio] =
+  const [services, industries, reviews, ratingBreakdown, similarAgencies, portfolio, pricingData] =
     await Promise.all([
       fetchServices(agency.id),
       fetchIndustries(agency.id),
@@ -482,6 +575,12 @@ export default async function AgencyProfilePage({
       fetchRatingBreakdown(agency.id),
       fetchSimilarAgencies(agency.id),
       fetchPortfolio(agency.id),
+      fetchPricingData(
+        agency.id,
+        agency.name,
+        agency.min_project_size != null ? Number(agency.min_project_size) : null,
+        agency.hourly_rate || null
+      ),
     ]);
 
   const cityName = agency.city_id ? await fetchCityName(agency.city_id) : null;
@@ -830,6 +929,11 @@ export default async function AgencyProfilePage({
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* ---- Pricing Snapshot ---- */}
+              <div id="pricing" className="scroll-mt-24">
+                <PricingSnapshot data={pricingData} agencyName={agency.name} />
               </div>
 
               {/* ---- Portfolio & Awards ---- */}
