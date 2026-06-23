@@ -15,6 +15,7 @@ import {
   FileText,
   CreditCard,
   FileBarChart,
+  BookOpen,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -27,6 +28,7 @@ const sidebarLinks = [
   { name: "Leads", href: "/admin/leads", icon: FileText },
   { name: "Credits", href: "/admin/credits", icon: CreditCard },
   { name: "Reviews", href: "/admin/reviews", icon: Star },
+  { name: "Blog", href: "/admin/blog", icon: BookOpen },
   { name: "Reports", href: "/admin/reports", icon: FileBarChart },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
