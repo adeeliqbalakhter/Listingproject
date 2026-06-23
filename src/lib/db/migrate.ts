@@ -556,6 +556,14 @@ export async function runMigrations() {
     )
   `);
 
+  // ─── Agency languages, timezones & multi-location (Clutch-style) ───
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS languages JSONB`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS timezones JSONB`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS locations JSONB`);
+
+  // ─── Review project cost (for dynamic pricing snapshot) ───
+  await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS project_budget VARCHAR(100)`);
+
   // ─── SEO metadata ───
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS seo_metadata (

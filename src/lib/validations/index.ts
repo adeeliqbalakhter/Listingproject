@@ -50,6 +50,26 @@ export const createAgencySchema = z.object({
   metaTitle: z.string().max(70).optional(),
   metaDescription: z.string().max(160).optional(),
 
+  // Languages, timezones & multi-location (Clutch-style)
+  languages: z.array(z.string().max(60)).max(30).optional(),
+  timezones: z.array(z.string().max(60)).max(30).optional(),
+  locations: z
+    .array(
+      z.object({
+        label: z.string().max(120).optional(),
+        address: z.string().max(300).optional(),
+        city: z.string().max(120).optional(),
+        country: z.string().max(120).optional(),
+        phone: z.string().max(60).optional(),
+        teamSize: z.string().max(60).optional(),
+        latitude: z.coerce.number().min(-90).max(90).optional(),
+        longitude: z.coerce.number().min(-180).max(180).optional(),
+        isHeadquarters: z.boolean().optional(),
+      })
+    )
+    .max(50)
+    .optional(),
+
   // Relations
   serviceIds: z.array(z.string().uuid()).optional(),
   industryIds: z.array(z.string().uuid()).optional(),
@@ -76,6 +96,8 @@ export const createReviewSchema = z.object({
   improvements: z.string().max(2000).optional(),
   serviceProvided: z.string().max(255).optional(),
   wouldRecommend: z.boolean(),
+  projectBudget: z.string().max(100).optional(),
+  projectDuration: z.string().max(100).optional(),
   // Step 3: Personal info (guest fields, handled separately for logged-in users)
   reviewerName: z.string().min(2).max(100).optional(),
   reviewerEmail: z.string().email().max(255).optional(),

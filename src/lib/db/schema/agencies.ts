@@ -53,6 +53,9 @@ export const agencies = pgTable("agencies", {
   teamMembers: jsonb("team_members"),
   awards: jsonb("awards"),
   certifications: jsonb("certifications"),
+  languages: jsonb("languages"),
+  timezones: jsonb("timezones"),
+  locations: jsonb("locations"),
 
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),

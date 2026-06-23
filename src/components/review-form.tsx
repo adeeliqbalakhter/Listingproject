@@ -33,6 +33,22 @@ const RATING_CATEGORIES = [
 
 const COMPANY_SIZE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 
+const PROJECT_COST_OPTIONS = [
+  "Less than $10,000",
+  "$10,000 to $49,999",
+  "$50,000 to $199,999",
+  "$200,000 to $999,999",
+  "$1,000,000+",
+];
+
+const PROJECT_DURATION_OPTIONS = [
+  "Less than 1 month",
+  "1-3 months",
+  "3-6 months",
+  "6-12 months",
+  "Ongoing (1+ year)",
+];
+
 function StarRating({
   value,
   onChange,
@@ -128,6 +144,8 @@ export function ReviewForm({ agencyId, agencyName }: ReviewFormProps) {
   const [enjoyed, setEnjoyed] = useState("");
   const [improvements, setImprovements] = useState("");
   const [serviceProvided, setServiceProvided] = useState("");
+  const [projectBudget, setProjectBudget] = useState("");
+  const [projectDuration, setProjectDuration] = useState("");
   const [wouldRecommend, setWouldRecommend] = useState<boolean | null>(null);
 
   // Step 3: Personal info
@@ -180,6 +198,8 @@ export function ReviewForm({ agencyId, agencyName }: ReviewFormProps) {
     setEnjoyed("");
     setImprovements("");
     setServiceProvided("");
+    setProjectBudget("");
+    setProjectDuration("");
     setWouldRecommend(null);
     setReviewerName("");
     setReviewerEmail("");
@@ -217,6 +237,8 @@ export function ReviewForm({ agencyId, agencyName }: ReviewFormProps) {
           enjoyed: enjoyed.trim(),
           improvements: improvements.trim() || undefined,
           serviceProvided: serviceProvided.trim() || undefined,
+          projectBudget: projectBudget || undefined,
+          projectDuration: projectDuration || undefined,
           wouldRecommend,
           reviewerName: reviewerName.trim(),
           reviewerEmail: reviewerEmail.trim(),
@@ -454,6 +476,49 @@ export function ReviewForm({ agencyId, agencyName }: ReviewFormProps) {
                             placeholder="e.g. Web Development, Branding..."
                             className={inputClass}
                           />
+                        </div>
+
+                        {/* Project cost & duration */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="review-budget" className={labelClass}>
+                              Approximate project cost
+                            </label>
+                            <select
+                              id="review-budget"
+                              value={projectBudget}
+                              onChange={(e) => setProjectBudget(e.target.value)}
+                              className={inputClass}
+                            >
+                              <option value="">Select project cost</option>
+                              {PROJECT_COST_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="mt-1 text-xs text-gray-400">
+                              Helps others gauge pricing. Shown anonymously in aggregate.
+                            </p>
+                          </div>
+                          <div>
+                            <label htmlFor="review-duration" className={labelClass}>
+                              Project duration
+                            </label>
+                            <select
+                              id="review-duration"
+                              value={projectDuration}
+                              onChange={(e) => setProjectDuration(e.target.value)}
+                              className={inputClass}
+                            >
+                              <option value="">Select duration</option>
+                              {PROJECT_DURATION_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
 
                         {/* Would recommend */}

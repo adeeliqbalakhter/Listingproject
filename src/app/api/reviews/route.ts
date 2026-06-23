@@ -193,6 +193,7 @@ export async function POST(request: NextRequest) {
         overall_rating, budget_rating, quality_rating, schedule_rating, collaboration_rating,
         title, content, objective, enjoyed, improvements,
         service_provided, would_recommend,
+        project_budget, project_duration,
         company_name, company_size, reviewer_company_industry,
         status, is_verified, helpful_count
       ) VALUES (
@@ -213,6 +214,8 @@ export async function POST(request: NextRequest) {
         ${data.improvements ?? null},
         ${data.serviceProvided ?? null},
         ${data.wouldRecommend},
+        ${data.projectBudget ?? null},
+        ${data.projectDuration ?? null},
         ${data.companyName ?? null},
         ${data.companySize ?? null},
         ${data.companyIndustry ?? null},
