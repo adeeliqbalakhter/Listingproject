@@ -28,6 +28,8 @@ import { PortfolioSection } from "@/components/portfolio-section";
 import { PricingSnapshot } from "@/components/agencies/PricingSnapshot";
 import { ReviewInsights } from "@/components/agencies/ReviewInsights";
 import { ReviewsBrowser } from "@/components/agencies/ReviewsBrowser";
+import { LocationMap } from "@/components/agencies/LocationMap";
+import { Languages as LanguagesIcon, Globe2 } from "lucide-react";
 import { TrackProfileView, TrackClick } from "@/components/analytics/TrackEvent";
 
 // ---------------------------------------------------------------------------
@@ -399,6 +401,57 @@ async function fetchRatingBreakdown(agencyId: string) {
 // Helper: parse social_links jsonb
 // ---------------------------------------------------------------------------
 
+function parseJsonValue(raw: unknown): unknown {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw;
+}
+
+function parseStringArray(raw: unknown): string[] {
+  const val = parseJsonValue(raw);
+  if (Array.isArray(val)) return val.map((v) => String(v)).filter(Boolean);
+  return [];
+}
+
+interface ParsedLocation {
+  label?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  phone?: string;
+  teamSize?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  isHeadquarters?: boolean;
+}
+
+function parseLocations(raw: unknown): ParsedLocation[] {
+  const val = parseJsonValue(raw);
+  if (!Array.isArray(val)) return [];
+  return val
+    .filter((v) => v && typeof v === "object")
+    .map((v) => {
+      const o = v as Record<string, unknown>;
+      return {
+        label: o.label ? String(o.label) : undefined,
+        address: o.address ? String(o.address) : undefined,
+        city: o.city ? String(o.city) : undefined,
+        country: o.country ? String(o.country) : undefined,
+        phone: o.phone ? String(o.phone) : undefined,
+        teamSize: o.teamSize ? String(o.teamSize) : undefined,
+        latitude: o.latitude != null ? Number(o.latitude) : null,
+        longitude: o.longitude != null ? Number(o.longitude) : null,
+        isHeadquarters: Boolean(o.isHeadquarters),
+      };
+    });
+}
+
 function parseSocialLinks(raw: unknown): Record<string, string> {
   if (!raw) return {};
   if (typeof raw === "string") {
@@ -647,6 +700,27 @@ export default async function AgencyProfilePage({
     ? await fetchCountryName(agency.country_id)
     : null;
   const location = [cityName, countryName].filter(Boolean).join(", ");
+
+  const languages = parseStringArray(agency.languages);
+  const timezones = parseStringArray(agency.timezones);
+
+  // Multi-location list with fallback to the agency's single registered address
+  let locations = parseLocations(agency.locations);
+  if (locations.length === 0 && (agency.address || cityName || countryName || agency.latitude)) {
+    locations = [
+      {
+        label: "Headquarters",
+        address: agency.address || undefined,
+        city: cityName || undefined,
+        country: countryName || undefined,
+        phone: agency.phone || undefined,
+        teamSize: agency.company_size || undefined,
+        latitude: agency.latitude != null ? Number(agency.latitude) : null,
+        longitude: agency.longitude != null ? Number(agency.longitude) : null,
+        isHeadquarters: true,
+      },
+    ];
+  }
 
   const socialLinks = parseSocialLinks(agency.social_links);
   const rating = agency.average_rating ? Number(agency.average_rating) : 0;
@@ -990,6 +1064,48 @@ export default async function AgencyProfilePage({
                 </div>
               </div>
 
+              {/* ---- Languages & Timezones ---- */}
+              {(languages.length > 0 || timezones.length > 0) && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    {languages.length > 0 && (
+                      <div>
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-navy">
+                          <LanguagesIcon className="w-5 h-5 text-brand" /> Languages
+                        </h2>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {languages.map((lang) => (
+                            <span
+                              key={lang}
+                              className="inline-flex items-center bg-blue-50 text-brand text-sm font-medium px-3 py-1.5 rounded-full"
+                            >
+                              {lang}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {timezones.length > 0 && (
+                      <div>
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-navy">
+                          <Globe2 className="w-5 h-5 text-brand" /> Timezones
+                        </h2>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {timezones.map((tz) => (
+                            <span
+                              key={tz}
+                              className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full"
+                            >
+                              {tz}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* ---- Pricing Snapshot ---- */}
               <div id="pricing" className="scroll-mt-24">
                 <PricingSnapshot data={pricingData} agencyName={agency.name} />
@@ -1050,6 +1166,13 @@ export default async function AgencyProfilePage({
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* ---- Location ---- */}
+              {locations.length > 0 && (
+                <div id="location" className="scroll-mt-24">
+                  <LocationMap locations={locations} />
                 </div>
               )}
 
