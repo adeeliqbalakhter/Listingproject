@@ -5,6 +5,10 @@ import { requireAgencyAccess } from "@/lib/auth/guards";
 import { success, error, serverError } from "@/lib/api/response";
 import { checkRateLimit, rateLimitResponse } from "@/lib/services/rate-limit";
 
+async function safeQuery<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try { return await promise; } catch { return fallback; }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -18,29 +22,41 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const days = Math.min(90, Math.max(7, parseInt(searchParams.get("days") || "30")));
 
     const [agency, dailyStats, totalLeads, reviewStats] = await Promise.all([
-      db.execute(sql`
-        SELECT profile_views, total_reviews, total_leads, average_rating
-        FROM agencies WHERE id = ${id}
-      `),
-      db.execute(sql`
-        SELECT date, profile_views, search_impressions, website_clicks, phone_clicks, email_clicks, lead_requests
-        FROM agency_analytics_daily
-        WHERE agency_id = ${id} AND date >= CURRENT_DATE - ${days}
-        ORDER BY date ASC
-      `),
-      db.execute(sql`
-        SELECT status, count(*) as count
-        FROM lead_assignments WHERE agency_id = ${id}
-        GROUP BY status
-      `),
-      db.execute(sql`
-        SELECT
-          COUNT(*) as total,
-          AVG(overall_rating) as avg_rating,
-          COUNT(*) FILTER (WHERE status = 'approved') as approved,
-          COUNT(*) FILTER (WHERE status = 'pending') as pending
-        FROM reviews WHERE agency_id = ${id} AND deleted_at IS NULL
-      `),
+      safeQuery(
+        db.execute(sql`
+          SELECT profile_views, total_reviews, total_leads, average_rating
+          FROM agencies WHERE id = ${id}
+        `),
+        [] as any[]
+      ),
+      safeQuery(
+        db.execute(sql`
+          SELECT date, profile_views, search_impressions, website_clicks, phone_clicks, email_clicks, lead_requests
+          FROM agency_analytics_daily
+          WHERE agency_id = ${id} AND date >= CURRENT_DATE - ${days}
+          ORDER BY date ASC
+        `),
+        [] as any[]
+      ),
+      safeQuery(
+        db.execute(sql`
+          SELECT status, count(*) as count
+          FROM lead_assignments WHERE agency_id = ${id}
+          GROUP BY status
+        `),
+        [] as any[]
+      ),
+      safeQuery(
+        db.execute(sql`
+          SELECT
+            COUNT(*) as total,
+            AVG(overall_rating) as avg_rating,
+            COUNT(*) FILTER (WHERE status = 'approved') as approved,
+            COUNT(*) FILTER (WHERE status = 'pending') as pending
+          FROM reviews WHERE agency_id = ${id} AND deleted_at IS NULL
+        `),
+        [{ total: 0, avg_rating: null, approved: 0, pending: 0 }] as any[]
+      ),
     ]);
 
     return success({
@@ -83,9 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       INSERT INTO agency_analytics_daily (agency_id, date, ${sql.raw(columnMap[event])})
       VALUES (${id}, CURRENT_DATE, 1)
       ON CONFLICT (agency_id, date) DO UPDATE SET ${sql.raw(columnMap[event])} = agency_analytics_daily.${sql.raw(columnMap[event])} + 1
-    `).catch(() => {
-      // Fallback if unique constraint doesn't exist
-    });
+    `).catch(() => {});
 
     if (event === "profile_view") {
       await db.execute(sql`
