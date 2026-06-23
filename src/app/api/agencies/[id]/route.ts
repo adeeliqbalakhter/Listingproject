@@ -46,6 +46,39 @@ const updateAgencySchema = z.object({
     .max(50)
     .optional()
     .nullable(),
+  serviceFocus: z.array(z.object({
+    serviceId: z.string().uuid(),
+    percentage: z.number().min(0).max(100),
+  })).max(20).optional().nullable(),
+  packages: z.array(z.object({
+    serviceLine: z.string().max(255).optional(),
+    focusArea: z.string().max(255).optional(),
+    name: z.string().max(80).optional(),
+    description: z.string().max(500).optional(),
+    tiers: z.array(z.object({
+      label: z.string().max(60),
+      price: z.string().max(60).optional(),
+      frequency: z.string().max(60).optional(),
+      audience: z.string().max(200).optional(),
+      features: z.array(z.object({
+        name: z.string().max(200),
+        type: z.enum(["text", "checkmark"]).optional(),
+        value: z.string().max(200).optional(),
+      })).max(20).optional(),
+    })).max(3).optional(),
+  })).max(10).optional().nullable(),
+  teamInfo: z.object({
+    story: z.string().max(5000).optional(),
+    teamPhoto: z.string().max(500).optional(),
+    videoUrl: z.string().max(500).optional(),
+    setsApart: z.array(z.string().max(300)).max(6).optional(),
+    quickFacts: z.array(z.string().max(200)).max(6).optional(),
+    tools: z.array(z.string().max(100)).max(30).optional(),
+    faq: z.array(z.object({
+      question: z.string().max(300),
+      answer: z.string().max(1000),
+    })).max(10).optional(),
+  }).optional().nullable(),
   serviceIds: z.array(z.string().uuid()).optional(),
   industryIds: z.array(z.string().uuid()).optional(),
   status: z.enum(["draft", "pending"]).optional(),
@@ -154,6 +187,9 @@ export async function PATCH(
     if ("languages" in updateFields) setClauses.push(sql`languages = ${updateFields.languages ? JSON.stringify(updateFields.languages) : null}`);
     if ("timezones" in updateFields) setClauses.push(sql`timezones = ${updateFields.timezones ? JSON.stringify(updateFields.timezones) : null}`);
     if ("locations" in updateFields) setClauses.push(sql`locations = ${updateFields.locations ? JSON.stringify(updateFields.locations) : null}`);
+    if ("serviceFocus" in updateFields) setClauses.push(sql`service_focus = ${updateFields.serviceFocus ? JSON.stringify(updateFields.serviceFocus) : null}`);
+    if ("packages" in updateFields) setClauses.push(sql`packages = ${updateFields.packages ? JSON.stringify(updateFields.packages) : null}`);
+    if ("teamInfo" in updateFields) setClauses.push(sql`team_info = ${updateFields.teamInfo ? JSON.stringify(updateFields.teamInfo) : null}`);
     if (status !== undefined) setClauses.push(sql`status = ${status}`);
 
     setClauses.push(sql`updated_at = NOW()`);

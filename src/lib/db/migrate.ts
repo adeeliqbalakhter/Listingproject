@@ -560,6 +560,9 @@ export async function runMigrations() {
   await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS languages JSONB`);
   await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS timezones JSONB`);
   await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS locations JSONB`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS service_focus JSONB`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS packages JSONB`);
+  await db.execute(sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS team_info JSONB`);
 
   // ─── Review project cost (for dynamic pricing snapshot) ───
   await db.execute(sql`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS project_budget VARCHAR(100)`);

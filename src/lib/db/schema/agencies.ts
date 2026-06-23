@@ -56,6 +56,9 @@ export const agencies = pgTable("agencies", {
   languages: jsonb("languages"),
   timezones: jsonb("timezones"),
   locations: jsonb("locations"),
+  serviceFocus: jsonb("service_focus"),
+  packages: jsonb("packages"),
+  teamInfo: jsonb("team_info"),
 
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),

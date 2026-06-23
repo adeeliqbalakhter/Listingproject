@@ -16,6 +16,10 @@ import {
   Loader2,
   UserPlus,
   FileBarChart,
+  ChevronDown,
+  BarChart3,
+  PenSquare,
+  User,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
 import OnboardingModal from "@/components/onboarding-modal";
@@ -45,6 +49,7 @@ export default function DashboardLayout({
   const [agencyName, setAgencyName] = useState<string | null>(null);
   const [agencyInitials, setAgencyInitials] = useState("--");
   const [loadingAgency, setLoadingAgency] = useState(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -155,9 +160,10 @@ export default function DashboardLayout({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
-          <div className="flex items-center gap-3 overflow-x-auto">
+        {/* Top Header Bar */}
+        <div className="bg-white border-b border-gray-200 px-4 lg:px-8 py-3 flex items-center justify-between">
+          {/* Mobile nav tabs */}
+          <div className="lg:hidden flex items-center gap-3 overflow-x-auto flex-1 mr-4">
             {sidebarLinks.map((link) => {
               const Icon = link.icon;
               const isActive =
@@ -178,6 +184,82 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+          </div>
+          {/* Desktop spacer */}
+          <div className="hidden lg:block flex-1" />
+          {/* User Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="w-8 h-8 bg-brand rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold text-xs">
+                  {user.name
+                    ? user.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
+                    : "U"}
+                </span>
+              </div>
+              <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-[120px] truncate">
+                {user.name || "User"}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-sm font-semibold text-navy truncate">{user.name || "User"}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                </div>
+                <div className="py-1">
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-gray-400" />
+                    My Vendor Dashboard
+                  </Link>
+                  <Link
+                    href="/dashboard/reports"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <BarChart3 className="w-4 h-4 text-gray-400" />
+                    Performance Analytics
+                  </Link>
+                  <Link
+                    href="/dashboard/reviews"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <PenSquare className="w-4 h-4 text-gray-400" />
+                    Request a Review
+                  </Link>
+                  <Link
+                    href="/dashboard/profile"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Building2 className="w-4 h-4 text-gray-400" />
+                    Update Company Profile
+                  </Link>
+                  <Link
+                    href="/dashboard/settings"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <User className="w-4 h-4 text-gray-400" />
+                    Account Settings
+                  </Link>
+                </div>
+                <div className="border-t border-gray-100 py-1">
+                  <button
+                    onClick={logout}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 w-full transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
