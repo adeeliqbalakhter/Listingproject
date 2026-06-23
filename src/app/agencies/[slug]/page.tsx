@@ -1009,9 +1009,9 @@ export default async function AgencyProfilePage({
                 )}
 
                 {/* Location */}
-                {location && (
+                {displayLocation && (
                   <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-4 h-4" /> {location}
+                    <MapPin className="w-4 h-4" /> {displayLocation}
                   </span>
                 )}
 
