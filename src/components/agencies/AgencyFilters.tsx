@@ -155,6 +155,131 @@ export function AgencySearchBar({
   );
 }
 
+const HOURLY_OPTIONS = [
+  "< $25 / hr",
+  "$25 - $49 / hr",
+  "$50 - $99 / hr",
+  "$100 - $149 / hr",
+  "$150 - $199 / hr",
+  "$200+ / hr",
+];
+
+const CLIENT_BUDGET_OPTIONS = [
+  "$1,000+",
+  "$5,000+",
+  "$10,000+",
+  "$25,000+",
+  "$50,000+",
+  "$100,000+",
+];
+
+const REVIEW_OPTIONS = ["4.5 & up", "4.0 & up", "3.5 & up", "3.0 & up"];
+
+function Dropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+          value ? "border-brand text-brand bg-brand/5" : "border-gray-200 text-gray-700 bg-white hover:border-gray-300"
+        }`}
+      >
+        {value || label}
+        <ChevronDown className="w-4 h-4" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-72 overflow-y-auto">
+          <button
+            onMouseDown={() => { onChange(""); setOpen(false); }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:bg-gray-50"
+          >
+            All {label}
+          </button>
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onMouseDown={() => { onChange(opt); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${value === opt ? "text-brand font-medium" : "text-gray-700"}`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface AgencyFilterBarProps {
+  initialFilters: {
+    service: string;
+    location: string;
+    size: string;
+    budget: string;
+    hourly: string;
+    industry: string;
+    rating: string;
+  };
+  serviceOptions: string[];
+  industryOptions: string[];
+}
+
+export function AgencyFilterBar({ initialFilters, serviceOptions, industryOptions }: AgencyFilterBarProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState(initialFilters);
+
+  const apply = useCallback(
+    (key: string, value: string) => {
+      const next = { ...filters, [key]: value };
+      setFilters(next);
+      const params = new URLSearchParams(searchParams.toString());
+      if (value) params.set(key, value);
+      else params.delete(key);
+      router.push(`/agencies?${params.toString()}`);
+    },
+    [filters, router, searchParams]
+  );
+
+  const clearAll = useCallback(() => {
+    setFilters({ service: "", location: "", size: "", budget: "", hourly: "", industry: "", rating: "" });
+    const params = new URLSearchParams(searchParams.toString());
+    ["service", "location", "size", "budget", "hourly", "industry", "rating"].forEach((k) => params.delete(k));
+    router.push(`/agencies?${params.toString()}`);
+  }, [router, searchParams]);
+
+  const activeCount = Object.values(filters).filter(Boolean).length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Dropdown label="Services" value={filters.service} options={serviceOptions.length ? serviceOptions : SERVICE_OPTIONS} onChange={(v) => apply("service", v)} />
+      <Dropdown label="Client Budget" value={filters.budget} options={CLIENT_BUDGET_OPTIONS} onChange={(v) => apply("budget", v)} />
+      <Dropdown label="Hourly Rates" value={filters.hourly} options={HOURLY_OPTIONS} onChange={(v) => apply("hourly", v)} />
+      <Dropdown label="Industry" value={filters.industry} options={industryOptions.length ? industryOptions : []} onChange={(v) => apply("industry", v)} />
+      <Dropdown label="Company Size" value={filters.size} options={COMPANY_SIZE_OPTIONS} onChange={(v) => apply("size", v)} />
+      <Dropdown label="Reviews" value={filters.rating} options={REVIEW_OPTIONS} onChange={(v) => apply("rating", v)} />
+      {activeCount > 0 && (
+        <button onClick={clearAll} className="inline-flex items-center gap-1 px-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+          <X className="w-3.5 h-3.5" /> Clear ({activeCount})
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function AgencySidebar({
   initialFilters,
 }: {
