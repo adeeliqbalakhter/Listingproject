@@ -19,6 +19,9 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  Languages as LanguagesIcon,
+  Globe2,
+  X,
 } from "lucide-react";
 
 type LocationItem = { id: string; name: string; slug: string; code?: string };
@@ -104,6 +107,36 @@ export default function ProfilePage() {
     metaDescription: "",
   });
 
+  type OfficeLocation = {
+    label: string;
+    address: string;
+    city: string;
+    country: string;
+    phone: string;
+    teamSize: string;
+    latitude: string;
+    longitude: string;
+    isHeadquarters: boolean;
+  };
+
+  const emptyOffice = (): OfficeLocation => ({
+    label: "",
+    address: "",
+    city: "",
+    country: "",
+    phone: "",
+    teamSize: "",
+    latitude: "",
+    longitude: "",
+    isHeadquarters: false,
+  });
+
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [languageInput, setLanguageInput] = useState("");
+  const [timezones, setTimezones] = useState<string[]>([]);
+  const [timezoneInput, setTimezoneInput] = useState("");
+  const [offices, setOffices] = useState<OfficeLocation[]>([]);
+
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(me => {
       if (!me?.data?.id) {
@@ -155,6 +188,33 @@ export default function ProfilePage() {
 
           if (agency.serviceIds?.length) setSelectedServiceIds(agency.serviceIds);
           if (agency.industryIds?.length) setSelectedIndustryIds(agency.industryIds);
+
+          // Languages, timezones, locations (may be JSONB or JSON string)
+          const parseJsonField = (raw: unknown): unknown => {
+            if (raw == null) return null;
+            if (typeof raw === "string") { try { return JSON.parse(raw); } catch { return null; } }
+            return raw;
+          };
+          const langs = parseJsonField(agency.languages);
+          if (Array.isArray(langs)) setLanguages(langs.map((v) => String(v)).filter(Boolean));
+          const tzs = parseJsonField(agency.timezones);
+          if (Array.isArray(tzs)) setTimezones(tzs.map((v) => String(v)).filter(Boolean));
+          const locs = parseJsonField(agency.locations);
+          if (Array.isArray(locs)) {
+            setOffices(
+              locs.filter((o): o is Record<string, unknown> => o != null && typeof o === "object").map((o) => ({
+                label: o.label ? String(o.label) : "",
+                address: o.address ? String(o.address) : "",
+                city: o.city ? String(o.city) : "",
+                country: o.country ? String(o.country) : "",
+                phone: o.phone ? String(o.phone) : "",
+                teamSize: o.teamSize ? String(o.teamSize) : "",
+                latitude: o.latitude != null ? String(o.latitude) : "",
+                longitude: o.longitude != null ? String(o.longitude) : "",
+                isHeadquarters: Boolean(o.isHeadquarters),
+              }))
+            );
+          }
 
           if (agency.logo) setLogoPreview(agency.logo);
           if (agency.cover_image) setCoverPreview(agency.cover_image);
@@ -348,6 +408,28 @@ export default function ProfilePage() {
       industryIds: selectedIndustryIds,
       countryId: form.countryId || undefined,
       cityId: form.cityId || undefined,
+      languages: languages.length > 0 ? languages : undefined,
+      timezones: timezones.length > 0 ? timezones : undefined,
+      locations:
+        offices.length > 0
+          ? offices
+              .filter((o) =>
+                [o.label, o.address, o.city, o.country, o.phone, o.teamSize, o.latitude, o.longitude].some(
+                  (v) => String(v || "").trim() !== ""
+                )
+              )
+              .map((o) => ({
+                label: o.label.trim() || undefined,
+                address: o.address.trim() || undefined,
+                city: o.city.trim() || undefined,
+                country: o.country.trim() || undefined,
+                phone: o.phone.trim() || undefined,
+                teamSize: o.teamSize.trim() || undefined,
+                latitude: o.latitude.trim() ? Number(o.latitude) : undefined,
+                longitude: o.longitude.trim() ? Number(o.longitude) : undefined,
+                isHeadquarters: o.isHeadquarters || undefined,
+              }))
+          : undefined,
     };
 
     if (logoPreview) payload.logo = logoPreview;
@@ -796,6 +878,269 @@ export default function ProfilePage() {
             />
           </div>
         </div>
+      </section>
+
+      {/* Languages */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-navy mb-1 flex items-center gap-2">
+          <LanguagesIcon className="w-5 h-5 text-brand" />
+          Languages
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Languages your team can work in. Shown on your public profile.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {languages.map((lang) => (
+            <span
+              key={lang}
+              className="inline-flex items-center gap-1.5 bg-blue-50 text-brand text-sm font-medium px-3 py-1.5 rounded-full"
+            >
+              {lang}
+              <button
+                type="button"
+                onClick={() => setLanguages((prev) => prev.filter((l) => l !== lang))}
+                className="hover:text-brand-dark"
+                aria-label={`Remove ${lang}`}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          ))}
+          {languages.length === 0 && (
+            <p className="text-xs text-gray-400 italic">No languages added yet.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={languageInput}
+            onChange={(e) => setLanguageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const val = languageInput.trim();
+                if (val && !languages.includes(val) && languages.length < 30) {
+                  setLanguages((prev) => [...prev, val]);
+                  setLanguageInput("");
+                }
+              }
+            }}
+            placeholder="e.g. English, Spanish, French..."
+            maxLength={60}
+            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const val = languageInput.trim();
+              if (val && !languages.includes(val) && languages.length < 30) {
+                setLanguages((prev) => [...prev, val]);
+                setLanguageInput("");
+              }
+            }}
+            disabled={!languageInput.trim()}
+            className="inline-flex items-center gap-1.5 bg-brand text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Add
+          </button>
+        </div>
+      </section>
+
+      {/* Timezones */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-navy mb-1 flex items-center gap-2">
+          <Globe2 className="w-5 h-5 text-brand" />
+          Timezones
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Timezones your team operates in (e.g. EST, GMT, CET, IST).
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {timezones.map((tz) => (
+            <span
+              key={tz}
+              className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full"
+            >
+              {tz}
+              <button
+                type="button"
+                onClick={() => setTimezones((prev) => prev.filter((t) => t !== tz))}
+                className="hover:text-gray-900"
+                aria-label={`Remove ${tz}`}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          ))}
+          {timezones.length === 0 && (
+            <p className="text-xs text-gray-400 italic">No timezones added yet.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={timezoneInput}
+            onChange={(e) => setTimezoneInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const val = timezoneInput.trim();
+                if (val && !timezones.includes(val) && timezones.length < 30) {
+                  setTimezones((prev) => [...prev, val]);
+                  setTimezoneInput("");
+                }
+              }
+            }}
+            placeholder="e.g. EST, GMT, CET, IST..."
+            maxLength={60}
+            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const val = timezoneInput.trim();
+              if (val && !timezones.includes(val) && timezones.length < 30) {
+                setTimezones((prev) => [...prev, val]);
+                setTimezoneInput("");
+              }
+            }}
+            disabled={!timezoneInput.trim()}
+            className="inline-flex items-center gap-1.5 bg-brand text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Add
+          </button>
+        </div>
+      </section>
+
+      {/* Office Locations (multi) */}
+      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className="flex items-start justify-between mb-1 gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-navy flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-brand" />
+              Office Locations
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Add all your offices. Latitude/longitude (optional) enables the map view on your profile.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOffices((prev) => [...prev, emptyOffice()])}
+            className="inline-flex items-center gap-1.5 border border-brand text-brand px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand/5 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Add Office
+          </button>
+        </div>
+
+        {offices.length === 0 ? (
+          <p className="text-xs text-gray-400 italic mt-3">
+            No offices added yet. Your registered HQ will be used as a fallback on the public profile.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {offices.map((office, i) => {
+              const update = (patch: Partial<OfficeLocation>) =>
+                setOffices((prev) => prev.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+              return (
+                <div key={i} className="rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-medium text-navy text-sm">
+                      {office.label || (office.isHeadquarters ? "Headquarters" : `Office #${i + 1}`)}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={office.isHeadquarters}
+                          onChange={(e) =>
+                            setOffices((prev) =>
+                              prev.map((o, idx) =>
+                                idx === i
+                                  ? { ...o, isHeadquarters: e.target.checked }
+                                  : e.target.checked
+                                    ? { ...o, isHeadquarters: false }
+                                    : o
+                              )
+                            )
+                          }
+                          className="rounded border-gray-300 text-brand focus:ring-brand/20"
+                        />
+                        Headquarters
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setOffices((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-500 hover:text-red-700"
+                        aria-label="Remove office"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <input
+                      value={office.label}
+                      onChange={(e) => update({ label: e.target.value })}
+                      placeholder="Label (e.g. Headquarters, EU Office)"
+                      maxLength={120}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <input
+                      value={office.phone}
+                      onChange={(e) => update({ phone: e.target.value })}
+                      placeholder="Phone (optional)"
+                      maxLength={60}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <input
+                      value={office.address}
+                      onChange={(e) => update({ address: e.target.value })}
+                      placeholder="Street address"
+                      maxLength={300}
+                      className="sm:col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <input
+                      value={office.city}
+                      onChange={(e) => update({ city: e.target.value })}
+                      placeholder="City"
+                      maxLength={120}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <input
+                      value={office.country}
+                      onChange={(e) => update({ country: e.target.value })}
+                      placeholder="Country"
+                      maxLength={120}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <input
+                      value={office.teamSize}
+                      onChange={(e) => update({ teamSize: e.target.value })}
+                      placeholder="Team size at this office (e.g. 21-30)"
+                      maxLength={60}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        value={office.latitude}
+                        onChange={(e) => update({ latitude: e.target.value })}
+                        placeholder="Latitude"
+                        inputMode="decimal"
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                      />
+                      <input
+                        value={office.longitude}
+                        onChange={(e) => update({ longitude: e.target.value })}
+                        placeholder="Longitude"
+                        inputMode="decimal"
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Company Details */}
