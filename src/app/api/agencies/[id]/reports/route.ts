@@ -18,7 +18,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const db = getDb();
 
     const { searchParams } = request.nextUrl;
-    const days = Math.min(365, Math.max(7, parseInt(searchParams.get("days") || "30")));
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    let days: number;
+    let dateFilter: ReturnType<typeof sql>;
+
+    if (fromParam && toParam) {
+      const fromDate = fromParam;
+      const toDate = toParam;
+      days = Math.max(1, Math.ceil((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000) + 1);
+      dateFilter = sql`date >= ${fromDate}::date AND date <= ${toDate}::date`;
+    } else {
+      days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") || "30")));
+      dateFilter = sql`date >= CURRENT_DATE - ${days - 1}`;
+    }
+    const createdAtFilter = fromParam && toParam
+      ? sql`created_at >= ${fromParam}::date AND created_at < (${toParam}::date + interval '1 day')`
+      : sql`created_at >= NOW() - make_interval(days => ${days})`;
 
     const emptyLeadStats = [{ total: 0, sent: 0, viewed: 0, responded: 0, won: 0, lost: 0, claimed: 0, opened: 0, replied: 0 }];
     const emptyTotals = [{ views: 0, clicks: 0, phone: 0, email: 0, impressions: 0, leads: 0 }];
@@ -45,7 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                  profile_views, search_impressions, website_clicks,
                  phone_clicks, email_clicks, lead_requests
           FROM agency_analytics_daily
-          WHERE agency_id = ${id} AND date >= CURRENT_DATE - ${days}
+          WHERE agency_id = ${id} AND ${dateFilter}
           ORDER BY date ASC
         `),
         [] as any[]
@@ -70,7 +86,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         db.execute(sql`
           SELECT DATE_TRUNC('week', created_at)::date AS week, COUNT(*)::int AS count
           FROM lead_assignments
-          WHERE agency_id = ${id} AND created_at >= NOW() - make_interval(days => ${days})
+          WHERE agency_id = ${id} AND ${createdAtFilter}
           GROUP BY week ORDER BY week ASC
         `),
         [] as any[]
@@ -97,7 +113,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             COALESCE(SUM(search_impressions), 0)::int AS impressions,
             COALESCE(SUM(lead_requests), 0)::int AS leads
           FROM agency_analytics_daily
-          WHERE agency_id = ${id} AND date >= CURRENT_DATE - ${days}
+          WHERE agency_id = ${id} AND ${dateFilter}
         `),
         emptyTotals as any[]
       ),

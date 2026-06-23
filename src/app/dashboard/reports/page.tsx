@@ -55,10 +55,12 @@ interface ReportData {
 }
 
 const RANGES = [
+  { key: "1", label: "Today" },
   { key: "7", label: "7 days" },
   { key: "30", label: "30 days" },
   { key: "90", label: "90 days" },
   { key: "365", label: "1 year" },
+  { key: "custom", label: "Custom" },
 ] as const;
 
 function fmt(n: number): string { return n.toLocaleString(); }
@@ -112,10 +114,28 @@ function RatingBar({ rating, count, total }: { rating: number; count: number; to
 
 export default function ReportsPage() {
   const [range, setRange] = useState("30");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ReportData | null>(null);
   const [agencyId, setAgencyId] = useState<string | null>(null);
+
+  function handleRangeChange(key: string) {
+    if (key === "custom") {
+      setShowCustom(true);
+      return;
+    }
+    setShowCustom(false);
+    setRange(key);
+  }
+
+  function applyCustomRange() {
+    if (customFrom && customTo) {
+      setRange(`custom:${customFrom}:${customTo}`);
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -138,7 +158,14 @@ export default function ReportsPage() {
     if (!agencyId) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/agencies/${agencyId}/reports?days=${range}`)
+    let url: string;
+    if (range.startsWith("custom:")) {
+      const [, from, to] = range.split(":");
+      url = `/api/agencies/${agencyId}/reports?from=${from}&to=${to}`;
+    } else {
+      url = `/api/agencies/${agencyId}/reports?days=${range}`;
+    }
+    fetch(url)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((json) => setData(json.data ?? null))
       .catch(() => setError("Failed to load report data."))
@@ -190,20 +217,36 @@ export default function ReportsPage() {
             Comprehensive performance report for your agency.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end gap-2">
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  range === r.key ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
+            {RANGES.map((r) => {
+              const isActive = r.key === "custom" ? showCustom || range.startsWith("custom:") : range === r.key;
+              return (
+                <button
+                  key={r.key}
+                  onClick={() => handleRangeChange(r.key)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    isActive ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
           </div>
+          {showCustom && (
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2">
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-700" />
+              <span className="text-xs text-gray-400">to</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-700" />
+              <button onClick={applyCustomRange} disabled={!customFrom || !customTo}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-brand rounded-md hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                Apply
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

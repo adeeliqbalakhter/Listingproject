@@ -25,7 +25,23 @@ export async function GET(request: NextRequest) {
     const db = getDb();
 
     const { searchParams } = request.nextUrl;
-    const days = Math.min(365, Math.max(7, parseInt(searchParams.get("days") || "30")));
+    const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    let days: number;
+    let dateFilter: ReturnType<typeof sql>;
+
+    if (fromParam && toParam) {
+      const fromDate = fromParam;
+      const toDate = toParam;
+      days = Math.max(1, Math.ceil((new Date(toDate).getTime() - new Date(fromDate).getTime()) / 86400000) + 1);
+      dateFilter = sql`date >= ${fromDate}::date AND date <= ${toDate}::date`;
+    } else {
+      days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") || "30")));
+      dateFilter = sql`date >= CURRENT_DATE - ${days - 1}`;
+    }
+    const createdAtFilter = fromParam && toParam
+      ? sql`created_at >= ${fromParam}::date AND created_at < (${toParam}::date + interval '1 day')`
+      : sql`created_at >= NOW() - make_interval(days => ${days})`;
 
     const [
       // Platform growth
@@ -78,18 +94,18 @@ export async function GET(request: NextRequest) {
       // --- Platform growth ---
       safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM users WHERE deleted_at IS NULL`), [{ count: 0 }] as any[]),
       safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM agencies WHERE deleted_at IS NULL`), [{ count: 0 }] as any[]),
-      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM users WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})`), [{ count: 0 }] as any[]),
-      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM agencies WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})`), [{ count: 0 }] as any[]),
+      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM users WHERE deleted_at IS NULL AND ${createdAtFilter}`), [{ count: 0 }] as any[]),
+      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM agencies WHERE deleted_at IS NULL AND ${createdAtFilter}`), [{ count: 0 }] as any[]),
       safeQuery(db.execute(sql`SELECT role, COUNT(*)::int AS count FROM users WHERE deleted_at IS NULL GROUP BY role ORDER BY count DESC`), [] as any[]),
       safeQuery(db.execute(sql`SELECT status, COUNT(*)::int AS count FROM agencies WHERE deleted_at IS NULL GROUP BY status ORDER BY count DESC`), [] as any[]),
       safeQuery(db.execute(sql`
         SELECT date_trunc('day', created_at)::date AS date, COUNT(*)::int AS count
-        FROM users WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})
+        FROM users WHERE deleted_at IS NULL AND ${createdAtFilter}
         GROUP BY date ORDER BY date ASC
       `), [] as any[]),
       safeQuery(db.execute(sql`
         SELECT date_trunc('day', created_at)::date AS date, COUNT(*)::int AS count
-        FROM agencies WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})
+        FROM agencies WHERE deleted_at IS NULL AND ${createdAtFilter}
         GROUP BY date ORDER BY date ASC
       `), [] as any[]),
 
@@ -144,7 +160,7 @@ export async function GET(request: NextRequest) {
       safeQuery(db.execute(sql`
         SELECT COUNT(*)::int AS count, COALESCE(SUM(amount), 0)::int AS total
         FROM lead_credit_transactions
-        WHERE amount > 0 AND type = 'topup' AND created_at >= NOW() - make_interval(days => ${days})
+        WHERE amount > 0 AND type = 'topup' AND ${createdAtFilter}
       `), [{ count: 0, total: 0 }] as any[]),
       safeQuery(db.execute(sql`
         SELECT
@@ -157,7 +173,7 @@ export async function GET(request: NextRequest) {
 
       // --- Reviews ---
       safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM reviews WHERE deleted_at IS NULL`), [{ count: 0 }] as any[]),
-      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM reviews WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})`), [{ count: 0 }] as any[]),
+      safeQuery(db.execute(sql`SELECT COUNT(*)::int AS count FROM reviews WHERE deleted_at IS NULL AND ${createdAtFilter}`), [{ count: 0 }] as any[]),
       safeQuery(db.execute(sql`SELECT status, COUNT(*)::int AS count FROM reviews WHERE deleted_at IS NULL GROUP BY status ORDER BY count DESC`), [] as any[]),
       safeQuery(db.execute(sql`
         SELECT ROUND(AVG(overall_rating)::numeric, 2) AS avg_rating
@@ -165,7 +181,7 @@ export async function GET(request: NextRequest) {
       `), [{ avg_rating: 0 }] as any[]),
       safeQuery(db.execute(sql`
         SELECT date_trunc('day', created_at)::date AS date, COUNT(*)::int AS count
-        FROM reviews WHERE deleted_at IS NULL AND created_at >= NOW() - make_interval(days => ${days})
+        FROM reviews WHERE deleted_at IS NULL AND ${createdAtFilter}
         GROUP BY date ORDER BY date ASC
       `), [] as any[]),
 
@@ -174,7 +190,7 @@ export async function GET(request: NextRequest) {
       safeQuery(db.execute(sql`
         SELECT query, COUNT(*)::int AS count
         FROM search_logs
-        WHERE query IS NOT NULL AND query != '' AND created_at >= NOW() - make_interval(days => ${days})
+        WHERE query IS NOT NULL AND query != '' AND ${createdAtFilter}
         GROUP BY query ORDER BY count DESC LIMIT 10
       `), [] as any[]),
       safeQuery(db.execute(sql`
@@ -185,7 +201,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(phone_clicks), 0)::int AS total_phone_clicks,
           COALESCE(SUM(email_clicks), 0)::int AS total_email_clicks,
           COALESCE(SUM(lead_requests), 0)::int AS total_lead_requests
-        FROM agency_analytics_daily WHERE date >= CURRENT_DATE - ${days}
+        FROM agency_analytics_daily WHERE ${dateFilter}
       `), [{ total_views: 0, total_impressions: 0, total_website_clicks: 0, total_phone_clicks: 0, total_email_clicks: 0, total_lead_requests: 0 }] as any[]),
       safeQuery(db.execute(sql`
         SELECT date,
@@ -194,7 +210,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(website_clicks), 0)::int AS website_clicks,
           COALESCE(SUM(phone_clicks), 0)::int AS phone_clicks,
           COALESCE(SUM(email_clicks), 0)::int AS email_clicks
-        FROM agency_analytics_daily WHERE date >= CURRENT_DATE - ${days}
+        FROM agency_analytics_daily WHERE ${dateFilter}
         GROUP BY date ORDER BY date ASC
       `), [] as any[]),
 

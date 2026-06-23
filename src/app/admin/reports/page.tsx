@@ -93,10 +93,12 @@ interface ReportsData {
 }
 
 const PERIODS = [
+  { label: "Today", value: 1 },
   { label: "7 Days", value: 7 },
   { label: "30 Days", value: 30 },
   { label: "90 Days", value: 90 },
   { label: "1 Year", value: 365 },
+  { label: "Custom", value: -1 },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -232,12 +234,40 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(30);
+  const [showCustom, setShowCustom] = useState(false);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null);
+
+  function handlePeriodChange(value: number) {
+    if (value === -1) {
+      setShowCustom(true);
+      return;
+    }
+    setShowCustom(false);
+    setCustomRange(null);
+    setDays(value);
+  }
+
+  function applyCustomRange() {
+    if (customFrom && customTo) {
+      setShowCustom(false);
+      setCustomRange({ from: customFrom, to: customTo });
+      setDays(-1);
+    }
+  }
 
   const fetchReports = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/admin/reports?days=${days}`);
+      let url: string;
+      if (customRange) {
+        url = `/api/admin/reports?from=${customRange.from}&to=${customRange.to}`;
+      } else {
+        url = `/api/admin/reports?days=${days}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Failed to load reports (${res.status})`);
@@ -249,7 +279,7 @@ export default function AdminReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, customRange]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
@@ -295,23 +325,41 @@ export default function AdminReportsPage() {
           <h1 className="text-2xl font-bold text-navy">Platform Reports</h1>
           <p className="mt-1 text-gray-500">Comprehensive analytics across all platform metrics.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
-            {PERIODS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setDays(p.value)}
-                className={`px-3 py-2 text-xs font-medium transition-colors ${
-                  days === p.value ? "bg-brand text-white" : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
+              {PERIODS.map((p) => {
+                const isActive = p.value === -1 ? (showCustom || customRange !== null) : (days === p.value && !customRange);
+                return (
+                  <button
+                    key={p.value}
+                    onClick={() => handlePeriodChange(p.value)}
+                    className={`px-3 py-2 text-xs font-medium transition-colors ${
+                      isActive ? "bg-brand text-white" : "text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={fetchReports} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh">
+              <RefreshCw className="w-4 h-4 text-gray-500" />
+            </button>
           </div>
-          <button onClick={fetchReports} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh">
-            <RefreshCw className="w-4 h-4 text-gray-500" />
-          </button>
+          {showCustom && (
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2">
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-700" />
+              <span className="text-xs text-gray-400">to</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-700" />
+              <button onClick={applyCustomRange} disabled={!customFrom || !customTo}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-brand rounded-md hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                Apply
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
