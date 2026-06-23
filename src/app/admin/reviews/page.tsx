@@ -99,6 +99,42 @@ export default function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [moderating, setModerating] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelect = (id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map(r => r.id)));
+    }
+  };
+
+  const handleBulkModerate = async (action: "approve" | "reject" | "flag") => {
+    if (selected.size === 0) return;
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${selected.size} reviews?`)) return;
+    setBulkLoading(true);
+    try {
+      for (const id of selected) {
+        await fetch(`/api/admin/reviews/${id}/moderate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }).catch(() => {});
+      }
+      setSelected(new Set());
+      await fetchReviews(statusFilter, pagination.page, pagination.limit);
+    } catch { /* handled per-item */ }
+    setBulkLoading(false);
+  };
 
   const fetchReviews = useCallback(async (status: ReviewStatus, page: number, limit: number) => {
     setLoading(true);
@@ -227,6 +263,35 @@ export default function AdminReviewsPage() {
         </div>
       </div>
 
+      {/* Bulk Actions */}
+      {selected.size > 0 && (
+        <div className="mb-6 bg-brand/5 border border-brand/20 rounded-xl p-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+              onChange={toggleAll} className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/20" />
+            <span className="text-sm font-medium text-navy">{selected.size} selected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleBulkModerate("approve")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Approve All
+            </button>
+            <button onClick={() => handleBulkModerate("reject")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
+              <XCircle className="w-3.5 h-3.5" /> Reject All
+            </button>
+            <button onClick={() => handleBulkModerate("flag")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-50">
+              <Flag className="w-3.5 h-3.5" /> Flag All
+            </button>
+            <button onClick={() => setSelected(new Set())}
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700">
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error State */}
       {error && (
         <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
@@ -249,16 +314,30 @@ export default function AdminReviewsPage() {
         </div>
       )}
 
+      {/* Select All */}
+      {!loading && filtered.length > 0 && (
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+              onChange={toggleAll} className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/20" />
+            Select all ({filtered.length})
+          </label>
+        </div>
+      )}
+
       {/* Review Cards */}
       {!loading && (
         <div className="space-y-4">
           {filtered.map((review) => (
             <div
               key={review.id}
-              className="bg-white rounded-xl border border-gray-200 p-5"
+              className={`bg-white rounded-xl border p-5 transition-colors ${selected.has(review.id) ? "border-brand/40 bg-brand/[0.02]" : "border-gray-200"}`}
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <input type="checkbox" checked={selected.has(review.id)} onChange={() => toggleSelect(review.id)}
+                    className="mt-1 w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/20 flex-shrink-0 cursor-pointer" />
+                  <div className="flex-1 min-w-0">
                   {/* Header */}
                   <div className="flex flex-wrap items-center gap-3 mb-2">
                     <div className="flex items-center gap-2">
@@ -385,6 +464,7 @@ export default function AdminReviewsPage() {
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
 
                 {/* Actions */}

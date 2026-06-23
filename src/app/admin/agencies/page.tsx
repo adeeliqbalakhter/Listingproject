@@ -68,6 +68,47 @@ export default function AdminAgenciesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === agencies.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(agencies.map(a => a.id)));
+    }
+  };
+
+  const handleBulkAction = async (action: "approve" | "reject" | "suspend" | "delete") => {
+    if (selected.size === 0) return;
+    if (action === "delete" && !confirm(`Delete ${selected.size} agencies permanently?`)) return;
+    if (action !== "delete" && !confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${selected.size} agencies?`)) return;
+    setBulkLoading(true);
+    try {
+      for (const id of selected) {
+        if (action === "delete") {
+          await fetch(`/api/agencies/${id}`, { method: "DELETE" }).catch(() => {});
+        } else {
+          await fetch(`/api/admin/agencies/${id}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          }).catch(() => {});
+        }
+      }
+      setSelected(new Set());
+      await fetchAgencies();
+    } catch { /* handled per-item */ }
+    setBulkLoading(false);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -227,6 +268,35 @@ export default function AdminAgenciesPage() {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selected.size > 0 && (
+        <div className="bg-brand/5 border border-brand/20 rounded-xl p-3 mb-6 flex items-center justify-between">
+          <span className="text-sm font-medium text-navy">{selected.size} selected</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleBulkAction("approve")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+            </button>
+            <button onClick={() => handleBulkAction("reject")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
+              <XCircle className="w-3.5 h-3.5" /> Reject
+            </button>
+            <button onClick={() => handleBulkAction("suspend")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-50">
+              <XCircle className="w-3.5 h-3.5" /> Suspend
+            </button>
+            <button onClick={() => handleBulkAction("delete")} disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+            <button onClick={() => setSelected(new Set())}
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700">
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between">
@@ -256,6 +326,10 @@ export default function AdminAgenciesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="w-10 px-3 py-3">
+                      <input type="checkbox" checked={agencies.length > 0 && selected.size === agencies.length}
+                        onChange={toggleAll} className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/20" />
+                    </th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500">
                       Agency
                     </th>
@@ -284,7 +358,11 @@ export default function AdminAgenciesPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {agencies.map((agency) => (
-                    <tr key={agency.id} className="hover:bg-gray-50/50">
+                    <tr key={agency.id} className={`hover:bg-gray-50/50 ${selected.has(agency.id) ? "bg-brand/5" : ""}`}>
+                      <td className="px-3 py-3.5">
+                        <input type="checkbox" checked={selected.has(agency.id)}
+                          onChange={() => toggleSelect(agency.id)} className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand/20" />
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -448,7 +526,7 @@ export default function AdminAgenciesPage() {
                   ))}
                   {agencies.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-5 py-12 text-center text-gray-400">
+                      <td colSpan={9} className="px-5 py-12 text-center text-gray-400">
                         No agencies found matching your criteria.
                       </td>
                     </tr>
