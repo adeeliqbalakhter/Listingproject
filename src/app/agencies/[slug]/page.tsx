@@ -29,6 +29,7 @@ import { sql } from "drizzle-orm";
 import { ReviewForm } from "@/components/review-form";
 import { PortfolioSection } from "@/components/portfolio-section";
 import { PricingSnapshot } from "@/components/agencies/PricingSnapshot";
+import { ReviewInsights } from "@/components/agencies/ReviewInsights";
 import { TrackProfileView, TrackClick } from "@/components/analytics/TrackEvent";
 
 // ---------------------------------------------------------------------------
@@ -293,6 +294,85 @@ async function fetchPricingData(agencyId: string, agencyName: string, minProject
     }
 
     return { minProjectSize, hourlyRate, costRating, totalCostReviews, buckets, services, summary };
+  } catch {
+    return empty;
+  }
+}
+
+// Theme dictionary for Review Insights (keyword frequency over review text).
+const INSIGHT_THEMES: Array<{
+  label: string;
+  keywords: string[];
+  highlightTitle: string;
+  highlightBody: (name: string) => string;
+}> = [
+  { label: "Timely", keywords: ["on time", "timely", "deadline", "punctual", "prompt", "quick turnaround", "fast deliver", "on schedule"],
+    highlightTitle: "Timely Delivery", highlightBody: (n) => `Clients frequently note that ${n} delivers work on time and meets agreed deadlines, keeping projects on schedule.` },
+  { label: "High-Quality Work", keywords: ["high quality", "high-quality", "quality work", "excellent work", "great work", "top-notch", "top notch", "bug-free", "well-built", "quality of"],
+    highlightTitle: "High-Quality Work", highlightBody: (n) => `Reviews consistently highlight ${n}'s high-quality output, attention to detail, and strong standards across deliverables.` },
+  { label: "Flexible", keywords: ["flexible", "flexibility", "adaptable", "accommodating", "adapt to"],
+    highlightTitle: "Flexibility & Adaptability", highlightBody: (n) => `Clients describe ${n} as flexible and adaptable, adjusting smoothly to evolving requirements and changing scopes.` },
+  { label: "Great Project Management", keywords: ["project management", "well managed", "well-managed", "organized", "on budget", "managed the project"],
+    highlightTitle: "Effective Project Management", highlightBody: (n) => `Reviewers commend ${n} for organized, well-structured project management that keeps work on track and on budget.` },
+  { label: "Professional", keywords: ["professional", "professionalism", "expertise", "knowledgeable", "expert"],
+    highlightTitle: "Professionalism & Expertise", highlightBody: (n) => `Clients consistently commend ${n} for their professionalism and expertise, describing the team as knowledgeable and dedicated.` },
+  { label: "Reasonable Pricing", keywords: ["reasonable pric", "affordable", "good value", "competitive pric", "fair price", "cost-effective", "value for money", "great value"],
+    highlightTitle: "Reasonable Pricing", highlightBody: (n) => `Several clients mention that ${n} offers reasonable pricing and strong value for the cost of their engagements.` },
+  { label: "Communicative", keywords: ["communicat", "responsive", "transparent", "kept us informed", "easy to reach"],
+    highlightTitle: "Strong Communication", highlightBody: (n) => `Reviews praise ${n} for clear, responsive communication and transparency throughout the collaboration.` },
+  { label: "Exceptional Performance", keywords: ["exceptional", "outstanding", "impressive", "exceeded", "went above", "beyond expectations"],
+    highlightTitle: "Exceptional Performance", highlightBody: (n) => `Clients describe ${n}'s performance as exceptional, often noting that the team exceeded expectations.` },
+  { label: "Innovative", keywords: ["innovat", "creative", "cutting-edge", "cutting edge", "fresh ideas"],
+    highlightTitle: "Innovative Approach", highlightBody: (n) => `Reviewers value ${n}'s innovative, creative thinking and willingness to bring fresh ideas to the table.` },
+  { label: "Reliable", keywords: ["reliable", "dependable", "trustworthy", "we trust", "can rely"],
+    highlightTitle: "Reliable Partner", highlightBody: (n) => `Clients consider ${n} a reliable, dependable partner they can trust with important work.` },
+  { label: "Collaborative", keywords: ["collaborat", "partnership", "team player", "worked closely", "felt like part"],
+    highlightTitle: "Collaborative Partnership", highlightBody: (n) => `Reviews describe a collaborative partnership with ${n}, with the team working closely alongside the client.` },
+];
+
+async function fetchReviewInsights(agencyId: string, agencyName: string) {
+  const empty = { topMentions: [], highlights: [], rating: 0, reviewCount: 0 };
+  try {
+    const db = getDb();
+    const rows = (await db.execute(
+      sql`SELECT objective, enjoyed, improvements, content, title, overall_rating
+          FROM reviews
+          WHERE agency_id = ${agencyId} AND status = 'approved' AND deleted_at IS NULL`
+    )) as unknown as Array<Record<string, unknown>>;
+
+    if (rows.length === 0) return empty;
+
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const text = [r.objective, r.enjoyed, r.improvements, r.content, r.title]
+        .map((v) => String(v || ""))
+        .join(" ")
+        .toLowerCase();
+      if (!text.trim()) continue;
+      for (const theme of INSIGHT_THEMES) {
+        if (theme.keywords.some((kw) => text.includes(kw))) {
+          counts.set(theme.label, (counts.get(theme.label) || 0) + 1);
+        }
+      }
+    }
+
+    const topMentions = Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .filter((m) => m.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const highlights = topMentions
+      .slice(0, 4)
+      .map((m) => {
+        const theme = INSIGHT_THEMES.find((t) => t.label === m.label)!;
+        return { title: theme.highlightTitle, body: theme.highlightBody(agencyName) };
+      });
+
+    const ratings = rows.map((r) => Number(r.overall_rating)).filter((n) => !Number.isNaN(n));
+    const rating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
+    return { topMentions, highlights, rating, reviewCount: rows.length };
   } catch {
     return empty;
   }
@@ -567,7 +647,7 @@ export default async function AgencyProfilePage({
   }
 
   // Fetch related data in parallel
-  const [services, industries, reviews, ratingBreakdown, similarAgencies, portfolio, pricingData] =
+  const [services, industries, reviews, ratingBreakdown, similarAgencies, portfolio, pricingData, reviewInsights] =
     await Promise.all([
       fetchServices(agency.id),
       fetchIndustries(agency.id),
@@ -581,6 +661,7 @@ export default async function AgencyProfilePage({
         agency.min_project_size != null ? Number(agency.min_project_size) : null,
         agency.hourly_rate || null
       ),
+      fetchReviewInsights(agency.id, agency.name),
     ]);
 
   const cityName = agency.city_id ? await fetchCityName(agency.city_id) : null;
@@ -992,6 +1073,11 @@ export default async function AgencyProfilePage({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* ---- Review Insights ---- */}
+              {reviewInsights.reviewCount > 0 && (
+                <ReviewInsights data={reviewInsights} agencyName={agency.name} />
               )}
 
               {/* ---- Reviews ---- */}
