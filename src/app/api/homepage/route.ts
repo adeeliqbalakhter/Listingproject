@@ -28,14 +28,14 @@ export async function GET() {
         WHERE a.status = 'active' AND a.deleted_at IS NULL
       `),
       db.execute(sql`
-        SELECT a.id, a.name, a.slug, a.tagline, a.logo, a.average_rating, a.total_reviews,
+        SELECT a.id, a.name, a.slug, a.tagline, a.logo, a.cover_image, a.average_rating, a.total_reviews,
                a.is_verified, a.is_featured, a.company_size, a.min_project_size,
                co.name AS country_name, ci.name AS city_name
         FROM agencies a
         LEFT JOIN countries co ON a.country_id = co.id
         LEFT JOIN cities ci ON a.city_id = ci.id
-        WHERE a.status = 'active' AND a.deleted_at IS NULL
-        ORDER BY a.is_featured DESC, a.average_rating DESC NULLS LAST, a.total_reviews DESC NULLS LAST
+        WHERE a.status = 'active' AND a.deleted_at IS NULL AND a.is_featured = true
+        ORDER BY a.average_rating DESC NULLS LAST, a.total_reviews DESC NULLS LAST
         LIMIT 6
       `),
       db.execute(sql`
@@ -87,6 +87,7 @@ export async function GET() {
       slug: a.slug,
       tagline: a.tagline,
       logo: a.logo,
+      coverImage: a.cover_image,
       averageRating: a.average_rating ? Number(a.average_rating) : null,
       totalReviews: a.total_reviews ?? 0,
       isVerified: a.is_verified,
