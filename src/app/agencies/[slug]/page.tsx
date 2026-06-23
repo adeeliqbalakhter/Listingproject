@@ -424,8 +424,8 @@ interface ParsedLocation {
   address?: string;
   city?: string;
   country?: string;
-  phone?: string;
-  teamSize?: string;
+  cityId?: string;
+  countryId?: string;
   latitude?: number | null;
   longitude?: number | null;
   isHeadquarters?: boolean;
@@ -443,8 +443,8 @@ function parseLocations(raw: unknown): ParsedLocation[] {
         address: o.address ? String(o.address) : undefined,
         city: o.city ? String(o.city) : undefined,
         country: o.country ? String(o.country) : undefined,
-        phone: o.phone ? String(o.phone) : undefined,
-        teamSize: o.teamSize ? String(o.teamSize) : undefined,
+        cityId: o.cityId ? String(o.cityId) : undefined,
+        countryId: o.countryId ? String(o.countryId) : undefined,
         latitude: o.latitude != null ? Number(o.latitude) : null,
         longitude: o.longitude != null ? Number(o.longitude) : null,
         isHeadquarters: Boolean(o.isHeadquarters),
@@ -706,6 +706,19 @@ export default async function AgencyProfilePage({
 
   // Multi-location list with fallback to the agency's single registered address
   let locations = parseLocations(agency.locations);
+
+  // Resolve cityId/countryId to names for locations that use the new format
+  for (const loc of locations) {
+    if (loc.countryId && !loc.country) {
+      const name = await fetchCountryName(loc.countryId);
+      if (name) loc.country = name;
+    }
+    if (loc.cityId && !loc.city) {
+      const name = await fetchCityName(loc.cityId);
+      if (name) loc.city = name;
+    }
+  }
+
   if (locations.length === 0 && (agency.address || cityName || countryName || agency.latitude)) {
     locations = [
       {
@@ -713,8 +726,6 @@ export default async function AgencyProfilePage({
         address: agency.address || undefined,
         city: cityName || undefined,
         country: countryName || undefined,
-        phone: agency.phone || undefined,
-        teamSize: agency.company_size || undefined,
         latitude: agency.latitude != null ? Number(agency.latitude) : null,
         longitude: agency.longitude != null ? Number(agency.longitude) : null,
         isHeadquarters: true,
