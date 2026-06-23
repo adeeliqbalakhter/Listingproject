@@ -16,6 +16,8 @@ import {
   CreditCard,
   FileBarChart,
   BookOpen,
+  Crown,
+  ScrollText,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -28,7 +30,9 @@ const sidebarLinks = [
   { name: "Leads", href: "/admin/leads", icon: FileText },
   { name: "Credits", href: "/admin/credits", icon: CreditCard },
   { name: "Reviews", href: "/admin/reviews", icon: Star },
+  { name: "Subscriptions", href: "/admin/subscriptions", icon: Crown },
   { name: "Blog", href: "/admin/blog", icon: BookOpen },
+  { name: "Logs", href: "/admin/logs", icon: ScrollText },
   { name: "Reports", href: "/admin/reports", icon: FileBarChart },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
