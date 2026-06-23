@@ -110,10 +110,8 @@ export default function ProfilePage() {
   type OfficeLocation = {
     label: string;
     address: string;
-    city: string;
-    country: string;
-    phone: string;
-    teamSize: string;
+    cityId: string;
+    countryId: string;
     latitude: string;
     longitude: string;
     isHeadquarters: boolean;
@@ -122,20 +120,32 @@ export default function ProfilePage() {
   const emptyOffice = (): OfficeLocation => ({
     label: "",
     address: "",
-    city: "",
-    country: "",
-    phone: "",
-    teamSize: "",
+    cityId: "",
+    countryId: "",
     latitude: "",
     longitude: "",
     isHeadquarters: false,
   });
 
+  const TIMEZONE_OPTIONS = [
+    "UTC-12:00 (Baker Island)", "UTC-11:00 (Samoa)", "UTC-10:00 (Hawaii)", "UTC-09:00 (Alaska)",
+    "UTC-08:00 (Pacific Time)", "UTC-07:00 (Mountain Time)", "UTC-06:00 (Central Time)",
+    "UTC-05:00 (Eastern Time)", "UTC-04:00 (Atlantic Time)", "UTC-03:00 (Buenos Aires)",
+    "UTC-02:00 (Mid-Atlantic)", "UTC-01:00 (Azores)", "UTC+00:00 (GMT/London)",
+    "UTC+01:00 (CET/Paris)", "UTC+02:00 (EET/Cairo)", "UTC+03:00 (Moscow/Riyadh)",
+    "UTC+03:30 (Tehran)", "UTC+04:00 (Dubai/Baku)", "UTC+04:30 (Kabul)",
+    "UTC+05:00 (Karachi/Tashkent)", "UTC+05:30 (IST/Mumbai)", "UTC+05:45 (Kathmandu)",
+    "UTC+06:00 (Dhaka/Almaty)", "UTC+06:30 (Yangon)", "UTC+07:00 (Bangkok/Jakarta)",
+    "UTC+08:00 (Singapore/Beijing)", "UTC+09:00 (Tokyo/Seoul)", "UTC+09:30 (Adelaide)",
+    "UTC+10:00 (Sydney/Melbourne)", "UTC+11:00 (Solomon Islands)", "UTC+12:00 (Auckland/Fiji)",
+    "UTC+13:00 (Tonga)",
+  ];
+
   const [languages, setLanguages] = useState<string[]>([]);
   const [languageInput, setLanguageInput] = useState("");
   const [timezones, setTimezones] = useState<string[]>([]);
-  const [timezoneInput, setTimezoneInput] = useState("");
   const [offices, setOffices] = useState<OfficeLocation[]>([]);
+  const [officeCities, setOfficeCities] = useState<Record<number, LocationItem[]>>({});
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(me => {
@@ -201,19 +211,26 @@ export default function ProfilePage() {
           if (Array.isArray(tzs)) setTimezones(tzs.map((v) => String(v)).filter(Boolean));
           const locs = parseJsonField(agency.locations);
           if (Array.isArray(locs)) {
-            setOffices(
-              locs.filter((o): o is Record<string, unknown> => o != null && typeof o === "object").map((o) => ({
+            const parsed = locs
+              .filter((o): o is Record<string, unknown> => o != null && typeof o === "object")
+              .map((o) => ({
                 label: o.label ? String(o.label) : "",
                 address: o.address ? String(o.address) : "",
-                city: o.city ? String(o.city) : "",
-                country: o.country ? String(o.country) : "",
-                phone: o.phone ? String(o.phone) : "",
-                teamSize: o.teamSize ? String(o.teamSize) : "",
+                cityId: o.cityId ? String(o.cityId) : "",
+                countryId: o.countryId ? String(o.countryId) : "",
                 latitude: o.latitude != null ? String(o.latitude) : "",
                 longitude: o.longitude != null ? String(o.longitude) : "",
                 isHeadquarters: Boolean(o.isHeadquarters),
-              }))
-            );
+              }));
+            setOffices(parsed);
+            parsed.forEach((o, idx) => {
+              if (o.countryId) {
+                fetch(`/api/locations?countryId=${o.countryId}`)
+                  .then((r) => r.json())
+                  .then((data) => setOfficeCities((prev) => ({ ...prev, [idx]: data.data || [] })))
+                  .catch(() => {});
+              }
+            });
           }
 
           if (agency.logo) setLogoPreview(agency.logo);
@@ -414,17 +431,15 @@ export default function ProfilePage() {
         offices.length > 0
           ? offices
               .filter((o) =>
-                [o.label, o.address, o.city, o.country, o.phone, o.teamSize, o.latitude, o.longitude].some(
+                [o.label, o.address, o.cityId, o.countryId, o.latitude, o.longitude].some(
                   (v) => String(v || "").trim() !== ""
                 )
               )
               .map((o) => ({
                 label: o.label.trim() || undefined,
                 address: o.address.trim() || undefined,
-                city: o.city.trim() || undefined,
-                country: o.country.trim() || undefined,
-                phone: o.phone.trim() || undefined,
-                teamSize: o.teamSize.trim() || undefined,
+                cityId: o.cityId || undefined,
+                countryId: o.countryId || undefined,
                 latitude: o.latitude.trim() ? Number(o.latitude) : undefined,
                 longitude: o.longitude.trim() ? Number(o.longitude) : undefined,
                 isHeadquarters: o.isHeadquarters || undefined,
@@ -827,59 +842,6 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* Location */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-navy mb-5 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-brand" />
-          Location
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Country</label>
-            <select
-              name="countryId"
-              value={form.countryId}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors bg-white"
-            >
-              <option value="">Select a country</option>
-              {countries.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">City</label>
-            <select
-              name="cityId"
-              value={form.cityId}
-              onChange={handleChange}
-              disabled={!form.countryId}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors bg-white disabled:opacity-50"
-            >
-              <option value="">{form.countryId ? "Select a city" : "Select a country first"}</option>
-              {citiesList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Address</label>
-            <input
-              name="address"
-              value={form.address}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors"
-              placeholder="Street address"
-            />
-          </div>
-        </div>
-      </section>
-
       {/* Languages */}
       <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
         <h2 className="text-lg font-semibold text-navy mb-1 flex items-center gap-2">
@@ -952,7 +914,7 @@ export default function ProfilePage() {
           Timezones
         </h2>
         <p className="text-xs text-gray-500 mb-4">
-          Timezones your team operates in (e.g. EST, GMT, CET, IST).
+          Timezones your team operates in. Select from the dropdown.
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
           {timezones.map((tz) => (
@@ -976,37 +938,21 @@ export default function ProfilePage() {
           )}
         </div>
         <div className="flex gap-2">
-          <input
-            value={timezoneInput}
-            onChange={(e) => setTimezoneInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const val = timezoneInput.trim();
-                if (val && !timezones.includes(val) && timezones.length < 30) {
-                  setTimezones((prev) => [...prev, val]);
-                  setTimezoneInput("");
-                }
-              }
-            }}
-            placeholder="e.g. EST, GMT, CET, IST..."
-            maxLength={60}
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const val = timezoneInput.trim();
+          <select
+            value=""
+            onChange={(e) => {
+              const val = e.target.value;
               if (val && !timezones.includes(val) && timezones.length < 30) {
                 setTimezones((prev) => [...prev, val]);
-                setTimezoneInput("");
               }
             }}
-            disabled={!timezoneInput.trim()}
-            className="inline-flex items-center gap-1.5 bg-brand text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark disabled:opacity-50"
+            className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white"
           >
-            <Plus className="w-4 h-4" /> Add
-          </button>
+            <option value="">Select a timezone to add...</option>
+            {TIMEZONE_OPTIONS.filter((tz) => !timezones.includes(tz)).map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </select>
         </div>
       </section>
 
@@ -1033,13 +979,15 @@ export default function ProfilePage() {
 
         {offices.length === 0 ? (
           <p className="text-xs text-gray-400 italic mt-3">
-            No offices added yet. Your registered HQ will be used as a fallback on the public profile.
+            No offices added yet. Click &quot;Add Office&quot; to add your first location.
           </p>
         ) : (
           <div className="mt-4 space-y-4">
             {offices.map((office, i) => {
               const update = (patch: Partial<OfficeLocation>) =>
                 setOffices((prev) => prev.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+              const cities = officeCities[i] || [];
+              const hasCoords = office.latitude.trim() && office.longitude.trim();
               return (
                 <div key={i} className="rounded-lg border border-gray-200 p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -1068,7 +1016,14 @@ export default function ProfilePage() {
                       </label>
                       <button
                         type="button"
-                        onClick={() => setOffices((prev) => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => {
+                          setOffices((prev) => prev.filter((_, idx) => idx !== i));
+                          setOfficeCities((prev) => {
+                            const next = { ...prev };
+                            delete next[i];
+                            return next;
+                          });
+                        }}
                         className="text-red-500 hover:text-red-700"
                         aria-label="Remove office"
                       >
@@ -1082,14 +1037,7 @@ export default function ProfilePage() {
                       onChange={(e) => update({ label: e.target.value })}
                       placeholder="Label (e.g. Headquarters, EU Office)"
                       maxLength={120}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-                    />
-                    <input
-                      value={office.phone}
-                      onChange={(e) => update({ phone: e.target.value })}
-                      placeholder="Phone (optional)"
-                      maxLength={60}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
+                      className="sm:col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                     />
                     <input
                       value={office.address}
@@ -1098,43 +1046,69 @@ export default function ProfilePage() {
                       maxLength={300}
                       className="sm:col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                     />
-                    <input
-                      value={office.city}
-                      onChange={(e) => update({ city: e.target.value })}
-                      placeholder="City"
-                      maxLength={120}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-                    />
-                    <input
-                      value={office.country}
-                      onChange={(e) => update({ country: e.target.value })}
-                      placeholder="Country"
-                      maxLength={120}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-                    />
-                    <input
-                      value={office.teamSize}
-                      onChange={(e) => update({ teamSize: e.target.value })}
-                      placeholder="Team size at this office (e.g. 21-30)"
-                      maxLength={60}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
-                    />
-                    <div className="grid grid-cols-2 gap-3">
+                    <select
+                      value={office.countryId}
+                      onChange={(e) => {
+                        const cid = e.target.value;
+                        update({ countryId: cid, cityId: "" });
+                        if (cid) {
+                          fetch(`/api/locations?countryId=${cid}`)
+                            .then((r) => r.json())
+                            .then((data) => setOfficeCities((prev) => ({ ...prev, [i]: data.data || [] })))
+                            .catch(() => {});
+                        } else {
+                          setOfficeCities((prev) => ({ ...prev, [i]: [] }));
+                        }
+                      }}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white"
+                    >
+                      <option value="">Select country</option>
+                      {countries.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={office.cityId}
+                      onChange={(e) => update({ cityId: e.target.value })}
+                      disabled={!office.countryId}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none bg-white disabled:opacity-50"
+                    >
+                      <option value="">{office.countryId ? "Select city" : "Select country first"}</option>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <div className="sm:col-span-2 grid grid-cols-2 gap-3">
                       <input
                         value={office.latitude}
                         onChange={(e) => update({ latitude: e.target.value })}
-                        placeholder="Latitude"
+                        placeholder="Latitude (e.g. 40.7128)"
                         inputMode="decimal"
                         className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                       />
                       <input
                         value={office.longitude}
                         onChange={(e) => update({ longitude: e.target.value })}
-                        placeholder="Longitude"
+                        placeholder="Longitude (e.g. -74.0060)"
                         inputMode="decimal"
                         className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none"
                       />
                     </div>
+                    {hasCoords && (
+                      <div className="sm:col-span-2 rounded-lg overflow-hidden border border-gray-200">
+                        <iframe
+                          title={`Map for ${office.label || `Office #${i + 1}`}`}
+                          width="100%"
+                          height="200"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(office.longitude) - 0.01},${Number(office.latitude) - 0.01},${Number(office.longitude) + 0.01},${Number(office.latitude) + 0.01}&layer=mapnik&marker=${office.latitude},${office.longitude}`}
+                        />
+                        <p className="text-xs text-gray-400 px-3 py-1.5 bg-gray-50">
+                          {office.latitude}, {office.longitude}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
