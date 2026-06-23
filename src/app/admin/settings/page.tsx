@@ -28,6 +28,8 @@ import {
   WifiOff,
   Clock,
   Server,
+  Pencil,
+  User,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
 
@@ -64,6 +66,11 @@ export default function AdminSettingsPage() {
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedMessage, setSeedMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Profile state
+  const [profileName, setProfileName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   // Password state
   const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -87,6 +94,10 @@ export default function AdminSettingsPage() {
   }, []);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+  useEffect(() => {
+    if (user?.name) setProfileName(user.name);
+  }, [user?.name]);
 
   async function runSetup(force: boolean) {
     setSetupLoading(true);
@@ -149,6 +160,28 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function handleSaveProfile() {
+    setSavingProfile(true);
+    setProfileMessage(null);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: profileName }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setProfileMessage({ type: "success", text: json.data?.message || "Profile updated." });
+      } else {
+        setProfileMessage({ type: "error", text: json.error || "Failed to update profile." });
+      }
+    } catch {
+      setProfileMessage({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -191,24 +224,65 @@ export default function AdminSettingsPage() {
         </button>
       </div>
 
-      {/* ═══ CHANGE PASSWORD ═══ */}
+      {/* ═══ ADMIN PROFILE ═══ */}
       <section>
         <h2 className="text-lg font-semibold text-navy mb-4 flex items-center gap-2">
-          <Lock className="w-5 h-5 text-brand" /> Change Password
+          <User className="w-5 h-5 text-brand" /> Admin Profile
         </h2>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-start gap-6 mb-4">
-            <div className="w-12 h-12 bg-navy rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm font-bold">{user?.name?.substring(0, 2).toUpperCase() || "AD"}</span>
+          <div className="flex items-start gap-6 mb-6">
+            <div className="w-14 h-14 bg-navy rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-lg font-bold">{user?.name?.substring(0, 2).toUpperCase() || "AD"}</span>
             </div>
             <div>
-              <p className="font-medium text-navy">{user?.name || "Admin"}</p>
+              <p className="font-medium text-navy text-lg">{user?.name || "Admin"}</p>
               <p className="text-sm text-gray-500">{user?.email}</p>
               <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
                 <Shield className="w-3 h-3" /> {user?.role === "super_admin" ? "Super Admin" : "Admin"}
               </span>
             </div>
           </div>
+          <div className="space-y-4 max-w-md">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Display Name</label>
+              <div className="relative">
+                <input type="text" value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none pr-10" />
+                <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+              <input type="email" value={user?.email || ""} disabled
+                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" />
+              <p className="text-xs text-gray-400 mt-1">Email cannot be changed.</p>
+            </div>
+          </div>
+          {profileMessage && (
+            <div className={`flex items-center gap-2 mt-4 text-sm ${profileMessage.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
+              {profileMessage.type === "success" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+              {profileMessage.text}
+            </div>
+          )}
+          <div className="flex justify-end mt-5">
+            <button onClick={handleSaveProfile}
+              disabled={savingProfile || !profileName.trim() || profileName.trim().length < 2 || profileName === user?.name}
+              className="flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50">
+              {savingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+              {savingProfile ? "Saving..." : "Save Profile"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ CHANGE PASSWORD ═══ */}
+      <section>
+        <h2 className="text-lg font-semibold text-navy mb-4 flex items-center gap-2">
+          <Lock className="w-5 h-5 text-brand" /> Change Password
+        </h2>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="space-y-4 max-w-md">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Current Password</label>

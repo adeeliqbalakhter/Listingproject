@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { hasDb, getDb } from "@/lib/db";
+import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth/guards";
 import { success, error, serverError } from "@/lib/api/response";
@@ -43,6 +43,35 @@ export async function GET(request: NextRequest) {
         language: row.language,
       },
     });
+  } catch (err) {
+    return serverError(err);
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const authResult = await requireAuth(request);
+    if ("error" in authResult) return authResult.error;
+    const { user } = authResult;
+
+    if (!hasDb()) return error("Database not available", 503);
+    const neonSql = getNeonSql();
+
+    const body = await request.json();
+    const { name } = body as { name?: string };
+
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return error("Name must be at least 2 characters", 400);
+    }
+
+    const sanitizedName = name.trim().slice(0, 100);
+
+    await neonSql`
+      UPDATE users SET name = ${sanitizedName}, updated_at = NOW()
+      WHERE id = ${user.id} AND deleted_at IS NULL
+    `;
+
+    return success({ message: "Profile updated successfully", name: sanitizedName });
   } catch (err) {
     return serverError(err);
   }
