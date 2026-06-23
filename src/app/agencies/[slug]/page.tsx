@@ -723,6 +723,51 @@ function ServiceFocusPie({ items }: { items: ServiceFocusItem[] }) {
   );
 }
 
+const INDUSTRY_COLORS = [
+  "#059669", "#10b981", "#34d399", "#6ee7b7", "#a78bfa",
+  "#8b5cf6", "#7c3aed", "#f59e0b", "#f97316", "#ef4444",
+  "#1e40af", "#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa",
+  "#155e75", "#0e7490", "#0891b2", "#06b6d4", "#7dd3fc",
+];
+
+function IndustryPie({ items }: { items: { name: string; pct: number }[] }) {
+  const valid = items.filter((i) => i.pct > 0);
+  if (valid.length === 0) return <div className="w-48 h-48 rounded-full bg-gray-100 mx-auto" />;
+
+  let cumulative = 0;
+  const slices: Array<{ startAngle: number; endAngle: number; color: string; pct: number }> = [];
+  valid.forEach((item, i) => {
+    const start = cumulative;
+    cumulative += item.pct;
+    slices.push({ startAngle: start * 3.6, endAngle: cumulative * 3.6, color: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length], pct: item.pct });
+  });
+
+  const toRad = (deg: number) => (deg - 90) * (Math.PI / 180);
+  const cx = 100, cy = 100, r = 90;
+
+  return (
+    <svg viewBox="0 0 200 200" className="w-48 h-48 mx-auto">
+      {slices.map((s, i) => {
+        const largeArc = s.endAngle - s.startAngle > 180 ? 1 : 0;
+        const x1 = cx + r * Math.cos(toRad(s.startAngle));
+        const y1 = cy + r * Math.sin(toRad(s.startAngle));
+        const x2 = cx + r * Math.cos(toRad(s.endAngle));
+        const y2 = cy + r * Math.sin(toRad(s.endAngle));
+        const midAngle = toRad((s.startAngle + s.endAngle) / 2);
+        const labelR = 55;
+        const lx = cx + labelR * Math.cos(midAngle);
+        const ly = cy + labelR * Math.sin(midAngle);
+        return (
+          <g key={i}>
+            <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`} fill={s.color} stroke="white" strokeWidth="2" />
+            {s.pct >= 8 && <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="14" fontWeight="bold">{Math.round(s.pct)}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "pricing", label: "Pricing" },
@@ -1311,29 +1356,36 @@ export default async function AgencyProfilePage({
                 </div>
               )}
 
-              {/* ---- Industries ---- */}
-              {industries.length > 0 && (
-                <div id="industries" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
-                    <h2 className="text-xl font-bold text-navy">Industries</h2>
-                    <div className="mt-6 grid sm:grid-cols-2 gap-4">
-                      {industries.map((industry) => (
-                        <div
-                          key={industry.name}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-brand/30 hover:bg-blue-50/40 transition-colors"
-                        >
-                          <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                            <Building2 className="w-4.5 h-4.5 text-brand" />
-                          </div>
-                          <span className="font-medium text-gray-800">
-                            {industry.name}
-                          </span>
+              {/* ---- Industries (pie chart) ---- */}
+              {industries.length > 0 && (() => {
+                const pctEach = Math.floor(100 / industries.length);
+                const remainder = 100 - pctEach * industries.length;
+                const industryItems = industries.map((ind, i) => ({
+                  name: ind.name,
+                  pct: pctEach + (i < remainder ? 1 : 0),
+                }));
+                return (
+                  <div id="industries" className="scroll-mt-24">
+                    <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                      <h2 className="text-xl font-bold text-navy">Industry Focus</h2>
+                      <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
+                        <div className="shrink-0">
+                          <IndustryPie items={industryItems} />
                         </div>
-                      ))}
+                        <div className="flex-1 space-y-3">
+                          {industryItems.map((item, i) => (
+                            <div key={item.name} className="flex items-center gap-3">
+                              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length] }} />
+                              <span className="flex-1 text-sm font-medium text-gray-800">{item.name}</span>
+                              <span className="text-sm font-semibold text-navy">{item.pct}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ---- Location ---- */}
               {locations.length > 0 && (
