@@ -310,6 +310,16 @@ export async function GET(request: NextRequest) {
       VALUES (${query ?? null}, ${JSON.stringify(filters)}::jsonb, ${total}, ${userId}, ${ip})
     `).catch(() => {});
 
+    if (agencyIds.length > 0) {
+      for (const aid of agencyIds) {
+        db.execute(sql`
+          INSERT INTO agency_analytics_daily (agency_id, date, search_impressions)
+          VALUES (${aid}, CURRENT_DATE, 1)
+          ON CONFLICT (agency_id, date) DO UPDATE SET search_impressions = agency_analytics_daily.search_impressions + 1
+        `).catch(() => {});
+      }
+    }
+
     return Response.json({
       data,
       pagination: { page, limit, total, totalPages },

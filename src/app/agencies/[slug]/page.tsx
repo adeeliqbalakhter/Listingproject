@@ -28,6 +28,7 @@ import { hasDb, getDb } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { ReviewForm } from "@/components/review-form";
 import { PortfolioSection } from "@/components/portfolio-section";
+import { TrackProfileView, TrackClick } from "@/components/analytics/TrackEvent";
 
 // ---------------------------------------------------------------------------
 // DB helpers
@@ -576,6 +577,7 @@ export default async function AgencyProfilePage({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
       )}
+      {isActive && <TrackProfileView agencyId={agency.id as string} />}
 
       {/* Non-active warning banner */}
       {!isActive && (
@@ -642,7 +644,9 @@ export default async function AgencyProfilePage({
 
                 {/* Website */}
                 {agency.website && (
-                  <a
+                  <TrackClick
+                    agencyId={agency.id as string}
+                    event="website_click"
                     href={agency.website}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -650,7 +654,7 @@ export default async function AgencyProfilePage({
                   >
                     <Globe className="w-4 h-4" /> Website
                     <ExternalLink className="w-3 h-3" />
-                  </a>
+                  </TrackClick>
                 )}
               </div>
             </div>
@@ -664,12 +668,14 @@ export default async function AgencyProfilePage({
                 Get a Free Quote <ArrowRight className="w-4 h-4" />
               </Link>
               {agency.phone && (
-                <a
+                <TrackClick
+                  agencyId={agency.id as string}
+                  event="phone_click"
                   href={`tel:${agency.phone}`}
                   className="inline-flex items-center justify-center gap-2 border border-gray-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-navy-light transition-colors text-sm"
                 >
                   <Phone className="w-4 h-4" /> {agency.phone}
-                </a>
+                </TrackClick>
               )}
               {agency.claim_status === "unclaimed" && (
                 <Link
@@ -774,12 +780,14 @@ export default async function AgencyProfilePage({
           </Link>
         )}
         {agency.phone && (
-          <a
+          <TrackClick
+            agencyId={agency.id as string}
+            event="phone_click"
             href={`tel:${agency.phone}`}
             className="inline-flex items-center justify-center gap-2 border border-gray-300 text-navy px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors"
           >
             <Phone className="w-4 h-4" />
-          </a>
+          </TrackClick>
         )}
       </div>
 
@@ -1123,12 +1131,14 @@ export default async function AgencyProfilePage({
                   Get a Free Quote <ArrowRight className="w-4 h-4" />
                 </Link>
                 {agency.phone && (
-                  <a
+                  <TrackClick
+                    agencyId={agency.id as string}
+                    event="phone_click"
                     href={`tel:${agency.phone}`}
                     className="mt-3 w-full inline-flex items-center justify-center gap-2 border border-gray-200 text-navy py-3 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors"
                   >
                     <Phone className="w-4 h-4" /> {agency.phone}
-                  </a>
+                  </TrackClick>
                 )}
 
                 {/* Quick info */}
@@ -1147,14 +1157,16 @@ export default async function AgencyProfilePage({
                       <Globe className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                       <div>
                         <p className="text-gray-500">Website</p>
-                        <a
+                        <TrackClick
+                          agencyId={agency.id as string}
+                          event="website_click"
                           href={agency.website}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium text-brand hover:underline"
                         >
                           {agency.website.replace(/^https?:\/\//, "")}
-                        </a>
+                        </TrackClick>
                       </div>
                     </div>
                   )}
@@ -1163,12 +1175,14 @@ export default async function AgencyProfilePage({
                       <Mail className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                       <div>
                         <p className="text-gray-500">Email</p>
-                        <a
+                        <TrackClick
+                          agencyId={agency.id as string}
+                          event="email_click"
                           href={`mailto:${agency.email}`}
                           className="font-medium text-brand hover:underline"
                         >
                           {agency.email}
-                        </a>
+                        </TrackClick>
                       </div>
                     </div>
                   )}

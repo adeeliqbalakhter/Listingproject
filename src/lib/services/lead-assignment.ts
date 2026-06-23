@@ -181,6 +181,13 @@ export async function autoAssignLead(
         UPDATE agencies SET total_leads = COALESCE(total_leads, 0) + 1 WHERE id = ${agency.id}
       `);
 
+      // Track daily lead request
+      db.execute(sql`
+        INSERT INTO agency_analytics_daily (agency_id, date, lead_requests)
+        VALUES (${agency.id}, CURRENT_DATE, 1)
+        ON CONFLICT (agency_id, date) DO UPDATE SET lead_requests = agency_analytics_daily.lead_requests + 1
+      `).catch(() => {});
+
       assigned++;
     } catch { /* skip */ }
   }
