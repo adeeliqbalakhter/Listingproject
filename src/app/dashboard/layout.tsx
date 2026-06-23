@@ -15,6 +15,8 @@ import {
   Briefcase,
   LogOut,
   Loader2,
+  UserPlus,
+  FileBarChart,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/SessionProvider";
 import OnboardingModal from "@/components/onboarding-modal";
@@ -27,7 +29,9 @@ const sidebarLinks = [
   { name: "Reviews", href: "/dashboard/reviews", icon: Star },
   { name: "Leads", href: "/dashboard/leads", icon: Users },
   { name: "Messages", href: "/dashboard/messages", icon: MessageSquare },
+  { name: "Team", href: "/dashboard/team", icon: UserPlus },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { name: "Subscription", href: "/dashboard/subscription", icon: CreditCard },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

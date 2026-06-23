@@ -17,7 +17,10 @@ export async function GET(request: NextRequest) {
     const db = getDb();
 
     const rows = await db.execute(
-      sql`SELECT * FROM agencies WHERE user_id = ${user.id} AND deleted_at IS NULL LIMIT 1`
+      sql`SELECT a.*, u.name AS owner_name, u.email AS owner_email
+          FROM agencies a
+          JOIN users u ON u.id = a.user_id
+          WHERE a.user_id = ${user.id} AND a.deleted_at IS NULL LIMIT 1`
     );
 
     const agency = (rows as unknown as Array<Record<string, unknown>>)[0] ?? null;
