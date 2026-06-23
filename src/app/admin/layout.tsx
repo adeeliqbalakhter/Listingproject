@@ -7,7 +7,6 @@ import {
   Building2,
   Users,
   Star,
-  Flag,
   Settings,
   LogOut,
   Shield,
@@ -15,6 +14,7 @@ import {
   X,
   FileText,
   CreditCard,
+  FileBarChart,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -27,7 +27,7 @@ const sidebarLinks = [
   { name: "Leads", href: "/admin/leads", icon: FileText },
   { name: "Credits", href: "/admin/credits", icon: CreditCard },
   { name: "Reviews", href: "/admin/reviews", icon: Star },
-  { name: "Reports", href: "/admin/reports", icon: Flag },
+  { name: "Reports", href: "/admin/reports", icon: FileBarChart },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
