@@ -127,6 +127,7 @@ export const createLeadSchema = z.object({
   countryId: z.string().uuid().optional(),
   cityId: z.string().uuid().optional(),
   agencyIds: z.array(z.string().uuid()).optional(),
+  isDirect: z.boolean().optional(),
 });
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;

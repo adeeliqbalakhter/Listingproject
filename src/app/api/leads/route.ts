@@ -257,10 +257,11 @@ export async function POST(request: NextRequest) {
     const leadId = lead.id as string;
 
     if (data.agencyIds?.length) {
+      const assignmentStatus = data.isDirect ? "claimed" : "sent";
       for (const agencyId of data.agencyIds) {
         try {
           const insertResult = await db.execute(
-            sql`INSERT INTO lead_assignments (lead_id, agency_id, status) VALUES (${leadId}, ${agencyId}, 'sent') ON CONFLICT DO NOTHING RETURNING id`
+            sql`INSERT INTO lead_assignments (lead_id, agency_id, status, credits_used) VALUES (${leadId}, ${agencyId}, ${assignmentStatus}, ${data.isDirect ? 0 : 1}) ON CONFLICT DO NOTHING RETURNING id`
           );
           const inserted = (insertResult as unknown as Array<Record<string, unknown>>);
           if (inserted.length > 0) {
@@ -269,6 +270,11 @@ export async function POST(request: NextRequest) {
             );
           }
         } catch { /* skip invalid agency */ }
+      }
+      if (data.isDirect) {
+        try {
+          await db.execute(sql`UPDATE leads SET status = 'viewed', updated_at = NOW() WHERE id = ${leadId}`);
+        } catch { /* non-critical */ }
       }
     } else {
       // Auto-assign to relevant agencies

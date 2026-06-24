@@ -89,6 +89,7 @@ type SocialLink = { platform: string; url: string };
 type OfficeLocation = {
   label: string;
   address: string;
+  phone: string;
   cityId: string;
   countryId: string;
   latitude: string;
@@ -126,7 +127,7 @@ type TeamInfo = {
 };
 
 const emptyOffice = (): OfficeLocation => ({
-  label: "", address: "", cityId: "", countryId: "", latitude: "", longitude: "", isHeadquarters: false,
+  label: "", address: "", phone: "", cityId: "", countryId: "", latitude: "", longitude: "", isHeadquarters: false,
 });
 
 const emptyTier = (label: string): PackageTier => ({
@@ -326,6 +327,7 @@ export default function ProfilePage() {
         if (Array.isArray(locs)) {
           const parsed = locs.filter((o): o is Record<string, unknown> => o != null && typeof o === "object").map((o) => ({
             label: o.label ? String(o.label) : "", address: o.address ? String(o.address) : "",
+            phone: o.phone ? String(o.phone) : "",
             cityId: o.cityId ? String(o.cityId) : "", countryId: o.countryId ? String(o.countryId) : "",
             latitude: o.latitude != null ? String(o.latitude) : "", longitude: o.longitude != null ? String(o.longitude) : "",
             isHeadquarters: Boolean(o.isHeadquarters),
@@ -971,6 +973,7 @@ export default function ProfilePage() {
                       <div className="grid sm:grid-cols-2 gap-3">
                         <input value={office.label} onChange={(e) => update({ label: e.target.value })} placeholder="Label (e.g. Headquarters, EU Office)" maxLength={120} className={`sm:col-span-2 ${inputClass}`} />
                         <input value={office.address} onChange={(e) => update({ address: e.target.value })} placeholder="Street address" maxLength={300} className={`sm:col-span-2 ${inputClass}`} />
+                        <input value={office.phone} onChange={(e) => update({ phone: e.target.value })} placeholder="Phone number (e.g. +1 555 000-0000)" maxLength={60} className={`sm:col-span-2 ${inputClass}`} />
                         <select value={office.countryId} onChange={(e) => { const cid = e.target.value; update({ countryId: cid, cityId: "" }); if (cid) fetch(`/api/locations?countryId=${cid}`).then((r) => r.json()).then((d) => setOfficeCities((p) => ({ ...p, [i]: d.data || [] }))).catch(() => {}); else setOfficeCities((p) => ({ ...p, [i]: [] })); }} className={selectClass}>
                           <option value="">Select country</option>
                           {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

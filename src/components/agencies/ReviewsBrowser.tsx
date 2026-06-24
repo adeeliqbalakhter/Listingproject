@@ -216,7 +216,7 @@ export function ReviewsBrowser({
       {filtered.length > 0 ? (
         <div className="mt-4 divide-y divide-gray-100">
           {filtered.map((review) => {
-            const name = review.user_name || review.reviewer_name || "Anonymous";
+            const name = review.reviewer_name || review.user_name || "Anonymous";
             const initials = name
               .split(" ")
               .map((w) => w.charAt(0))

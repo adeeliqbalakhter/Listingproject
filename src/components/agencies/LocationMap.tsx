@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MapPin, CheckCircle2 } from "lucide-react";
+import { MapPin, CheckCircle2, Phone } from "lucide-react";
 
 export interface LocationItem {
   label?: string;
   address?: string;
   city?: string;
   country?: string;
+  phone?: string;
   latitude?: number | null;
   longitude?: number | null;
   isHeadquarters?: boolean;
@@ -145,6 +146,15 @@ export function LocationMap({ locations }: { locations: LocationItem[] }) {
                   </div>
                   {addr.length > 0 && (
                     <p className="mt-1 text-xs text-gray-500 leading-relaxed">{addr.join(" · ")}</p>
+                  )}
+                  {loc.phone && (
+                    <a
+                      href={`tel:${loc.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-brand hover:underline"
+                    >
+                      <Phone className="w-3 h-3" /> {loc.phone}
+                    </a>
                   )}
                 </button>
               );

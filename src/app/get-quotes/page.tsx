@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -103,6 +104,17 @@ interface FormErrors {
 }
 
 export default function GetQuotesPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-3xl px-6 py-16 text-center text-gray-400">Loading...</div>}>
+      <GetQuotesContent />
+    </Suspense>
+  );
+}
+
+function GetQuotesContent() {
+  const searchParams = useSearchParams();
+  const agencySlug = searchParams.get("agency");
+
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>({
     services: [],
@@ -117,6 +129,7 @@ export default function GetQuotesPage() {
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [loggedInUser, setLoggedInUser] = useState<{ name: string; email: string } | null>(null);
+  const [directAgency, setDirectAgency] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -139,6 +152,22 @@ export default function GetQuotesPage() {
     }
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (!agencySlug) return;
+    async function resolveAgency() {
+      try {
+        const res = await fetch(`/api/agencies/by-slug/${agencySlug}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.id) {
+            setDirectAgency({ id: json.data.id, name: json.data.name || agencySlug });
+          }
+        }
+      } catch { /* couldn't resolve */ }
+    }
+    resolveAgency();
+  }, [agencySlug]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -233,18 +262,23 @@ export default function GetQuotesPage() {
     }
 
     try {
+      const payload: Record<string, unknown> = {
+        companyName: form.company || (loggedInUser ? loggedInUser.name : ""),
+        contactName: form.name || (loggedInUser ? loggedInUser.name : ""),
+        contactEmail: form.email || (loggedInUser ? loggedInUser.email : ""),
+        contactPhone: form.phone || undefined,
+        projectDescription: descriptionParts.join(""),
+        budget: form.budget || undefined,
+        timeline: form.timeline || undefined,
+      };
+      if (directAgency) {
+        payload.agencyIds = [directAgency.id];
+        payload.isDirect = true;
+      }
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyName: form.company || (loggedInUser ? loggedInUser.name : ""),
-          contactName: form.name || (loggedInUser ? loggedInUser.name : ""),
-          contactEmail: form.email || (loggedInUser ? loggedInUser.email : ""),
-          contactPhone: form.phone || undefined,
-          projectDescription: descriptionParts.join(""),
-          budget: form.budget || undefined,
-          timeline: form.timeline || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const resData = await res.json().catch(() => null);
@@ -308,8 +342,9 @@ export default function GetQuotesPage() {
             Your request has been submitted!
           </h1>
           <p className="mt-4 text-lg text-gray-500">
-            We&apos;re matching you with the best agencies for your project.
-            Agencies will start responding soon.
+            {directAgency
+              ? `Your inquiry has been sent directly to ${directAgency.name}. They will respond soon.`
+              : "We're matching you with the best agencies for your project. Agencies will start responding soon."}
           </p>
         </div>
 
@@ -457,10 +492,12 @@ export default function GetQuotesPage() {
       {/* Header */}
       <div className="mb-10 text-center">
         <h1 className="text-3xl font-bold text-navy sm:text-4xl">
-          Get Free Quotes
+          {directAgency ? `Get a Quote from ${directAgency.name}` : "Get Free Quotes"}
         </h1>
         <p className="mt-3 text-lg text-gray-500">
-          Tell us about your project and receive proposals from top agencies
+          {directAgency
+            ? "Tell us about your project and get a custom proposal"
+            : "Tell us about your project and receive proposals from top agencies"}
         </p>
       </div>
 

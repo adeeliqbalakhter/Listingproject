@@ -461,6 +461,7 @@ interface ParsedLocation {
   address?: string;
   city?: string;
   country?: string;
+  phone?: string;
   cityId?: string;
   countryId?: string;
   latitude?: number | null;
@@ -480,6 +481,7 @@ function parseLocations(raw: unknown): ParsedLocation[] {
         address: o.address ? String(o.address) : undefined,
         city: o.city ? String(o.city) : undefined,
         country: o.country ? String(o.country) : undefined,
+        phone: o.phone ? String(o.phone) : undefined,
         cityId: o.cityId ? String(o.cityId) : undefined,
         countryId: o.countryId ? String(o.countryId) : undefined,
         latitude: o.latitude != null ? Number(o.latitude) : null,
@@ -555,6 +557,50 @@ function parseTeamInfo(raw: unknown): TeamInfoData | null {
   }
   const hasContent = info.story || (info.setsApart && info.setsApart.length > 0) || (info.tools && info.tools.length > 0) || (info.faq && info.faq.length > 0) || info.teamPhoto || info.videoUrl;
   return hasContent ? info : null;
+}
+
+interface PackageTierData {
+  label: string;
+  price: string;
+  frequency: string;
+  audience: string;
+  features: Array<{ name: string; type: string; value: string }>;
+}
+
+interface PackageData {
+  serviceLine: string;
+  focusArea: string;
+  name: string;
+  description: string;
+  tiers: PackageTierData[];
+}
+
+function parsePackages(raw: unknown): PackageData[] {
+  const val = parseJsonValue(raw);
+  if (!Array.isArray(val)) return [];
+  return val
+    .filter((v) => v && typeof v === "object" && (v as Record<string, unknown>).name)
+    .map((v) => {
+      const o = v as Record<string, unknown>;
+      const tiers = Array.isArray(o.tiers) ? (o.tiers as Array<Record<string, unknown>>).map((t) => ({
+        label: String(t.label || ""),
+        price: String(t.price || ""),
+        frequency: String(t.frequency || ""),
+        audience: String(t.audience || ""),
+        features: Array.isArray(t.features) ? (t.features as Array<Record<string, unknown>>).map((f) => ({
+          name: String(f.name || ""),
+          type: String(f.type || "text"),
+          value: String(f.value || ""),
+        })) : [],
+      })) : [];
+      return {
+        serviceLine: String(o.serviceLine || ""),
+        focusArea: String(o.focusArea || ""),
+        name: String(o.name || ""),
+        description: String(o.description || ""),
+        tiers,
+      };
+    });
 }
 
 function parseSocialLinks(raw: unknown): Record<string, string> {
@@ -824,6 +870,7 @@ function IndustryPie({ items }: { items: { name: string; pct: number }[] }) {
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "pricing", label: "Pricing" },
+  { id: "packages", label: "Packages" },
   { id: "portfolio", label: "Portfolio" },
   { id: "services", label: "Services" },
   { id: "industries", label: "Industries" },
@@ -930,6 +977,9 @@ export default async function AgencyProfilePage({
   // Team info
   const teamInfo = parseTeamInfo(agency.team_info);
 
+  // Packages
+  const packages = parsePackages(agency.packages);
+
   // Multi-location list with fallback to the agency's single registered address
   let locations = parseLocations(agency.locations);
 
@@ -952,11 +1002,18 @@ export default async function AgencyProfilePage({
         address: agency.address || undefined,
         city: cityName || undefined,
         country: countryName || undefined,
+        phone: agency.phone || undefined,
         latitude: agency.latitude != null ? Number(agency.latitude) : null,
         longitude: agency.longitude != null ? Number(agency.longitude) : null,
         isHeadquarters: true,
       },
     ];
+  }
+
+  // Attach agency phone to HQ location if location doesn't have its own phone
+  if (agency.phone) {
+    const hq = locations.find((l) => l.isHeadquarters);
+    if (hq && !hq.phone) hq.phone = agency.phone;
   }
 
   // Determine display location: prefer HQ office location, fall back to agency-level location
@@ -1142,16 +1199,6 @@ export default async function AgencyProfilePage({
               >
                 Get a Free Quote <ArrowRight className="w-4 h-4" />
               </Link>
-              {agency.phone && (
-                <TrackClick
-                  agencyId={agency.id as string}
-                  event="phone_click"
-                  href={`tel:${agency.phone}`}
-                  className="inline-flex items-center justify-center gap-2 border border-gray-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-navy-light transition-colors text-sm"
-                >
-                  <Phone className="w-4 h-4" /> {agency.phone}
-                </TrackClick>
-              )}
               {agency.claim_status === "unclaimed" && (
                 <Link
                   href={`/agencies/${agency.slug}/claim`}
@@ -1254,16 +1301,6 @@ export default async function AgencyProfilePage({
             Get a Free Quote
           </Link>
         )}
-        {agency.phone && (
-          <TrackClick
-            agencyId={agency.id as string}
-            event="phone_click"
-            href={`tel:${agency.phone}`}
-            className="inline-flex items-center justify-center gap-2 border border-gray-300 text-navy px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors"
-          >
-            <Phone className="w-4 h-4" />
-          </TrackClick>
-        )}
       </div>
 
       {/* ---------------------------------------------------------------- */}
@@ -1353,6 +1390,66 @@ export default async function AgencyProfilePage({
               <div id="pricing" className="scroll-mt-24">
                 <PricingSnapshot data={pricingData} agencyName={agency.name} />
               </div>
+
+              {/* ---- Packages ---- */}
+              {packages.length > 0 && (
+                <div id="packages" className="scroll-mt-24">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                    <h2 className="text-xl font-bold text-navy">Packages</h2>
+                    {packages.map((pkg, pkgIdx) => (
+                      <div key={pkgIdx} className="mt-8 first:mt-6">
+                        {/* Package header */}
+                        <div className="mb-4">
+                          {pkg.serviceLine && (
+                            <span className="text-xs font-semibold text-brand uppercase tracking-wide">{pkg.serviceLine}</span>
+                          )}
+                          <h3 className="text-lg font-bold text-navy mt-1">{pkg.name || `Package ${pkgIdx + 1}`}</h3>
+                          {pkg.description && (
+                            <p className="text-sm text-gray-600 mt-1 leading-relaxed">{pkg.description}</p>
+                          )}
+                        </div>
+
+                        {/* Tiers */}
+                        {pkg.tiers.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {pkg.tiers.filter((t) => t.label || t.price).map((tier, ti) => (
+                              <div
+                                key={ti}
+                                className={`rounded-xl border p-5 flex flex-col ${
+                                  ti === 1 ? "border-brand bg-brand/5" : "border-gray-200"
+                                }`}
+                              >
+                                <p className="text-sm font-bold text-navy">{tier.label}</p>
+                                {tier.audience && <p className="text-xs text-gray-500 mt-0.5">{tier.audience}</p>}
+                                {tier.price && (
+                                  <p className="mt-3 text-2xl font-bold text-navy">
+                                    {tier.price}
+                                    {tier.frequency && <span className="text-sm font-normal text-gray-500">{tier.frequency}</span>}
+                                  </p>
+                                )}
+                                {tier.features.length > 0 && (
+                                  <ul className="mt-4 space-y-2 flex-1">
+                                    {tier.features.map((feat, fi) => (
+                                      <li key={fi} className="flex items-start gap-2 text-sm text-gray-700">
+                                        {feat.type === "checkmark" ? (
+                                          <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                        ) : (
+                                          <span className="mt-1.5 w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" />
+                                        )}
+                                        <span>{feat.name}{feat.value && feat.type !== "checkmark" ? `: ${feat.value}` : ""}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ---- Portfolio & Awards ---- */}
               {portfolio.length > 0 && (
@@ -1627,16 +1724,6 @@ export default async function AgencyProfilePage({
                 >
                   Get a Free Quote <ArrowRight className="w-4 h-4" />
                 </Link>
-                {agency.phone && (
-                  <TrackClick
-                    agencyId={agency.id as string}
-                    event="phone_click"
-                    href={`tel:${agency.phone}`}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 border border-gray-200 text-navy py-3 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors"
-                  >
-                    <Phone className="w-4 h-4" /> {agency.phone}
-                  </TrackClick>
-                )}
 
                 {/* Quick info */}
                 <div className="mt-6 space-y-4 border-t border-gray-100 pt-6">
