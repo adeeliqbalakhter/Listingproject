@@ -123,6 +123,18 @@ async function fetchCountryName(countryId: string) {
   }
 }
 
+async function fetchCountryCode(countryId: string): Promise<string | null> {
+  try {
+    const db = getDb();
+    const rows = await db.execute(
+      sql`SELECT code FROM countries WHERE id = ${countryId} LIMIT 1`
+    );
+    return ((rows as any[])[0]?.code as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchCityName(cityId: string) {
   try {
     const db = getDb();
@@ -457,12 +469,32 @@ function parseStringArray(raw: unknown): string[] {
   return [];
 }
 
+const PHONE_CODES: Record<string, string> = {
+  AF: "+93", AL: "+355", DZ: "+213", AR: "+54", AU: "+61", AT: "+43",
+  BD: "+880", BE: "+32", BR: "+55", BG: "+359", KH: "+855", CA: "+1",
+  CL: "+56", CN: "+86", CO: "+57", CR: "+506", HR: "+385", CZ: "+420",
+  DK: "+45", DO: "+1", EC: "+593", EG: "+20", EE: "+372", ET: "+251",
+  FI: "+358", FR: "+33", DE: "+49", GH: "+233", GR: "+30", GT: "+502",
+  HK: "+852", HU: "+36", IS: "+354", IN: "+91", ID: "+62", IR: "+98",
+  IQ: "+964", IE: "+353", IL: "+972", IT: "+39", JM: "+1", JP: "+81",
+  JO: "+962", KZ: "+7", KE: "+254", KW: "+965", LV: "+371", LB: "+961",
+  LT: "+370", LU: "+352", MY: "+60", MX: "+52", MA: "+212", MM: "+95",
+  NP: "+977", NL: "+31", NZ: "+64", NG: "+234", NO: "+47", OM: "+968",
+  PK: "+92", PA: "+507", PE: "+51", PH: "+63", PL: "+48", PT: "+351",
+  QA: "+974", RO: "+40", RU: "+7", SA: "+966", RS: "+381", SG: "+65",
+  SK: "+421", SI: "+386", ZA: "+27", KR: "+82", ES: "+34", LK: "+94",
+  SE: "+46", CH: "+41", TW: "+886", TZ: "+255", TH: "+66", TN: "+216",
+  TR: "+90", UA: "+380", AE: "+971", GB: "+44", US: "+1", UY: "+598",
+  VE: "+58", VN: "+84",
+};
+
 interface ParsedLocation {
   label?: string;
   address?: string;
   city?: string;
   country?: string;
   phone?: string;
+  countryCode?: string;
   cityId?: string;
   countryId?: string;
   latitude?: number | null;
@@ -984,11 +1016,15 @@ export default async function AgencyProfilePage({
   // Multi-location list with fallback to the agency's single registered address
   let locations = parseLocations(agency.locations);
 
-  // Resolve cityId/countryId to names for locations that use the new format
+  // Resolve cityId/countryId to names and country codes for locations
   for (const loc of locations) {
-    if (loc.countryId && !loc.country) {
-      const name = await fetchCountryName(loc.countryId);
-      if (name) loc.country = name;
+    if (loc.countryId) {
+      if (!loc.country) {
+        const name = await fetchCountryName(loc.countryId);
+        if (name) loc.country = name;
+      }
+      const code = await fetchCountryCode(loc.countryId);
+      if (code) loc.countryCode = code;
     }
     if (loc.cityId && !loc.city) {
       const name = await fetchCityName(loc.cityId);
@@ -1009,6 +1045,16 @@ export default async function AgencyProfilePage({
         isHeadquarters: true,
       },
     ];
+  }
+
+  // Prepend country code to phone numbers that don't already have one
+  for (const loc of locations) {
+    if (loc.phone && loc.countryCode) {
+      const phoneCode = PHONE_CODES[loc.countryCode];
+      if (phoneCode && !loc.phone.startsWith("+")) {
+        loc.phone = `${phoneCode} ${loc.phone}`;
+      }
+    }
   }
 
   // Attach agency phone to HQ location if location doesn't have its own phone
