@@ -57,6 +57,7 @@ export const agencies = pgTable("agencies", {
   timezones: jsonb("timezones"),
   locations: jsonb("locations"),
   serviceFocus: jsonb("service_focus"),
+  industryFocus: jsonb("industry_focus"),
   packages: jsonb("packages"),
   teamInfo: jsonb("team_info"),
 

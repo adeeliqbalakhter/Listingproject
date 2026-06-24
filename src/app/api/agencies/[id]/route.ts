@@ -27,6 +27,7 @@ const updateAgencySchema = z.object({
   twitterUrl: z.string().max(500).optional().nullable(),
   facebookUrl: z.string().max(500).optional().nullable(),
   instagramUrl: z.string().max(500).optional().nullable(),
+  socialLinksData: z.record(z.string(), z.string().max(500)).optional().nullable(),
   metaTitle: z.string().max(70).optional().nullable(),
   metaDescription: z.string().max(160).optional().nullable(),
   languages: z.array(z.string().max(60)).max(30).optional().nullable(),
@@ -48,6 +49,10 @@ const updateAgencySchema = z.object({
     .nullable(),
   serviceFocus: z.array(z.object({
     serviceId: z.string().uuid(),
+    percentage: z.number().min(0).max(100),
+  })).max(20).optional().nullable(),
+  industryFocus: z.array(z.object({
+    industryId: z.string().uuid(),
     percentage: z.number().min(0).max(100),
   })).max(20).optional().nullable(),
   packages: z.array(z.object({
@@ -147,11 +152,16 @@ export async function PATCH(
     }
     const data = parsed.data;
 
-    const socialLinks: Record<string, string> = {};
-    if (data.linkedinUrl) socialLinks.linkedin = data.linkedinUrl;
-    if (data.twitterUrl) socialLinks.twitter = data.twitterUrl;
-    if (data.facebookUrl) socialLinks.facebook = data.facebookUrl;
-    if (data.instagramUrl) socialLinks.instagram = data.instagramUrl;
+    // Build social links object: prefer new socialLinksData, fall back to individual fields
+    let socialLinks: Record<string, string> = {};
+    if (data.socialLinksData && typeof data.socialLinksData === "object") {
+      socialLinks = data.socialLinksData as Record<string, string>;
+    } else {
+      if (data.linkedinUrl) socialLinks.linkedin = data.linkedinUrl;
+      if (data.twitterUrl) socialLinks.twitter = data.twitterUrl;
+      if (data.facebookUrl) socialLinks.facebook = data.facebookUrl;
+      if (data.instagramUrl) socialLinks.instagram = data.instagramUrl;
+    }
 
     const { serviceIds, industryIds, status, ...updateFields } = data;
 
@@ -179,7 +189,7 @@ export async function PATCH(
     if ("address" in updateFields) setClauses.push(sql`address = ${updateFields.address ?? null}`);
     if ("latitude" in updateFields) setClauses.push(sql`latitude = ${updateFields.latitude ?? null}`);
     if ("longitude" in updateFields) setClauses.push(sql`longitude = ${updateFields.longitude ?? null}`);
-    if (hasSocial || "linkedinUrl" in data || "twitterUrl" in data || "facebookUrl" in data || "instagramUrl" in data) {
+    if (hasSocial || "socialLinksData" in data || "linkedinUrl" in data || "twitterUrl" in data || "facebookUrl" in data || "instagramUrl" in data) {
       setClauses.push(sql`social_links = ${hasSocial ? JSON.stringify(socialLinks) : null}::jsonb`);
     }
     if ("metaTitle" in updateFields) setClauses.push(sql`meta_title = ${updateFields.metaTitle ?? null}`);
@@ -188,6 +198,7 @@ export async function PATCH(
     if ("timezones" in updateFields) setClauses.push(sql`timezones = ${updateFields.timezones ? JSON.stringify(updateFields.timezones) : null}::jsonb`);
     if ("locations" in updateFields) setClauses.push(sql`locations = ${updateFields.locations ? JSON.stringify(updateFields.locations) : null}::jsonb`);
     if ("serviceFocus" in updateFields) setClauses.push(sql`service_focus = ${updateFields.serviceFocus ? JSON.stringify(updateFields.serviceFocus) : null}::jsonb`);
+    if ("industryFocus" in updateFields) setClauses.push(sql`industry_focus = ${updateFields.industryFocus ? JSON.stringify(updateFields.industryFocus) : null}::jsonb`);
     if ("packages" in updateFields) setClauses.push(sql`packages = ${updateFields.packages ? JSON.stringify(updateFields.packages) : null}::jsonb`);
     if ("teamInfo" in updateFields) setClauses.push(sql`team_info = ${updateFields.teamInfo ? JSON.stringify(updateFields.teamInfo) : null}::jsonb`);
     if (status !== undefined) setClauses.push(sql`status = ${status}`);

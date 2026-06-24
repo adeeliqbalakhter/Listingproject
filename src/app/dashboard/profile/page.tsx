@@ -39,10 +39,16 @@ type ServiceItem = { id: string; name: string; slug: string };
 type IndustryItem = { id: string; name: string; slug: string };
 
 const SOCIAL_PLATFORMS = [
-  { key: "linkedinUrl", label: "LinkedIn", placeholder: "https://linkedin.com/company/..." },
-  { key: "twitterUrl", label: "Twitter / X", placeholder: "https://x.com/..." },
-  { key: "facebookUrl", label: "Facebook", placeholder: "https://facebook.com/..." },
-  { key: "instagramUrl", label: "Instagram", placeholder: "https://instagram.com/..." },
+  { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/company/...", icon: "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" },
+  { key: "twitter", label: "X (Twitter)", placeholder: "https://x.com/...", icon: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/...", icon: "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" },
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/...", icon: "M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678a6.162 6.162 0 100 12.324 6.162 6.162 0 100-12.324zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405a1.441 1.441 0 11-2.882 0 1.441 1.441 0 012.882 0z" },
+  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@...", icon: "M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" },
+  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@...", icon: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" },
+  { key: "pinterest", label: "Pinterest", placeholder: "https://pinterest.com/...", icon: "M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 01.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641 0 12.017 0z" },
+  { key: "github", label: "GitHub", placeholder: "https://github.com/...", icon: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" },
+  { key: "dribbble", label: "Dribbble", placeholder: "https://dribbble.com/...", icon: "M12 24C5.385 24 0 18.615 0 12S5.385 0 12 0s12 5.385 12 12-5.385 12-12 12zm10.12-10.358c-.35-.11-3.17-.953-6.384-.438 1.34 3.684 1.887 6.684 1.992 7.308 2.3-1.555 3.936-4.02 4.395-6.87zm-6.115 7.808c-.153-.9-.75-4.032-2.19-7.77l-.066.02c-5.79 2.015-7.86 6.025-8.04 6.4 1.73 1.358 3.92 2.166 6.29 2.166 1.42 0 2.77-.29 4-.81zm-11.62-2.58c.232-.4 3.045-5.055 8.332-6.765.135-.045.27-.084.405-.12-.26-.585-.54-1.167-.832-1.74C7.17 11.775 2.206 11.71 1.756 11.7l-.004.312c0 2.633.998 5.037 2.634 6.855zm-2.42-8.955c.46.008 4.683.026 9.477-1.248-1.698-3.018-3.53-5.558-3.8-5.928-2.868 1.35-5.01 3.99-5.676 7.17zM9.6 2.052c.282.38 2.145 2.914 3.822 6 3.645-1.365 5.19-3.44 5.373-3.702-1.81-1.61-4.19-2.586-6.795-2.586-.825 0-1.63.1-2.4.285zm10.335 3.483c-.218.29-1.91 2.493-5.724 4.04.24.49.47.985.68 1.486.08.18.15.36.22.53 3.41-.43 6.8.26 7.14.33-.02-2.42-.88-4.64-2.31-6.38z" },
+  { key: "behance", label: "Behance", placeholder: "https://behance.net/...", icon: "M22 7h-7V5h7v2zm1.726 10c-.442 1.297-2.029 3-5.101 3-3.074 0-5.564-1.729-5.564-5.675 0-3.91 2.325-5.92 5.466-5.92 3.082 0 4.964 1.782 5.375 4.426.078.506.109 1.188.095 2.14H15.97c.13 3.211 3.483 3.312 4.588 2.029h3.168zm-7.686-4h4.965c-.105-1.547-1.136-2.219-2.477-2.219-1.466 0-2.277.768-2.488 2.219zm-9.574 6.988H0V5.021h6.953c5.476.081 5.58 5.444 2.72 6.906 3.461 1.26 3.577 8.061-3.207 8.061zM3 11h3.584c2.508 0 2.906-3-.312-3H3v3zm3.391 3H3v3.016h3.341c3.055 0 2.868-3.016.05-3.016z" },
 ] as const;
 
 const PHONE_CODES: Record<string, string> = {
@@ -91,6 +97,7 @@ type OfficeLocation = {
 };
 
 type ServiceFocusItem = { serviceId: string; percentage: number };
+type IndustryFocusItem = { industryId: string; percentage: number };
 
 type PackageTier = {
   label: string;
@@ -227,7 +234,7 @@ export default function ProfilePage() {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedIndustryIds, setSelectedIndustryIds] = useState<string[]>([]);
 
-  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([{ platform: "linkedinUrl", url: "" }]);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([{ platform: "linkedin", url: "" }]);
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -246,9 +253,14 @@ export default function ProfilePage() {
   const [offices, setOffices] = useState<OfficeLocation[]>([]);
   const [officeCities, setOfficeCities] = useState<Record<number, LocationItem[]>>({});
   const [serviceFocus, setServiceFocus] = useState<ServiceFocusItem[]>([]);
+  const [industryFocus, setIndustryFocus] = useState<IndustryFocusItem[]>([]);
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [teamInfo, setTeamInfo] = useState<TeamInfo>(emptyTeamInfo());
   const [toolInput, setToolInput] = useState("");
+
+  // ─── Computed totals ───
+  const focusTotal = serviceFocus.reduce((a, b) => a + b.percentage, 0);
+  const industryFocusTotal = industryFocus.reduce((a, b) => a + b.percentage, 0);
 
   // ─── Section completion tracking ───
   const sectionComplete = useMemo(() => {
@@ -259,11 +271,11 @@ export default function ProfilePage() {
       locations: offices.length > 0,
       social: socialLinks.some((s) => filled(s.url)),
       services: serviceFocus.length > 0 && serviceFocus.reduce((a, b) => a + b.percentage, 0) === 100,
-      industries: selectedIndustryIds.length > 0,
+      industries: industryFocus.length > 0 && industryFocusTotal === 100,
       packages: packages.length > 0 && packages.some((p) => filled(p.name)),
       seo: filled(form.metaTitle),
     };
-  }, [form, teamInfo, offices, socialLinks, serviceFocus, selectedIndustryIds, packages]);
+  }, [form, teamInfo, offices, socialLinks, serviceFocus, industryFocus, industryFocusTotal, packages]);
 
   // ─── Data loading ───
   useEffect(() => {
@@ -330,6 +342,9 @@ export default function ProfilePage() {
         const sf = parseJsonField(agency.service_focus);
         if (Array.isArray(sf)) setServiceFocus(sf.filter((s): s is ServiceFocusItem => s && typeof s === "object" && "serviceId" in s && "percentage" in s));
 
+        const ifoc = parseJsonField(agency.industry_focus);
+        if (Array.isArray(ifoc)) setIndustryFocus(ifoc.filter((i): i is IndustryFocusItem => i && typeof i === "object" && "industryId" in i && "percentage" in i));
+
         const pkgs = parseJsonField(agency.packages);
         if (Array.isArray(pkgs)) setPackages(pkgs.map((p: Record<string, unknown>) => ({
           serviceLine: String(p.serviceLine || ""), focusArea: String(p.focusArea || ""),
@@ -360,9 +375,10 @@ export default function ProfilePage() {
         if (agency.cover_image) setCoverPreview(agency.cover_image);
 
         if (agency.social_links && typeof agency.social_links === "object") {
-          const keyMap: Record<string, string> = { linkedin: "linkedinUrl", twitter: "twitterUrl", facebook: "facebookUrl", instagram: "instagramUrl" };
+          const validKeys: string[] = SOCIAL_PLATFORMS.map((p) => p.key);
           const mapped = Object.entries(agency.social_links as Record<string, string>)
-            .filter(([key]) => key in keyMap).map(([key, url]) => ({ platform: keyMap[key], url: url || "" }));
+            .filter(([key]) => validKeys.includes(key))
+            .map(([key, url]) => ({ platform: key, url: url || "" }));
           if (mapped.length > 0) setSocialLinks(mapped);
         }
 
@@ -445,14 +461,14 @@ export default function ProfilePage() {
     if (!form.name.trim()) { setMessage({ type: "error", text: "Agency name is required." }); return; }
     autoSeo(); setSaving(true); setMessage(null);
 
-    const socialData: Record<string, string> = {};
-    socialLinks.forEach((link) => { if (link.url.trim()) socialData[link.platform] = link.url.trim(); });
+    const socialObj: Record<string, string> = {};
+    socialLinks.forEach((link) => { if (link.url.trim()) socialObj[link.platform] = link.url.trim(); });
 
     const payload: Record<string, unknown> = {
       ...form,
       foundedYear: form.foundedYear ? Number(form.foundedYear) : undefined,
       minProjectSize: form.minProjectSize ? Number(form.minProjectSize.replace(/[^0-9]/g, "")) : undefined,
-      ...socialData,
+      socialLinksData: Object.keys(socialObj).length > 0 ? socialObj : null,
       serviceIds: selectedServiceIds,
       industryIds: selectedIndustryIds,
       countryId: form.countryId || undefined,
@@ -464,6 +480,7 @@ export default function ProfilePage() {
             .map((o) => ({ label: o.label.trim() || undefined, address: o.address.trim() || undefined, cityId: o.cityId || undefined, countryId: o.countryId || undefined, latitude: o.latitude.trim() ? Number(o.latitude) : undefined, longitude: o.longitude.trim() ? Number(o.longitude) : undefined, isHeadquarters: o.isHeadquarters || undefined }))
         : undefined,
       serviceFocus: serviceFocus.length > 0 ? serviceFocus : undefined,
+      industryFocus: industryFocus.length > 0 ? industryFocus : undefined,
       packages: packages.length > 0 ? packages.filter((p) => p.name.trim()) : undefined,
       teamInfo: teamInfo.story || teamInfo.setsApart.length > 0 || teamInfo.tools.length > 0 || teamInfo.faq.length > 0 ? teamInfo : undefined,
     };
@@ -506,8 +523,6 @@ export default function ProfilePage() {
   };
 
   // ─── Service Focus helpers ───
-  const focusTotal = serviceFocus.reduce((a, b) => a + b.percentage, 0);
-
   const addServiceToFocus = (serviceId: string) => {
     if (serviceFocus.find((s) => s.serviceId === serviceId)) return;
     setServiceFocus((prev) => [...prev, { serviceId, percentage: 10 }]);
@@ -527,6 +542,27 @@ export default function ProfilePage() {
       pct: sf.percentage,
     })),
   [serviceFocus, serviceOptions]);
+
+  // ─── Industry Focus helpers ───
+  const addIndustryToFocus = (industryId: string) => {
+    if (industryFocus.find((i) => i.industryId === industryId)) return;
+    setIndustryFocus((prev) => [...prev, { industryId, percentage: 10 }]);
+  };
+
+  const removeIndustryFromFocus = (industryId: string) => {
+    setIndustryFocus((prev) => prev.filter((i) => i.industryId !== industryId));
+  };
+
+  const updateIndustryFocusPercentage = (industryId: string, pct: number) => {
+    setIndustryFocus((prev) => prev.map((i) => i.industryId === industryId ? { ...i, percentage: pct } : i));
+  };
+
+  const industryPieItems = useMemo(() =>
+    industryFocus.map((ifoc) => ({
+      label: industryOptions.find((i) => i.id === ifoc.industryId)?.name || "Unknown",
+      pct: ifoc.percentage,
+    })),
+  [industryFocus, industryOptions]);
 
   // ─── Render ───
   if (loading) {
@@ -979,10 +1015,15 @@ export default function ProfilePage() {
                   const platformInfo = SOCIAL_PLATFORMS.find((p) => p.key === link.platform);
                   const usedPlatforms = socialLinks.map((s) => s.platform);
                   return (
-                    <div key={index} className="flex gap-3 items-start">
-                      <select value={link.platform} onChange={(e) => setSocialLinks(socialLinks.map((l, i) => i === index ? { ...l, platform: e.target.value } : l))} className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white min-w-[140px]">
-                        {SOCIAL_PLATFORMS.map((p) => <option key={p.key} value={p.key} disabled={usedPlatforms.includes(p.key) && p.key !== link.platform}>{p.label}</option>)}
-                      </select>
+                    <div key={index} className="flex gap-3 items-center">
+                      <div className="flex items-center gap-2 min-w-[170px]">
+                        {platformInfo && (
+                          <svg viewBox="0 0 24 24" className="w-5 h-5 text-gray-600 shrink-0" fill="currentColor"><path d={platformInfo.icon} /></svg>
+                        )}
+                        <select value={link.platform} onChange={(e) => setSocialLinks(socialLinks.map((l, i) => i === index ? { ...l, platform: e.target.value } : l))} className="border border-gray-300 rounded-lg px-2 py-2.5 text-sm bg-white flex-1">
+                          {SOCIAL_PLATFORMS.map((p) => <option key={p.key} value={p.key} disabled={usedPlatforms.includes(p.key) && p.key !== link.platform}>{p.label}</option>)}
+                        </select>
+                      </div>
                       <input value={link.url} onChange={(e) => setSocialLinks(socialLinks.map((l, i) => i === index ? { ...l, url: e.target.value } : l))} placeholder={platformInfo?.placeholder || "https://..."} className={`flex-1 ${inputClass}`} />
                       <button onClick={() => setSocialLinks(socialLinks.filter((_, i) => i !== index))} className="p-2.5 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                     </div>
@@ -1085,31 +1126,76 @@ export default function ProfilePage() {
         )}
 
         {/* ════════════════════════════════════════════ */}
-        {/* INDUSTRIES */}
+        {/* INDUSTRIES (pie chart + percentage) */}
         {/* ════════════════════════════════════════════ */}
         {activeSection === "industries" && (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-navy">Industries</h2>
+            <h2 className="text-xl font-bold text-navy">Industry Focus</h2>
+            <p className="text-sm text-gray-600">Allocate industries based on how much of your business focuses on each industry. An industry must be 10% or greater. All industries must add up to 100%.</p>
+
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              {industryOptions.length === 0 ? (
-                <p className="text-sm text-gray-500">No industries available.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {industryOptions.map((ind) => {
-                    const selected = selectedIndustryIds.includes(ind.id);
-                    return (
-                      <label key={ind.id} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-sm cursor-pointer transition-colors ${selected ? "border-brand bg-blue-50 text-brand" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}>
-                        <input type="checkbox" checked={selected} onChange={() => setSelectedIndustryIds((p) => selected ? p.filter((id) => id !== ind.id) : [...p, ind.id])} className="sr-only" />
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-brand border-brand" : "border-gray-300"}`}>
-                          {selected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                        </div>
-                        {ind.name}
-                      </label>
-                    );
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search for an Industry</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {industryFocus.map((ifoc) => {
+                    const ind = industryOptions.find((i) => i.id === ifoc.industryId);
+                    return ind ? (
+                      <span key={ifoc.industryId} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1 rounded-md border border-gray-200">
+                        {ind.name}<button type="button" onClick={() => removeIndustryFromFocus(ifoc.industryId)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                      </span>
+                    ) : null;
                   })}
+                </div>
+                <select value="" onChange={(e) => { if (e.target.value) addIndustryToFocus(e.target.value); }} className={selectClass}>
+                  <option value="">Select an industry to add...</option>
+                  {industryOptions.filter((i) => !industryFocus.find((ifoc) => ifoc.industryId === i.id)).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                </select>
+              </div>
+
+              {industryFocus.length > 0 && (
+                <div className="mt-6 grid lg:grid-cols-2 gap-8">
+                  <div className="flex items-center justify-center">
+                    <PieChartSVG items={industryPieItems} colors={PIE_COLORS} />
+                  </div>
+                  <div className="space-y-4">
+                    {industryFocus.map((ifoc, i) => {
+                      const ind = industryOptions.find((opt) => opt.id === ifoc.industryId);
+                      return (
+                        <div key={ifoc.industryId}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                              <span className="text-sm font-medium text-gray-800">{ind?.name || "Unknown"}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-700 w-10 text-right">{ifoc.percentage}%</span>
+                              <button type="button" onClick={() => removeIndustryFromFocus(ifoc.industryId)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-400 w-5">0%</span>
+                            <input type="range" min={0} max={100} step={5} value={ifoc.percentage}
+                              onChange={(e) => updateIndustryFocusPercentage(ifoc.industryId, Number(e.target.value))}
+                              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand" />
+                            <span className="text-xs text-gray-400 w-8">100%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="border-t border-gray-200 pt-3 flex items-center justify-between">
+                      <span className="font-bold text-gray-800">Total:</span>
+                      <span className={`font-bold text-lg flex items-center gap-1 ${industryFocusTotal === 100 ? "text-emerald-600" : "text-red-600"}`}>
+                        {industryFocusTotal === 100 && <CheckCircle2 className="w-4 h-4" />}
+                        {industryFocusTotal}%
+                      </span>
+                    </div>
+                    {industryFocusTotal !== 100 && <p className="text-xs text-red-500">Industry allocations must total exactly 100%.</p>}
+                  </div>
                 </div>
               )}
             </div>
+
             <div className="flex justify-end">
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-red-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-60">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {saving ? "Saving..." : "Save Changes"}
