@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAuditLog, getClientIp } from "@/lib/services/audit";
 import { success, created, error, serverError } from "@/lib/api/response";
 import { checkTeamLimit } from "@/lib/subscriptions/gates";
+import { sendEmail } from "@/lib/services/email";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -91,6 +92,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       newValues: { email, role },
       ipAddress: getClientIp(request),
     });
+
+    // Send invitation email
+    try {
+      const agencyRows = await db.execute(sql`SELECT name FROM agencies WHERE id = ${id} LIMIT 1`);
+      const agencyName = ((agencyRows as unknown as Array<Record<string, unknown>>)[0]?.name as string) || "an agency";
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const dashboardUrl = `${baseUrl}/dashboard/team`;
+      const inviterRows = await db.execute(sql`SELECT name FROM users WHERE id = ${user.id} LIMIT 1`);
+      const inviterName = ((inviterRows as unknown as Array<Record<string, unknown>>)[0]?.name as string) || "A team admin";
+      await sendEmail({
+        to: email,
+        subject: `You've been invited to join ${agencyName} on AgencyHub`,
+        html: `
+          <h2>Team Invitation</h2>
+          <p>Hi,</p>
+          <p><strong>${inviterName}</strong> has invited you to join <strong>${agencyName}</strong> as a <strong>${role}</strong> on AgencyHub.</p>
+          <p><a href="${dashboardUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">View Invitation</a></p>
+          <p>Or copy and paste: ${dashboardUrl}</p>
+          <p>If you don't have an account yet, please sign up first with this email address.</p>
+        `,
+        text: `You've been invited to join ${agencyName} as a ${role}. View: ${dashboardUrl}`,
+      });
+    } catch (emailErr) {
+      console.error("[TEAM] Failed to send invite email:", emailErr);
+    }
 
     return created((rows as unknown as Array<Record<string, unknown>>)[0]);
   } catch (err) {

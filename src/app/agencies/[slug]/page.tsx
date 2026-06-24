@@ -32,6 +32,7 @@ import { PricingSnapshot } from "@/components/agencies/PricingSnapshot";
 import { ReviewInsights } from "@/components/agencies/ReviewInsights";
 import { ReviewsBrowser } from "@/components/agencies/ReviewsBrowser";
 import { LocationMap } from "@/components/agencies/LocationMap";
+import { PackagesSection } from "@/components/agencies/PackagesSection";
 import { Languages as LanguagesIcon, Globe2 } from "lucide-react";
 import { TrackProfileView, TrackClick } from "@/components/analytics/TrackEvent";
 
@@ -1394,60 +1395,14 @@ export default async function AgencyProfilePage({
               {/* ---- Packages ---- */}
               {packages.length > 0 && (
                 <div id="packages" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
-                    <h2 className="text-xl font-bold text-navy">Packages</h2>
-                    {packages.map((pkg, pkgIdx) => (
-                      <div key={pkgIdx} className="mt-8 first:mt-6">
-                        {/* Package header */}
-                        <div className="mb-4">
-                          {pkg.serviceLine && (
-                            <span className="text-xs font-semibold text-brand uppercase tracking-wide">{pkg.serviceLine}</span>
-                          )}
-                          <h3 className="text-lg font-bold text-navy mt-1">{pkg.name || `Package ${pkgIdx + 1}`}</h3>
-                          {pkg.description && (
-                            <p className="text-sm text-gray-600 mt-1 leading-relaxed">{pkg.description}</p>
-                          )}
-                        </div>
-
-                        {/* Tiers */}
-                        {pkg.tiers.length > 0 && (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {pkg.tiers.filter((t) => t.label || t.price).map((tier, ti) => (
-                              <div
-                                key={ti}
-                                className={`rounded-xl border p-5 flex flex-col ${
-                                  ti === 1 ? "border-brand bg-brand/5" : "border-gray-200"
-                                }`}
-                              >
-                                <p className="text-sm font-bold text-navy">{tier.label}</p>
-                                {tier.audience && <p className="text-xs text-gray-500 mt-0.5">{tier.audience}</p>}
-                                {tier.price && (
-                                  <p className="mt-3 text-2xl font-bold text-navy">
-                                    {tier.price}
-                                    {tier.frequency && <span className="text-sm font-normal text-gray-500">{tier.frequency}</span>}
-                                  </p>
-                                )}
-                                {tier.features.length > 0 && (
-                                  <ul className="mt-4 space-y-2 flex-1">
-                                    {tier.features.map((feat, fi) => (
-                                      <li key={fi} className="flex items-start gap-2 text-sm text-gray-700">
-                                        {feat.type === "checkmark" ? (
-                                          <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                        ) : (
-                                          <span className="mt-1.5 w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" />
-                                        )}
-                                        <span>{feat.name}{feat.value && feat.type !== "checkmark" ? `: ${feat.value}` : ""}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <PackagesSection
+                    packages={packages}
+                    agencyId={agency.id as string}
+                    agencyName={agency.name as string}
+                    agencySlug={agency.slug as string}
+                    averageRating={rating}
+                    totalReviews={reviewCount}
+                  />
                 </div>
               )}
 

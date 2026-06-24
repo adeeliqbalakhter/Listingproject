@@ -719,19 +719,6 @@ export default function ProfilePage() {
                   {emailVerifyError && <p className="mt-1 text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {emailVerifyError}</p>}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
-                  {(() => {
-                    const selCountry = countries.find((c) => c.id === form.countryId);
-                    const pCode = selCountry?.code ? PHONE_CODES[selCountry.code] : "";
-                    return (
-                      <div className="flex gap-2">
-                        {pCode && <span className="inline-flex items-center px-2 bg-gray-100 border border-gray-300 rounded-lg text-xs text-gray-600 font-mono">{pCode}</span>}
-                        <input name="phone" value={form.phone} onChange={handleChange} className={`flex-1 ${inputClass}`} placeholder={pCode ? `${pCode} XXX XXXX` : "+1 (555) 000-0000"} />
-                      </div>
-                    );
-                  })()}
-                </div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Founding Year</label>
                   <select name="foundedYear" value={form.foundedYear} onChange={handleChange} className={selectClass}>
                     <option value="">Select year</option>
@@ -973,7 +960,16 @@ export default function ProfilePage() {
                       <div className="grid sm:grid-cols-2 gap-3">
                         <input value={office.label} onChange={(e) => update({ label: e.target.value })} placeholder="Label (e.g. Headquarters, EU Office)" maxLength={120} className={`sm:col-span-2 ${inputClass}`} />
                         <input value={office.address} onChange={(e) => update({ address: e.target.value })} placeholder="Street address" maxLength={300} className={`sm:col-span-2 ${inputClass}`} />
-                        <input value={office.phone} onChange={(e) => update({ phone: e.target.value })} placeholder="Phone number (e.g. +1 555 000-0000)" maxLength={60} className={`sm:col-span-2 ${inputClass}`} />
+                        {(() => {
+                          const officeCountry = countries.find((c) => c.id === office.countryId);
+                          const officePhoneCode = officeCountry?.code ? PHONE_CODES[officeCountry.code] : "";
+                          return (
+                            <div className="sm:col-span-2 flex gap-2">
+                              {officePhoneCode && <span className="inline-flex items-center px-2.5 bg-gray-100 border border-gray-300 rounded-lg text-xs text-gray-600 font-mono shrink-0">{officePhoneCode}</span>}
+                              <input value={office.phone} onChange={(e) => update({ phone: e.target.value })} placeholder={officePhoneCode ? "Phone number" : "Phone (select country for code)"} maxLength={60} className={`flex-1 ${inputClass}`} />
+                            </div>
+                          );
+                        })()}
                         <select value={office.countryId} onChange={(e) => { const cid = e.target.value; update({ countryId: cid, cityId: "" }); if (cid) fetch(`/api/locations?countryId=${cid}`).then((r) => r.json()).then((d) => setOfficeCities((p) => ({ ...p, [i]: d.data || [] }))).catch(() => {}); else setOfficeCities((p) => ({ ...p, [i]: [] })); }} className={selectClass}>
                           <option value="">Select country</option>
                           {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
