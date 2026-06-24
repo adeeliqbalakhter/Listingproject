@@ -20,6 +20,7 @@ interface Agency {
   id: string;
   name: string;
   slug: string;
+  logo: string;
   rating: number;
   reviews: number;
   location: string;
@@ -53,6 +54,7 @@ function mapApiAgency(raw: Record<string, unknown>): Agency {
     id: String(raw.id ?? ""),
     name: String(raw.name ?? ""),
     slug: String(raw.slug ?? ""),
+    logo: String(raw.logo ?? ""),
     rating: Number(raw.averageRating ?? raw.average_rating ?? 0),
     reviews: Number(raw.totalReviews ?? raw.total_reviews ?? 0),
     location: locationParts.length > 0 ? locationParts.join(", ") : "-",
@@ -247,20 +249,24 @@ export default function ComparePage() {
                           No agencies found
                         </p>
                       ) : (
-                        filtered.map((agency) => (
-                          <button
-                            key={agency.id}
-                            onClick={() => addAgency(agency)}
-                            className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <p className="text-sm font-medium text-navy">
-                              {agency.name}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {agency.location} · {agency.rating} stars
-                            </p>
-                          </button>
-                        ))
+                        filtered.map((agency) => {
+                          const logoSrc = agency.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(agency.name)}&size=40&background=2563EB&color=fff&bold=true&format=svg`;
+                          return (
+                            <button
+                              key={agency.id}
+                              onClick={() => addAgency(agency)}
+                              className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-3"
+                            >
+                              <img src={logoSrc} alt="" className="w-8 h-8 rounded-lg border border-gray-100 shrink-0 object-cover" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-navy truncate">{agency.name}</p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {agency.location} · {agency.rating > 0 ? `${agency.rating.toFixed(1)} stars` : "No rating"}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -279,21 +285,27 @@ export default function ComparePage() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-gray-500 w-48">
                     Feature
                   </th>
-                  {selected.map((agency) => (
-                    <th key={agency.id} className="px-6 py-4 text-center min-w-[200px]">
-                      <Link
-                        href={`/agencies/${agency.slug}`}
-                        className="text-navy font-semibold hover:text-brand transition-colors"
-                      >
-                        {agency.name}
-                      </Link>
-                      {agency.verified && (
-                        <span className="block text-xs text-brand mt-1">
-                          Verified
-                        </span>
-                      )}
-                    </th>
-                  ))}
+                  {selected.map((agency) => {
+                    const logoSrc = agency.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(agency.name)}&size=64&background=2563EB&color=fff&bold=true&format=svg`;
+                    return (
+                      <th key={agency.id} className="px-6 py-4 text-center min-w-[200px]">
+                        <div className="flex flex-col items-center gap-2">
+                          <img src={logoSrc} alt={agency.name} className="w-12 h-12 rounded-xl border border-gray-100 object-cover" />
+                          <Link
+                            href={`/agencies/${agency.slug}`}
+                            className="text-navy font-semibold hover:text-brand transition-colors"
+                          >
+                            {agency.name}
+                          </Link>
+                          {agency.verified && (
+                            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5" /> Verified
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

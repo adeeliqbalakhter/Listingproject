@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
     const agencyRows = await db.execute(
       sql`SELECT
             a.id, a.name, a.slug, a.tagline, a.description, a.logo, a.website,
-            a.company_size, a.hourly_rate, a.min_project_size,
+            a.company_size, a.hourly_rate, a.min_project_size, a.founded_year,
             a.is_verified, a.is_featured, a.average_rating, a.total_reviews,
             co.name AS country_name, co.slug AS country_slug,
             ci.name AS city_name, ci.slug AS city_slug
@@ -218,6 +218,7 @@ export async function GET(request: NextRequest) {
         companySize: row.company_size,
         hourlyRate: row.hourly_rate,
         minProjectSize: row.min_project_size ? Number(row.min_project_size) : null,
+        foundedYear: row.founded_year ? String(row.founded_year) : null,
         isVerified: row.is_verified ?? false,
         isFeatured: row.is_featured ?? false,
         averageRating: row.average_rating ? Number(row.average_rating) : 0,
