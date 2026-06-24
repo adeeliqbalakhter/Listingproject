@@ -42,6 +42,7 @@ const updateAgencySchema = z.object({
         latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
         longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
         isHeadquarters: z.boolean().optional(),
+        phone: z.string().max(50).optional(),
       })
     )
     .max(50)
