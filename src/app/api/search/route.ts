@@ -64,22 +64,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (services && services.length > 0) {
-      // Agency must have at least one of the requested services (by slug)
+      const svcSlugs = sql.join(services.map((s: string) => sql`${s}`), sql`, `);
       conditions.push(
         sql`EXISTS (
           SELECT 1 FROM agency_services asvc
           JOIN services s ON s.id = asvc.service_id
-          WHERE asvc.agency_id = a.id AND s.slug = ANY(${services})
+          WHERE asvc.agency_id = a.id AND s.slug IN (${svcSlugs})
         )`
       );
     }
 
     if (industries && industries.length > 0) {
+      const indSlugs = sql.join(industries.map((i: string) => sql`${i}`), sql`, `);
       conditions.push(
         sql`EXISTS (
           SELECT 1 FROM agency_industries ai
           JOIN industries i ON i.id = ai.industry_id
-          WHERE ai.agency_id = a.id AND i.slug = ANY(${industries})
+          WHERE ai.agency_id = a.id AND i.slug IN (${indSlugs})
         )`
       );
     }
@@ -172,12 +173,14 @@ export async function GET(request: NextRequest) {
     let serviceMap: Record<string, { id: string; name: string; slug: string }[]> = {};
     let industryMap: Record<string, { id: string; name: string; slug: string }[]> = {};
     if (agencyIds.length > 0) {
+      const idList = sql.join(agencyIds.map((id: string) => sql`${id}`), sql`, `);
+
       try {
         const svcRows = await db.execute(
           sql`SELECT asvc.agency_id, s.id, s.name, s.slug
               FROM agency_services asvc
               JOIN services s ON s.id = asvc.service_id
-              WHERE asvc.agency_id = ANY(${agencyIds})`
+              WHERE asvc.agency_id IN (${idList})`
         );
         for (const row of svcRows as any[]) {
           if (!serviceMap[row.agency_id]) serviceMap[row.agency_id] = [];
@@ -192,7 +195,7 @@ export async function GET(request: NextRequest) {
           sql`SELECT ai.agency_id, i.id, i.name, i.slug
               FROM agency_industries ai
               JOIN industries i ON i.id = ai.industry_id
-              WHERE ai.agency_id = ANY(${agencyIds})`
+              WHERE ai.agency_id IN (${idList})`
         );
         for (const row of indRows as any[]) {
           if (!industryMap[row.agency_id]) industryMap[row.agency_id] = [];

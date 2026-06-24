@@ -14,6 +14,10 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Sparkles,
+  Trophy,
+  TrendingUp,
+  Briefcase,
 } from "lucide-react";
 
 interface Agency {
@@ -83,6 +87,117 @@ const comparisonFields = [
   { key: "minProject", label: "Min Project Size", icon: DollarSign },
   { key: "founded", label: "Founded", icon: Calendar },
 ] as const;
+
+function generateSummary(agencies: Agency[]) {
+  if (agencies.length < 2) return null;
+
+  const bestRating = [...agencies].sort((a, b) => b.rating - a.rating)[0];
+  const mostReviews = [...agencies].sort((a, b) => b.reviews - a.reviews)[0];
+  const lowestBudget = [...agencies]
+    .filter((a) => a.minProject !== null && a.minProject > 0)
+    .sort((a, b) => (a.minProject ?? 0) - (b.minProject ?? 0))[0];
+
+  const allServices = new Map<string, string[]>();
+  for (const a of agencies) {
+    for (const s of a.services) {
+      if (!allServices.has(s)) allServices.set(s, []);
+      allServices.get(s)!.push(a.name);
+    }
+  }
+  const sharedServices = [...allServices.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([svc]) => svc);
+
+  const allIndustries = new Map<string, string[]>();
+  for (const a of agencies) {
+    for (const ind of a.industries) {
+      if (!allIndustries.has(ind)) allIndustries.set(ind, []);
+      allIndustries.get(ind)!.push(a.name);
+    }
+  }
+  const sharedIndustries = [...allIndustries.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([ind]) => ind);
+
+  const uniqueServicesPerAgency = agencies.map((a) => {
+    const unique = a.services.filter(
+      (s) => !allServices.has(s) || allServices.get(s)!.length === 1
+    );
+    return { name: a.name, unique };
+  });
+
+  const insights: { icon: typeof Trophy; title: string; text: string }[] = [];
+
+  if (bestRating && bestRating.rating > 0) {
+    const tied = agencies.filter((a) => a.rating === bestRating.rating);
+    if (tied.length === 1) {
+      insights.push({
+        icon: Trophy,
+        title: "Highest Rated",
+        text: `${bestRating.name} leads with a ${bestRating.rating.toFixed(1)} rating${bestRating.reviews > 0 ? ` across ${bestRating.reviews} review${bestRating.reviews > 1 ? "s" : ""}` : ""}.`,
+      });
+    } else {
+      insights.push({
+        icon: Trophy,
+        title: "Top Rated",
+        text: `${tied.map((a) => a.name).join(" and ")} are tied at ${bestRating.rating.toFixed(1)} rating.`,
+      });
+    }
+  }
+
+  if (mostReviews && mostReviews.reviews > 0 && mostReviews.id !== bestRating?.id) {
+    insights.push({
+      icon: TrendingUp,
+      title: "Most Reviewed",
+      text: `${mostReviews.name} has the most social proof with ${mostReviews.reviews} review${mostReviews.reviews > 1 ? "s" : ""}.`,
+    });
+  }
+
+  if (lowestBudget && lowestBudget.minProject !== null) {
+    insights.push({
+      icon: DollarSign,
+      title: "Budget-Friendly",
+      text: `${lowestBudget.name} has the lowest entry point at $${lowestBudget.minProject.toLocaleString()} minimum project size.`,
+    });
+  }
+
+  if (sharedServices.length > 0) {
+    insights.push({
+      icon: Briefcase,
+      title: "Common Services",
+      text: `All compared agencies offer: ${sharedServices.slice(0, 5).join(", ")}${sharedServices.length > 5 ? ` and ${sharedServices.length - 5} more` : ""}.`,
+    });
+  }
+
+  for (const entry of uniqueServicesPerAgency) {
+    if (entry.unique.length > 0) {
+      insights.push({
+        icon: Sparkles,
+        title: `Unique to ${entry.name}`,
+        text: `Only ${entry.name} offers: ${entry.unique.slice(0, 4).join(", ")}${entry.unique.length > 4 ? ` +${entry.unique.length - 4} more` : ""}.`,
+      });
+    }
+  }
+
+  if (sharedIndustries.length > 0) {
+    insights.push({
+      icon: Building2,
+      title: "Shared Industry Focus",
+      text: `They overlap in: ${sharedIndustries.slice(0, 5).join(", ")}${sharedIndustries.length > 5 ? ` and ${sharedIndustries.length - 5} more` : ""}.`,
+    });
+  }
+
+  let recommendation = "";
+  if (bestRating && bestRating.rating > 0) {
+    if (lowestBudget && lowestBudget.id !== bestRating.id) {
+      recommendation = `If quality is your priority, ${bestRating.name} has the strongest rating. For tighter budgets, ${lowestBudget.name} offers a lower entry point.`;
+    } else {
+      recommendation = `${bestRating.name} stands out with the best rating${lowestBudget ? " and the most accessible pricing" : ""} among the compared agencies.`;
+    }
+  }
+
+  return { insights, recommendation };
+}
 
 export default function ComparePage() {
   const [selected, setSelected] = useState<Agency[]>([]);
@@ -287,6 +402,7 @@ export default function ComparePage() {
 
         {/* Comparison Table */}
         {selected.length >= 2 ? (
+          <>
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -366,38 +482,56 @@ export default function ComparePage() {
 
                 {/* Services Row */}
                 <tr className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-600">Services</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Briefcase className="w-4 h-4 text-gray-400" />
+                      Services
+                    </div>
+                  </td>
                   {selected.map((agency) => (
                     <td key={agency.id} className="px-6 py-4">
-                      <div className="flex flex-wrap justify-center gap-1">
-                        {agency.services.map((s) => (
-                          <span
-                            key={s}
-                            className="text-xs bg-blue-50 text-brand px-2 py-0.5 rounded-full"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
+                      {agency.services.length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {agency.services.map((s) => (
+                            <span
+                              key={s}
+                              className="text-xs bg-blue-50 text-brand px-2 py-0.5 rounded-full"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 text-center block">None listed</span>
+                      )}
                     </td>
                   ))}
                 </tr>
 
                 {/* Industries Row */}
                 <tr className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-600">Industries</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      Industries
+                    </div>
+                  </td>
                   {selected.map((agency) => (
                     <td key={agency.id} className="px-6 py-4">
-                      <div className="flex flex-wrap justify-center gap-1">
-                        {agency.industries.map((ind) => (
-                          <span
-                            key={ind}
-                            className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"
-                          >
-                            {ind}
-                          </span>
-                        ))}
-                      </div>
+                      {agency.industries.length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {agency.industries.map((ind) => (
+                            <span
+                              key={ind}
+                              className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"
+                            >
+                              {ind}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 text-center block">None listed</span>
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -439,6 +573,53 @@ export default function ComparePage() {
               </div>
             </div>
           </div>
+
+          {/* Auto-generated Comparison Summary */}
+          {(() => {
+            const summary = generateSummary(selected);
+            if (!summary || summary.insights.length === 0) return null;
+            return (
+              <div className="mt-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-brand" />
+                    <h2 className="text-lg font-semibold text-navy">Comparison Summary</h2>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">Key insights to help you decide</p>
+                </div>
+                <div className="p-6 grid sm:grid-cols-2 gap-4">
+                  {summary.insights.map((insight, idx) => {
+                    const Icon = insight.icon;
+                    return (
+                      <div key={idx} className="flex gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                        <div className="shrink-0 w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-brand" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-navy">{insight.title}</p>
+                          <p className="text-sm text-gray-600 mt-0.5">{insight.text}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {summary.recommendation && (
+                  <div className="px-6 pb-6">
+                    <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+                      <div className="flex items-start gap-3">
+                        <Trophy className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-navy">Our Recommendation</p>
+                          <p className="text-sm text-gray-700 mt-0.5">{summary.recommendation}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          </>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
