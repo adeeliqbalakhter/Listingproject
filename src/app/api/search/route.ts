@@ -170,39 +170,36 @@ export async function GET(request: NextRequest) {
 
     // Batch fetch services for all agencies in the result set
     let serviceMap: Record<string, { id: string; name: string; slug: string }[]> = {};
-    if (agencyIds.length > 0) {
-      const svcRows = await db.execute(
-        sql`SELECT asvc.agency_id, s.id, s.name, s.slug
-            FROM agency_services asvc
-            JOIN services s ON s.id = asvc.service_id
-            WHERE asvc.agency_id = ANY(${agencyIds})`
-      );
-      for (const row of svcRows as any[]) {
-        if (!serviceMap[row.agency_id]) serviceMap[row.agency_id] = [];
-        serviceMap[row.agency_id].push({
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-        });
-      }
-    }
-
-    // Batch fetch industries for all agencies
     let industryMap: Record<string, { id: string; name: string; slug: string }[]> = {};
     if (agencyIds.length > 0) {
-      const indRows = await db.execute(
-        sql`SELECT ai.agency_id, i.id, i.name, i.slug
-            FROM agency_industries ai
-            JOIN industries i ON i.id = ai.industry_id
-            WHERE ai.agency_id = ANY(${agencyIds})`
-      );
-      for (const row of indRows as any[]) {
-        if (!industryMap[row.agency_id]) industryMap[row.agency_id] = [];
-        industryMap[row.agency_id].push({
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-        });
+      try {
+        const svcRows = await db.execute(
+          sql`SELECT asvc.agency_id, s.id, s.name, s.slug
+              FROM agency_services asvc
+              JOIN services s ON s.id = asvc.service_id
+              WHERE asvc.agency_id = ANY(${agencyIds})`
+        );
+        for (const row of svcRows as any[]) {
+          if (!serviceMap[row.agency_id]) serviceMap[row.agency_id] = [];
+          serviceMap[row.agency_id].push({ id: row.id, name: row.name, slug: row.slug });
+        }
+      } catch (e) {
+        console.error("GET /api/search services fetch error:", e);
+      }
+
+      try {
+        const indRows = await db.execute(
+          sql`SELECT ai.agency_id, i.id, i.name, i.slug
+              FROM agency_industries ai
+              JOIN industries i ON i.id = ai.industry_id
+              WHERE ai.agency_id = ANY(${agencyIds})`
+        );
+        for (const row of indRows as any[]) {
+          if (!industryMap[row.agency_id]) industryMap[row.agency_id] = [];
+          industryMap[row.agency_id].push({ id: row.id, name: row.name, slug: row.slug });
+        }
+      } catch (e) {
+        console.error("GET /api/search industries fetch error:", e);
       }
     }
 
@@ -235,54 +232,59 @@ export async function GET(request: NextRequest) {
     }
 
     // Compute real facets from active agencies only
-    const baseFacetWhere = sql`a.status = 'active' AND a.deleted_at IS NULL`;
+    let facets = { services: [] as any[], industries: [] as any[], countries: [] as any[] };
+    try {
+      const baseFacetWhere = sql`a.status = 'active' AND a.deleted_at IS NULL`;
 
-    const [serviceFacets, industryFacets, countryFacets] = await Promise.all([
-      db.execute(
-        sql`SELECT s.slug, s.name, COUNT(*)::int AS count
-            FROM agency_services asvc
-            JOIN services s ON s.id = asvc.service_id
-            JOIN agencies a ON a.id = asvc.agency_id
-            WHERE ${baseFacetWhere}
-            GROUP BY s.slug, s.name
-            ORDER BY count DESC`
-      ),
-      db.execute(
-        sql`SELECT i.slug, i.name, COUNT(*)::int AS count
-            FROM agency_industries ai
-            JOIN industries i ON i.id = ai.industry_id
-            JOIN agencies a ON a.id = ai.agency_id
-            WHERE ${baseFacetWhere}
-            GROUP BY i.slug, i.name
-            ORDER BY count DESC`
-      ),
-      db.execute(
-        sql`SELECT co.slug, co.name, COUNT(*)::int AS count
-            FROM agencies a
-            JOIN countries co ON a.country_id = co.id
-            WHERE ${baseFacetWhere}
-            GROUP BY co.slug, co.name
-            ORDER BY count DESC`
-      ),
-    ]);
+      const [serviceFacets, industryFacets, countryFacets] = await Promise.all([
+        db.execute(
+          sql`SELECT s.slug, s.name, COUNT(*)::int AS count
+              FROM agency_services asvc
+              JOIN services s ON s.id = asvc.service_id
+              JOIN agencies a ON a.id = asvc.agency_id
+              WHERE ${baseFacetWhere}
+              GROUP BY s.slug, s.name
+              ORDER BY count DESC`
+        ),
+        db.execute(
+          sql`SELECT i.slug, i.name, COUNT(*)::int AS count
+              FROM agency_industries ai
+              JOIN industries i ON i.id = ai.industry_id
+              JOIN agencies a ON a.id = ai.agency_id
+              WHERE ${baseFacetWhere}
+              GROUP BY i.slug, i.name
+              ORDER BY count DESC`
+        ),
+        db.execute(
+          sql`SELECT co.slug, co.name, COUNT(*)::int AS count
+              FROM agencies a
+              JOIN countries co ON a.country_id = co.id
+              WHERE ${baseFacetWhere}
+              GROUP BY co.slug, co.name
+              ORDER BY count DESC`
+        ),
+      ]);
 
-    const facets = {
-      services: (serviceFacets as any[]).map((r: any) => ({
-        slug: r.slug,
-        name: r.name,
-        count: r.count,
-      })),
-      industries: (industryFacets as any[]).map((r: any) => ({
-        slug: r.slug,
-        name: r.name,
-        count: r.count,
-      })),
-      countries: (countryFacets as any[]).map((r: any) => ({
-        slug: r.slug,
-        name: r.name,
-        count: r.count,
-      })),
-    };
+      facets = {
+        services: (serviceFacets as any[]).map((r: any) => ({
+          slug: r.slug,
+          name: r.name,
+          count: r.count,
+        })),
+        industries: (industryFacets as any[]).map((r: any) => ({
+          slug: r.slug,
+          name: r.name,
+          count: r.count,
+        })),
+        countries: (countryFacets as any[]).map((r: any) => ({
+          slug: r.slug,
+          name: r.name,
+          count: r.count,
+        })),
+      };
+    } catch (facetErr) {
+      console.error("GET /api/search facets error:", facetErr);
+    }
 
     // Fire-and-forget: log search query without blocking the response
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -327,9 +329,10 @@ export async function GET(request: NextRequest) {
       facets,
     });
   } catch (error) {
-    console.error("GET /api/search error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("GET /api/search error:", msg, error);
     return Response.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", detail: msg },
       { status: 500 }
     );
   }
