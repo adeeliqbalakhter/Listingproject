@@ -133,3 +133,75 @@ export function buildPasswordResetEmail(name: string, token: string): EmailOptio
     text: `Reset your password: ${resetUrl}. Expires in 1 hour.`,
   };
 }
+
+export function buildSubscriptionConfirmationEmail(name: string, planName: string, tier: string, isOverride: boolean): EmailOptions & { to: "" } {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const dashboardUrl = `${baseUrl}/dashboard/subscription`;
+  const tierBenefits: Record<string, string[]> = {
+    premium: ["Verified badge on your profile", "Priority search placement", "Unlimited portfolio items", "Cover image support", "Service packages", "Social media links"],
+    pro: ["Featured badge on your profile", "Highest search priority", "Unlimited team members", "API access", "Branded quote forms", "Advanced analytics"],
+    enterprise: ["Enterprise-level visibility", "Dedicated search boost", "All Pro features included", "Custom integrations support"],
+  };
+  const benefits = tierBenefits[tier] ?? ["Enhanced agency profile"];
+  const benefitsList = benefits.map(b => `<li style="padding:4px 0;">${b}</li>`).join("");
+  return {
+    to: "" as const,
+    subject: isOverride ? `Your agency has been upgraded to ${planName}!` : `Welcome to ${planName} - Subscription Confirmed`,
+    html: `
+      <h2>Hi${name ? ` ${name}` : ""},</h2>
+      <p>${isOverride ? `Great news! Your agency has been promoted to the <strong>${planName}</strong> plan.` : `Your subscription to the <strong>${planName}</strong> plan is now active.`}</p>
+      <h3 style="margin-top:20px;">What's included:</h3>
+      <ul style="list-style:none;padding:0;">${benefitsList}</ul>
+      <p style="margin-top:20px;"><a href="${dashboardUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">View Your Subscription</a></p>
+      <p style="margin-top:16px;color:#6b7280;font-size:14px;">If you have any questions, contact us at support@listingproject.com</p>
+    `,
+    text: `Your ${planName} plan is now active. View your subscription: ${dashboardUrl}`,
+  };
+}
+
+export function buildSubscriptionCancellationEmail(name: string, planName: string, endDate: string): EmailOptions & { to: "" } {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return {
+    to: "" as const,
+    subject: `Your ${planName} subscription has been cancelled`,
+    html: `
+      <h2>Hi${name ? ` ${name}` : ""},</h2>
+      <p>Your <strong>${planName}</strong> subscription has been cancelled.</p>
+      <p>You will continue to have access to ${planName} features until <strong>${endDate}</strong>. After that, your account will revert to the Free plan.</p>
+      <p style="margin-top:16px;">We're sorry to see you go. If you change your mind, you can re-subscribe anytime from your dashboard.</p>
+      <p style="margin-top:20px;"><a href="${baseUrl}/dashboard/subscription" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Manage Subscription</a></p>
+    `,
+    text: `Your ${planName} subscription has been cancelled. Access continues until ${endDate}.`,
+  };
+}
+
+export function buildSubscriptionRenewalReminderEmail(name: string, planName: string, renewalDate: string, price: string): EmailOptions & { to: "" } {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return {
+    to: "" as const,
+    subject: `Your ${planName} subscription renews soon`,
+    html: `
+      <h2>Hi${name ? ` ${name}` : ""},</h2>
+      <p>Your <strong>${planName}</strong> subscription will renew on <strong>${renewalDate}</strong> for <strong>${price}</strong>.</p>
+      <p>No action is needed if you'd like to continue. If you want to make changes, visit your subscription dashboard.</p>
+      <p style="margin-top:20px;"><a href="${baseUrl}/dashboard/subscription" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Manage Subscription</a></p>
+    `,
+    text: `Your ${planName} subscription renews on ${renewalDate} for ${price}. Manage: ${baseUrl}/dashboard/subscription`,
+  };
+}
+
+export function buildPaymentFailedEmail(name: string, planName: string): EmailOptions & { to: "" } {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return {
+    to: "" as const,
+    subject: `Payment failed for your ${planName} subscription`,
+    html: `
+      <h2>Hi${name ? ` ${name}` : ""},</h2>
+      <p>We were unable to process your payment for the <strong>${planName}</strong> plan.</p>
+      <p>Please update your payment method to avoid any interruption to your service. Your account will be downgraded to the Free plan if payment is not received within 7 days.</p>
+      <p style="margin-top:20px;"><a href="${baseUrl}/dashboard/subscription" style="background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Update Payment Method</a></p>
+      <p style="margin-top:16px;color:#6b7280;font-size:14px;">Need help? Contact us at support@listingproject.com</p>
+    `,
+    text: `Payment failed for your ${planName} plan. Update your payment method: ${baseUrl}/dashboard/subscription`,
+  };
+}

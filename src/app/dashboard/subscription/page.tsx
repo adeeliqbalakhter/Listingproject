@@ -50,12 +50,13 @@ interface Plan {
 
 const tierIcons: Record<string, typeof Star> = {
   free: Star,
+  premium: CreditCard,
   pro: Zap,
   enterprise: Crown,
 };
 
 const tierPopular: Record<string, boolean> = {
-  pro: true,
+  premium: true,
 };
 
 function formatDate(dateStr: string | undefined): string {
@@ -67,18 +68,20 @@ function formatDate(dateStr: string | undefined): string {
   });
 }
 
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(0)}`;
+function formatPrice(price: number): string {
+  return `$${price}`;
 }
 
 function featureList(plan: Plan): string[] {
   const items: string[] = [];
   if (plan.tier === "free") {
-    items.push("Basic agency profile");
+    items.push("Basic agency profile", "1 location", "5 service & industry tags");
+  } else if (plan.tier === "premium") {
+    items.push("Verified badge", "Cover image & social links", "Service packages", "Priority search placement", "Lead notifications");
   } else if (plan.tier === "pro") {
-    items.push("Enhanced profile with SEO");
+    items.push("Featured badge", "All Premium features", "API access", "Branded quote forms", "Advanced analytics");
   } else {
-    items.push("Premium profile placement");
+    items.push("All Pro features", "Highest search boost", "Custom integrations support");
   }
   items.push(
     plan.monthly_lead_credits === -1
@@ -90,18 +93,11 @@ function featureList(plan: Plan): string[] {
       ? "Unlimited portfolio items"
       : `${plan.max_portfolio_items} portfolio items`
   );
-  if (plan.tier === "pro") {
-    items.push("Review management", "Analytics dashboard", "Priority support");
-  } else if (plan.tier === "enterprise") {
-    items.push(
-      "Advanced analytics",
-      "Custom branding",
-      "Dedicated account manager",
-      "API access"
-    );
-  } else {
-    items.push("Standard support");
-  }
+  items.push(
+    plan.max_team_members === -1
+      ? "Unlimited team members"
+      : `${plan.max_team_members} team member${plan.max_team_members > 1 ? "s" : ""}`
+  );
   return items;
 }
 
@@ -113,6 +109,9 @@ export default function SubscriptionPage() {
   const [usage, setUsage] = useState<UsageData>({ portfolioCount: 0, teamMemberCount: 0 });
   const [plans, setPlans] = useState<Plan[]>([]);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoResult, setPromoResult] = useState<{ valid: boolean; message: string; discount?: string } | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
 
   const fetchSubscription = useCallback(async (): Promise<boolean> => {
     const res = await fetch("/api/subscriptions");
@@ -168,10 +167,37 @@ export default function SubscriptionPage() {
 
   function handleUpgrade(planName: string) {
     setUpgradeMessage(
-      `To upgrade to the ${planName} plan, please contact us at support@listingproject.com or visit the contact page.`
+      `To upgrade to the ${planName} plan, please contact us at support@listingproject.com. Payment processing via Stripe will be available soon.`
     );
-    // Auto-dismiss after 8 seconds
-    setTimeout(() => setUpgradeMessage(null), 8000);
+    setTimeout(() => setUpgradeMessage(null), 10000);
+  }
+
+  async function handleValidatePromo() {
+    if (!promoCode.trim()) return;
+    setValidatingPromo(true);
+    setPromoResult(null);
+    try {
+      const res = await fetch("/api/promo-codes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.valid) {
+        const d = json.data;
+        setPromoResult({
+          valid: true,
+          message: `Code applied! ${d.discountType === "percentage" ? `${d.discountValue}% off` : `$${d.discountValue} off`} your subscription.`,
+          discount: `${d.discountType === "percentage" ? d.discountValue + "%" : "$" + d.discountValue}`,
+        });
+      } else {
+        setPromoResult({ valid: false, message: json.error || "Invalid promo code" });
+      }
+    } catch {
+      setPromoResult({ valid: false, message: "Failed to validate code" });
+    } finally {
+      setValidatingPromo(false);
+    }
   }
 
   if (loading) {
@@ -394,7 +420,7 @@ export default function SubscriptionPage() {
           <h2 className="text-lg font-semibold text-navy mb-5">
             Upgrade Your Plan
           </h2>
-          <div className="grid md:grid-cols-3 gap-5">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
             {plans.map((plan) => {
               const Icon = tierIcons[plan.tier] ?? Star;
               const isCurrent = plan.tier === currentTier;
@@ -486,6 +512,32 @@ export default function SubscriptionPage() {
           </div>
         </div>
       )}
+
+      {/* Promo Code */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <h3 className="font-semibold text-navy mb-3">Have a Promo Code?</h3>
+        <div className="flex gap-3">
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+            placeholder="Enter promo code"
+            className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand font-mono"
+          />
+          <button
+            onClick={handleValidatePromo}
+            disabled={validatingPromo || !promoCode.trim()}
+            className="px-5 py-2.5 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-dark disabled:opacity-50 transition-colors"
+          >
+            {validatingPromo ? "Checking..." : "Apply"}
+          </button>
+        </div>
+        {promoResult && (
+          <p className={`mt-2 text-sm ${promoResult.valid ? "text-green-600" : "text-red-600"}`}>
+            {promoResult.message}
+          </p>
+        )}
+      </div>
 
       {/* Billing History */}
       <div className="bg-white rounded-xl border border-gray-200 mb-8">

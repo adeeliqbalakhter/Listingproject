@@ -32,6 +32,7 @@ import {
   Wrench,
   Sparkles,
   MessageSquareText,
+  Crown,
 } from "lucide-react";
 
 type LocationItem = { id: string; name: string; slug: string; code?: string };
@@ -220,6 +221,7 @@ export default function ProfilePage() {
   const [existingAgencyId, setExistingAgencyId] = useState<string | null>(null);
   const [agencyStatus, setAgencyStatus] = useState<string | null>(null);
   const [agencySlug, setAgencySlug] = useState<string | null>(null);
+  const [agencyTier, setAgencyTier] = useState<string>("free");
 
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailVerifying, setEmailVerifying] = useState(false);
@@ -389,6 +391,11 @@ export default function ProfilePage() {
           fetch(`/api/locations?countryId=${agency.country_id}`).then((r) => r.json())
             .then((data) => setCitiesList(data.data || [])).catch(() => {});
         }
+
+        // Fetch subscription tier for feature gating
+        fetch("/api/subscriptions").then((r) => r.ok ? r.json() : null).then((json) => {
+          if (json?.data?.subscription?.tier) setAgencyTier(json.data.subscription.tier);
+        }).catch(() => {});
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -571,6 +578,22 @@ export default function ProfilePage() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand" /></div>;
   }
 
+  const isPaidTier = agencyTier !== "free";
+  const UpgradeBanner = ({ feature }: { feature: string }) => (
+    <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200">
+      <div className="flex items-center gap-3">
+        <Crown className="w-5 h-5 text-brand shrink-0" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-navy">{feature} requires a Premium or higher plan</p>
+          <p className="text-xs text-gray-500 mt-0.5">Upgrade to unlock this feature and grow your agency profile.</p>
+        </div>
+        <Link href="/dashboard/subscription" className="shrink-0 px-4 py-1.5 bg-brand text-white rounded-lg text-xs font-medium hover:bg-brand-dark transition-colors">
+          Upgrade
+        </Link>
+      </div>
+    </div>
+  );
+
   const inputClass = "w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-colors";
   const selectClass = `${inputClass} bg-white`;
 
@@ -676,11 +699,11 @@ export default function ProfilePage() {
 
             {/* Cover + Logo */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="h-40 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-center border-b border-gray-100 relative group cursor-pointer overflow-hidden"
-                onClick={() => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleImageUpload(f, "cover"); }; i.click(); }}>
+              <div className={`h-40 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-center border-b border-gray-100 relative group overflow-hidden ${isPaidTier ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                onClick={() => { if (!isPaidTier) return; const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleImageUpload(f, "cover"); }; i.click(); }}>
                 {coverPreview ? <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-                  : <div className="text-center"><ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-1" /><p className="text-xs text-gray-400">Cover Image</p>
-                    <button className="mt-1 text-xs text-brand font-medium flex items-center gap-1 mx-auto">{uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} Upload</button></div>}
+                  : <div className="text-center"><ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-1" /><p className="text-xs text-gray-400">{isPaidTier ? "Cover Image" : "Cover Image (Premium+)"}</p>
+                    {isPaidTier && <button className="mt-1 text-xs text-brand font-medium flex items-center gap-1 mx-auto">{uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} Upload</button>}</div>}
               </div>
               <div className="px-6 py-3 flex items-center gap-4">
                 <div className="w-16 h-16 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center -mt-10 relative z-10 bg-white cursor-pointer overflow-hidden"
@@ -794,8 +817,9 @@ export default function ProfilePage() {
         {activeSection === "team" && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-navy">About The Team</h2>
+            {!isPaidTier && <UpgradeBanner feature="Team showcase" />}
 
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+            <div className={`bg-white rounded-xl border border-gray-200 p-6 space-y-6 ${!isPaidTier ? "opacity-50 pointer-events-none" : ""}`}>
               {/* Our Story */}
               <div>
                 <label className="block text-sm font-bold text-gray-800 mb-1">Our Story</label>
@@ -1008,7 +1032,8 @@ export default function ProfilePage() {
         {activeSection === "social" && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-navy">Social Media</h2>
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            {!isPaidTier && <UpgradeBanner feature="Social media links" />}
+            <div className={`bg-white rounded-xl border border-gray-200 p-6 ${!isPaidTier ? "opacity-50 pointer-events-none" : ""}`}>
               <div className="space-y-4">
                 {socialLinks.map((link, index) => {
                   const platformInfo = SOCIAL_PLATFORMS.find((p) => p.key === link.platform);
@@ -1208,6 +1233,8 @@ export default function ProfilePage() {
         {/* ════════════════════════════════════════════ */}
         {activeSection === "packages" && (
           <div className="space-y-6">
+            {!isPaidTier && <UpgradeBanner feature="Service packages" />}
+            <div className={!isPaidTier ? "opacity-50 pointer-events-none" : ""}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-navy">Packages</h2>
               <button type="button" onClick={() => setPackages((p) => [...p, emptyPackage()])} className="flex items-center gap-1.5 border border-brand text-brand px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand/5"><Plus className="w-4 h-4" /> Create a Package</button>
@@ -1308,6 +1335,7 @@ export default function ProfilePage() {
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-red-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-60">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {saving ? "Saving..." : "Save Changes"}
               </button>
+            </div>
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import { hasDb, getDb, getNeonSql } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getAgencyCapabilities, canUseTierFeature } from "@/lib/subscriptions/gates";
 
 const updateAgencySchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -152,6 +153,33 @@ export async function PATCH(
       );
     }
     const data = parsed.data;
+
+    // Tier-based feature gating
+    const caps = await getAgencyCapabilities(id);
+
+    if ("coverImage" in data && data.coverImage && !canUseTierFeature(caps, "coverImage")) {
+      return Response.json({ error: "Cover image requires a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+    }
+    if ("packages" in data && data.packages && Array.isArray(data.packages) && data.packages.length > 0 && !canUseTierFeature(caps, "packages")) {
+      return Response.json({ error: "Service packages require a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+    }
+    if ("teamInfo" in data && data.teamInfo && !canUseTierFeature(caps, "teamShowcase")) {
+      return Response.json({ error: "Team showcase requires a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+    }
+    const hasSocialData = data.socialLinksData && typeof data.socialLinksData === "object" && Object.keys(data.socialLinksData).length > 0;
+    const hasIndividualSocial = data.linkedinUrl || data.twitterUrl || data.facebookUrl || data.instagramUrl;
+    if ((hasSocialData || hasIndividualSocial) && !canUseTierFeature(caps, "socialLinks")) {
+      return Response.json({ error: "Social media links require a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+    }
+    if ("locations" in data && Array.isArray(data.locations) && caps.maxLocations !== -1 && data.locations.length > caps.maxLocations) {
+      return Response.json({ error: `Your plan allows up to ${caps.maxLocations} location(s). Upgrade to add more.` }, { status: 403 });
+    }
+    if (data.serviceIds && caps.maxServiceTags !== -1 && data.serviceIds.length > caps.maxServiceTags) {
+      return Response.json({ error: `Your plan allows up to ${caps.maxServiceTags} service tags. Upgrade to add more.` }, { status: 403 });
+    }
+    if (data.industryIds && caps.maxIndustryTags !== -1 && data.industryIds.length > caps.maxIndustryTags) {
+      return Response.json({ error: `Your plan allows up to ${caps.maxIndustryTags} industry tags. Upgrade to add more.` }, { status: 403 });
+    }
 
     // Build social links object: prefer new socialLinksData, fall back to individual fields
     let socialLinks: Record<string, string> = {};
