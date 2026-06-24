@@ -91,6 +91,7 @@ export default function ComparePage() {
   const [availableAgencies, setAvailableAgencies] = useState<Agency[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load agencies on mount
@@ -98,15 +99,26 @@ export default function ComparePage() {
     async function fetchAgencies() {
       try {
         setLoading(true);
-        const res = await fetch("/api/search?limit=20");
-        if (!res.ok) throw new Error("Failed to fetch agencies");
+        setError(null);
+        const res = await fetch("/api/search?limit=50");
+        if (!res.ok) {
+          const body = await res.text();
+          console.error("Search API error:", res.status, body);
+          setError(`Failed to load agencies (${res.status})`);
+          setAvailableAgencies([]);
+          return;
+        }
         const json = await res.json();
         const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
           mapApiAgency(a)
         );
         setAvailableAgencies(agencies);
+        if (agencies.length === 0) {
+          setError("No active agencies found");
+        }
       } catch (err) {
         console.error("Error loading agencies:", err);
+        setError("Network error loading agencies");
         setAvailableAgencies([]);
       } finally {
         setLoading(false);
@@ -117,31 +129,20 @@ export default function ComparePage() {
 
   // Search agencies with debounce
   const searchAgencies = useCallback(async (term: string) => {
-    if (!term.trim()) {
-      // Reset to default list
-      try {
-        setSearching(true);
-        const res = await fetch("/api/search?limit=20");
-        if (!res.ok) throw new Error("Failed to fetch agencies");
-        const json = await res.json();
-        const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
-          mapApiAgency(a)
-        );
-        setAvailableAgencies(agencies);
-      } catch (err) {
-        console.error("Error loading agencies:", err);
-      } finally {
-        setSearching(false);
-      }
-      return;
-    }
+    const url = term.trim()
+      ? `/api/search?query=${encodeURIComponent(term)}&limit=50`
+      : "/api/search?limit=50";
 
     try {
       setSearching(true);
-      const res = await fetch(
-        `/api/search?query=${encodeURIComponent(term)}&limit=20`
-      );
-      if (!res.ok) throw new Error("Search failed");
+      setError(null);
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("Search API error:", res.status, body);
+        setError(`Search failed (${res.status})`);
+        return;
+      }
       const json = await res.json();
       const agencies = (json.data ?? []).map((a: Record<string, unknown>) =>
         mapApiAgency(a)
@@ -149,6 +150,7 @@ export default function ComparePage() {
       setAvailableAgencies(agencies);
     } catch (err) {
       console.error("Error searching agencies:", err);
+      setError("Network error");
     } finally {
       setSearching(false);
     }
@@ -243,6 +245,13 @@ export default function ComparePage() {
                         <div className="flex items-center justify-center py-4 gap-2">
                           <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
                           <p className="text-sm text-gray-400">Loading agencies...</p>
+                        </div>
+                      ) : error ? (
+                        <div className="text-center py-4 px-3">
+                          <p className="text-sm text-red-500">{error}</p>
+                          <button onClick={() => searchAgencies(searchQuery)} className="mt-2 text-xs text-brand hover:underline">
+                            Try again
+                          </button>
                         </div>
                       ) : filtered.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-4">
