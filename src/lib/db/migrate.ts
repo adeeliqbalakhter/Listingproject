@@ -815,6 +815,66 @@ export async function runMigrations() {
     ON CONFLICT DO NOTHING
   `);
 
+  // ─── Subscription admin override & promo columns ───
+  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_admin_override BOOLEAN DEFAULT false`);
+  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_reason TEXT`);
+  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_by UUID REFERENCES users(id)`);
+  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS promo_code_id UUID`);
+
+  // ─── Plan description & stripe price ids ───
+  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS description TEXT`);
+  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_monthly_price_id VARCHAR(255)`);
+  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_yearly_price_id VARCHAR(255)`);
+
+  // ─── Promo codes ───
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      code VARCHAR(50) NOT NULL UNIQUE,
+      description TEXT,
+      discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+      discount_value DECIMAL(10,2) NOT NULL,
+      max_uses INTEGER,
+      current_uses INTEGER DEFAULT 0,
+      valid_from TIMESTAMPTZ DEFAULT NOW(),
+      valid_until TIMESTAMPTZ,
+      applicable_tiers JSONB DEFAULT '["premium","pro"]',
+      is_active BOOLEAN DEFAULT true,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ─── Update plan pricing to match final structure ───
+  await db.execute(sql`
+    UPDATE plans SET yearly_price = 468, description = 'Everything you need to grow your agency presence'
+    WHERE tier = 'premium' AND yearly_price != 468
+  `);
+  await db.execute(sql`
+    UPDATE plans SET yearly_price = 1428, description = 'Maximum visibility and lead generation power'
+    WHERE tier = 'pro' AND yearly_price != 1428
+  `);
+  await db.execute(sql`
+    UPDATE plans SET description = 'Get started with a basic agency profile'
+    WHERE tier = 'free' AND description IS NULL
+  `);
+  await db.execute(sql`
+    UPDATE plans SET description = 'Custom solutions for large agencies'
+    WHERE tier = 'enterprise' AND description IS NULL
+  `);
+
+  // ─── Auto-enroll existing agencies without subscriptions into Free plan ───
+  await db.execute(sql`
+    INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
+    SELECT a.id, p.id, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 month'
+    FROM agencies a
+    CROSS JOIN plans p
+    WHERE p.tier = 'free'
+      AND a.deleted_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.agency_id = a.id)
+    ON CONFLICT (agency_id) DO NOTHING
+  `);
+
   // ─── Seed RBAC permissions ───
   await seedPermissions(db);
 

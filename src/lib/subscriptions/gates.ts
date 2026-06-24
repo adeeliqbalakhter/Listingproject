@@ -9,6 +9,155 @@ export interface PlanLimits {
   features: Record<string, boolean>;
 }
 
+export interface TierCapabilities {
+  maxLocations: number;
+  maxServiceTags: number;
+  maxIndustryTags: number;
+  maxPortfolioItems: number;
+  maxTeamMembers: number;
+  analyticsWindowDays: number;
+  coverImage: boolean;
+  packages: boolean;
+  teamShowcase: boolean;
+  verifiedBadge: boolean;
+  featuredBadge: boolean;
+  prioritySearch: boolean;
+  leadNotifications: boolean;
+  monthlyReport: boolean;
+  apiAccess: boolean;
+  brandedQuoteForm: boolean;
+  socialLinks: boolean;
+  searchBoost: number;
+}
+
+const TIER_CAPABILITIES: Record<string, TierCapabilities> = {
+  free: {
+    maxLocations: 1,
+    maxServiceTags: 5,
+    maxIndustryTags: 5,
+    maxPortfolioItems: 5,
+    maxTeamMembers: 1,
+    analyticsWindowDays: 30,
+    coverImage: false,
+    packages: false,
+    teamShowcase: false,
+    verifiedBadge: false,
+    featuredBadge: false,
+    prioritySearch: false,
+    leadNotifications: false,
+    monthlyReport: false,
+    apiAccess: false,
+    brandedQuoteForm: false,
+    socialLinks: false,
+    searchBoost: 0,
+  },
+  premium: {
+    maxLocations: -1,
+    maxServiceTags: -1,
+    maxIndustryTags: -1,
+    maxPortfolioItems: -1,
+    maxTeamMembers: 5,
+    analyticsWindowDays: -1,
+    coverImage: true,
+    packages: true,
+    teamShowcase: true,
+    verifiedBadge: true,
+    featuredBadge: false,
+    prioritySearch: true,
+    leadNotifications: true,
+    monthlyReport: true,
+    apiAccess: false,
+    brandedQuoteForm: false,
+    socialLinks: true,
+    searchBoost: 1,
+  },
+  pro: {
+    maxLocations: -1,
+    maxServiceTags: -1,
+    maxIndustryTags: -1,
+    maxPortfolioItems: -1,
+    maxTeamMembers: -1,
+    analyticsWindowDays: -1,
+    coverImage: true,
+    packages: true,
+    teamShowcase: true,
+    verifiedBadge: true,
+    featuredBadge: true,
+    prioritySearch: true,
+    leadNotifications: true,
+    monthlyReport: true,
+    apiAccess: true,
+    brandedQuoteForm: true,
+    socialLinks: true,
+    searchBoost: 2,
+  },
+  enterprise: {
+    maxLocations: -1,
+    maxServiceTags: -1,
+    maxIndustryTags: -1,
+    maxPortfolioItems: -1,
+    maxTeamMembers: -1,
+    analyticsWindowDays: -1,
+    coverImage: true,
+    packages: true,
+    teamShowcase: true,
+    verifiedBadge: true,
+    featuredBadge: true,
+    prioritySearch: true,
+    leadNotifications: true,
+    monthlyReport: true,
+    apiAccess: true,
+    brandedQuoteForm: true,
+    socialLinks: true,
+    searchBoost: 3,
+  },
+};
+
+export function getTierCapabilities(tier: string): TierCapabilities {
+  return TIER_CAPABILITIES[tier] ?? TIER_CAPABILITIES.free;
+}
+
+export async function getAgencyTier(agencyId: string): Promise<string> {
+  try {
+    if (!hasDb()) return "free";
+    const db = getDb();
+    const rows = await db.execute(sql`
+      SELECT p.tier FROM subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      WHERE s.agency_id = ${agencyId} AND s.status = 'active'
+    `);
+    const row = (rows as unknown as Array<Record<string, unknown>>)[0];
+    return (row?.tier as string) ?? "free";
+  } catch {
+    return "free";
+  }
+}
+
+export async function getAgencyCapabilities(agencyId: string): Promise<TierCapabilities> {
+  const tier = await getAgencyTier(agencyId);
+  return getTierCapabilities(tier);
+}
+
+export function canUseTierFeature(
+  capabilities: TierCapabilities,
+  feature: keyof TierCapabilities
+): boolean {
+  const val = capabilities[feature];
+  if (typeof val === "boolean") return val;
+  if (typeof val === "number") return val !== 0;
+  return false;
+}
+
+export function checkTierLimit(
+  capabilities: TierCapabilities,
+  resource: "maxLocations" | "maxServiceTags" | "maxIndustryTags" | "maxPortfolioItems" | "maxTeamMembers",
+  currentCount: number
+): { allowed: boolean; limit: number } {
+  const limit = capabilities[resource];
+  if (limit === -1) return { allowed: true, limit: -1 };
+  return { allowed: currentCount < limit, limit };
+}
+
 const FREE_DEFAULTS: PlanLimits = {
   tier: "free",
   monthlyLeadCredits: 1,

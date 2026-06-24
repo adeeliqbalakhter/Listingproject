@@ -120,24 +120,31 @@ export async function GET(request: NextRequest) {
     // Combine conditions
     const whereClause = sql.join(conditions, sql` AND `);
 
+    // Subscription tier boost for priority placement
+    const tierBoost = sql`CASE
+      WHEN sp.tier = 'enterprise' THEN 0
+      WHEN sp.tier = 'pro' THEN 1
+      WHEN sp.tier = 'premium' THEN 2
+      ELSE 3 END`;
+
     // Sort
     let orderClause;
     if (sortBy === "rating") {
-      orderClause = sql`a.average_rating DESC NULLS LAST`;
+      orderClause = sql`${tierBoost}, a.average_rating DESC NULLS LAST`;
     } else if (sortBy === "reviews") {
-      orderClause = sql`a.total_reviews DESC NULLS LAST`;
+      orderClause = sql`${tierBoost}, a.total_reviews DESC NULLS LAST`;
     } else if (sortBy === "name") {
       orderClause = sql`a.name ASC`;
     } else if (sortBy === "newest") {
       orderClause = sql`a.created_at DESC`;
     } else if (query) {
-      // When searching, sort by relevance (name match first)
       orderClause = sql`
         CASE WHEN a.name ILIKE ${"%" + query + "%"} THEN 0 ELSE 1 END,
+        ${tierBoost},
         a.average_rating DESC NULLS LAST
       `;
     } else {
-      orderClause = sql`a.average_rating DESC NULLS LAST`;
+      orderClause = sql`${tierBoost}, a.average_rating DESC NULLS LAST`;
     }
 
     const offset = (page - 1) * limit;
@@ -149,17 +156,20 @@ export async function GET(request: NextRequest) {
     const total = (countResult as any[])[0]?.total ?? 0;
     const totalPages = Math.ceil(total / limit);
 
-    // Fetch agencies
+    // Fetch agencies with subscription tier for priority placement
     const agencyRows = await db.execute(
       sql`SELECT
             a.id, a.name, a.slug, a.tagline, a.description, a.logo, a.website,
             a.company_size, a.hourly_rate, a.min_project_size, a.founded_year,
             a.is_verified, a.is_featured, a.average_rating, a.total_reviews,
             co.name AS country_name, co.slug AS country_slug,
-            ci.name AS city_name, ci.slug AS city_slug
+            ci.name AS city_name, ci.slug AS city_slug,
+            sp.tier AS subscription_tier
           FROM agencies a
           LEFT JOIN countries co ON a.country_id = co.id
           LEFT JOIN cities ci ON a.city_id = ci.id
+          LEFT JOIN subscriptions sub ON sub.agency_id = a.id AND sub.status = 'active'
+          LEFT JOIN plans sp ON sp.id = sub.plan_id
           WHERE ${whereClause}
           ORDER BY ${orderClause}
           LIMIT ${limit} OFFSET ${offset}`
@@ -231,6 +241,7 @@ export async function GET(request: NextRequest) {
           : null,
         services: serviceMap[row.id] ?? [],
         industries: industryMap[row.id] ?? [],
+        subscriptionTier: row.subscription_tier ?? "free",
       });
     }
 

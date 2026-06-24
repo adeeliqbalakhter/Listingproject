@@ -75,6 +75,8 @@ export default function AdminSubscriptionsPage() {
   // Change plan modal
   const [changingPlan, setChangingPlan] = useState<Subscription | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [isOverride, setIsOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -115,21 +117,33 @@ export default function AdminSubscriptionsPage() {
   function openChangePlan(sub: Subscription) {
     setChangingPlan(sub);
     setSelectedPlanId(sub.plan_id);
+    setIsOverride(false);
+    setOverrideReason("");
     setSaveMessage(null);
   }
 
   async function handleChangePlan() {
     if (!changingPlan || !selectedPlanId) return;
+    if (isOverride && !overrideReason.trim()) {
+      setSaveMessage({ type: "error", text: "Please provide a reason for the override." });
+      return;
+    }
     setSaving(true);
     setSaveMessage(null);
     try {
       const res = await fetch("/api/admin/subscriptions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agencyId: changingPlan.agency_id, planId: selectedPlanId }),
+        body: JSON.stringify({
+          agencyId: changingPlan.agency_id,
+          planId: selectedPlanId,
+          isAdminOverride: isOverride,
+          overrideReason: isOverride ? overrideReason.trim() : undefined,
+        }),
       });
       if (res.ok) {
-        setSaveMessage({ type: "success", text: "Plan updated and credits granted." });
+        const label = isOverride ? "Agency promoted (admin override)" : "Plan updated and credits granted";
+        setSaveMessage({ type: "success", text: `${label}.` });
         setTimeout(() => { setChangingPlan(null); fetchData(); }, 1000);
       } else {
         const json = await res.json().catch(() => ({}));
@@ -348,6 +362,34 @@ export default function AdminSubscriptionsPage() {
                 );
               })}
             </div>
+            {/* Admin Override Toggle */}
+            <div className="mb-4 p-3 rounded-xl border border-gray-200 bg-gray-50">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isOverride}
+                  onChange={(e) => setIsOverride(e.target.checked)}
+                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                />
+                <div>
+                  <p className="text-sm font-medium text-navy">Admin Override (Free Promotion)</p>
+                  <p className="text-xs text-gray-500">Promote this agency without requiring payment</p>
+                </div>
+              </label>
+              {isOverride && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Reason for override *</label>
+                  <textarea
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    placeholder="e.g. Early adopter reward, Partnership deal, Beta tester..."
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
+                  />
+                </div>
+              )}
+            </div>
+
             {saveMessage && (
               <div className={`flex items-center gap-2 p-3 rounded-lg text-sm mb-4 ${
                 saveMessage.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
@@ -362,9 +404,9 @@ export default function AdminSubscriptionsPage() {
                 Cancel
               </button>
               <button onClick={handleChangePlan} disabled={saving || selectedPlanId === changingPlan.plan_id}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors">
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors ${isOverride ? "bg-purple-600 hover:bg-purple-700" : "bg-brand hover:bg-brand-dark"}`}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? "Saving..." : "Update Plan"}
+                {saving ? "Saving..." : isOverride ? "Promote Agency" : "Update Plan"}
               </button>
             </div>
           </div>

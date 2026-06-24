@@ -70,18 +70,27 @@ export async function PATCH(request: NextRequest) {
     const neonSql = getNeonSql();
 
     const body = await request.json();
-    const { agencyId, planId } = body as { agencyId?: string; planId?: string };
+    const { agencyId, planId, isAdminOverride, overrideReason } = body as {
+      agencyId?: string;
+      planId?: string;
+      isAdminOverride?: boolean;
+      overrideReason?: string;
+    };
 
     if (!agencyId || !planId) {
       return error("agencyId and planId are required", 400);
     }
 
+    if (isAdminOverride && !overrideReason?.trim()) {
+      return error("Override reason is required when promoting an agency", 400);
+    }
+
     try {
       // Verify the plan exists and get its credit amount
       const planRows = await db.execute(sql`
-        SELECT id, monthly_lead_credits FROM plans WHERE id = ${planId}
+        SELECT id, monthly_lead_credits, tier, name FROM plans WHERE id = ${planId}
       `);
-      const plan = (planRows as unknown as Array<{ id: string; monthly_lead_credits: number }>)[0];
+      const plan = (planRows as unknown as Array<{ id: string; monthly_lead_credits: number; tier: string; name: string }>)[0];
       if (!plan) return error("Plan not found", 404);
 
       // Check for existing subscription
@@ -91,33 +100,51 @@ export async function PATCH(request: NextRequest) {
       const existing = (existingRows as unknown as Array<{ id: string }>)[0];
 
       let subscriptionRow;
+      const adminId = authResult.user.id;
 
       if (existing) {
-        // Update existing subscription via Neon HTTP driver
         const updated = await neonSql`
           UPDATE subscriptions
-          SET plan_id = ${planId}, updated_at = NOW()
+          SET plan_id = ${planId},
+              updated_at = NOW(),
+              status = 'active',
+              is_admin_override = ${isAdminOverride ? true : false},
+              override_reason = ${isAdminOverride ? (overrideReason ?? null) : null},
+              override_by = ${isAdminOverride ? adminId : null},
+              current_period_end = NOW() + INTERVAL '1 year'
           WHERE id = ${existing.id}
           RETURNING *
         `;
         subscriptionRow = updated[0];
       } else {
-        // Create new subscription via Neon HTTP driver
         const inserted = await neonSql`
-          INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
-          VALUES (${agencyId}, ${planId}, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 month')
+          INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end, is_admin_override, override_reason, override_by)
+          VALUES (${agencyId}, ${planId}, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 year', ${isAdminOverride ? true : false}, ${isAdminOverride ? (overrideReason ?? null) : null}, ${isAdminOverride ? adminId : null})
           RETURNING *
         `;
         subscriptionRow = inserted[0];
       }
 
-      // Grant monthly credits via Neon HTTP driver
-      await neonSql`
-        INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
-        VALUES (${agencyId}, ${plan.monthly_lead_credits}, 'grant', 'Monthly credits from plan change')
-      `;
+      // Update agency verified/featured flags based on tier
+      if (plan.tier === "premium" || plan.tier === "pro" || plan.tier === "enterprise") {
+        await neonSql`UPDATE agencies SET is_verified = true WHERE id = ${agencyId}`;
+      }
+      if (plan.tier === "pro" || plan.tier === "enterprise") {
+        await neonSql`UPDATE agencies SET is_featured = true WHERE id = ${agencyId}`;
+      }
+      if (plan.tier === "free") {
+        await neonSql`UPDATE agencies SET is_verified = false, is_featured = false WHERE id = ${agencyId}`;
+      }
 
-      return success(subscriptionRow);
+      // Grant monthly credits
+      if (plan.monthly_lead_credits > 0) {
+        await neonSql`
+          INSERT INTO lead_credit_transactions (agency_id, amount, type, description)
+          VALUES (${agencyId}, ${plan.monthly_lead_credits}, 'grant', ${isAdminOverride ? 'Admin override: ' + plan.name + ' plan' : 'Monthly credits from plan change'})
+        `;
+      }
+
+      return success({ ...subscriptionRow, planTier: plan.tier, planName: plan.name });
     } catch (tableErr) {
       const message = tableErr instanceof Error ? tableErr.message : String(tableErr);
       if (message.includes("does not exist") || message.includes("relation")) {

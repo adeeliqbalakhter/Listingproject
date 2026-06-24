@@ -25,6 +25,29 @@ export async function GET(request: NextRequest) {
 
     const extract = (r: unknown) => Number((r as Array<{ count: string }>)[0]?.count ?? 0);
 
+    let subscriptionStats = { totalSubscribers: 0, paidSubscribers: 0, mrr: 0, tierBreakdown: [] as Array<Record<string, unknown>> };
+    try {
+      const tierRows = await db.execute(sql`
+        SELECT p.tier, p.monthly_price, count(s.id)::int as count
+        FROM plans p
+        LEFT JOIN subscriptions s ON s.plan_id = p.id AND s.status = 'active'
+        GROUP BY p.tier, p.monthly_price, p.sort_order
+        ORDER BY p.sort_order ASC
+      `);
+      const tiers = tierRows as unknown as Array<{ tier: string; monthly_price: string; count: number }>;
+      let total = 0;
+      let paid = 0;
+      let mrr = 0;
+      for (const t of tiers) {
+        total += t.count;
+        if (t.tier !== "free") {
+          paid += t.count;
+          mrr += t.count * Number(t.monthly_price);
+        }
+      }
+      subscriptionStats = { totalSubscribers: total, paidSubscribers: paid, mrr, tierBreakdown: tiers };
+    } catch { /* tables may not exist yet */ }
+
     return success({
       stats: {
         totalUsers: extract(usersCount),
@@ -34,6 +57,7 @@ export async function GET(request: NextRequest) {
         pendingAgencies: extract(pendingAgencies),
         pendingReviews: extract(pendingReviews),
       },
+      subscriptionStats,
       recentUsers,
     });
   } catch (err) {

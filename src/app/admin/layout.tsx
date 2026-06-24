@@ -17,6 +17,8 @@ import {
   FileBarChart,
   Crown,
   ScrollText,
+  DollarSign,
+  Tag,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +32,8 @@ const sidebarLinks = [
   { name: "Credits", href: "/admin/credits", icon: CreditCard },
   { name: "Reviews", href: "/admin/reviews", icon: Star },
   { name: "Subscriptions", href: "/admin/subscriptions", icon: Crown },
+  { name: "Plans", href: "/admin/plans", icon: DollarSign },
+  { name: "Promo Codes", href: "/admin/promo-codes", icon: Tag },
   { name: "Logs", href: "/admin/logs", icon: ScrollText },
   { name: "Reports", href: "/admin/reports", icon: FileBarChart },
   { name: "Settings", href: "/admin/settings", icon: Settings },
