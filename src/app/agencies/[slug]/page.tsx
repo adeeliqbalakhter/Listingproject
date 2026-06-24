@@ -1023,6 +1023,8 @@ export default async function AgencyProfilePage({
     ? [hqOffice.city, hqOffice.country].filter(Boolean).join(", ")
     : location;
 
+  const hqPhone = hqOffice?.phone || agency.phone || null;
+
   const socialLinks = parseSocialLinks(agency.social_links);
   const rating = agency.average_rating ? Number(agency.average_rating) : 0;
   const reviewCount = agency.total_reviews ?? 0;
@@ -1053,7 +1055,7 @@ export default async function AgencyProfilePage({
       url: agency.website || `${baseUrl}/agencies/${agency.slug}`,
       logo: agency.logo || undefined,
       image: agency.logo || agency.cover_image || undefined,
-      telephone: agency.phone || undefined,
+      telephone: hqPhone || undefined,
       email: agency.email || undefined,
       foundingDate: agency.founded_year ? String(agency.founded_year) : undefined,
       address: location
@@ -1679,6 +1681,15 @@ export default async function AgencyProfilePage({
                 >
                   Get a Free Quote <ArrowRight className="w-4 h-4" />
                 </Link>
+                {hqPhone && (
+                  <a
+                    href={`tel:${hqPhone}`}
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    <Phone className="w-4 h-4" />
+                    {hqPhone}
+                  </a>
+                )}
 
                 {/* Quick info */}
                 <div className="mt-6 space-y-4 border-t border-gray-100 pt-6">

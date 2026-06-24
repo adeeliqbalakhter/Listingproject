@@ -479,7 +479,7 @@ export default function ProfilePage() {
       timezones: timezones.length > 0 ? timezones : undefined,
       locations: offices.length > 0
         ? offices.filter((o) => [o.label, o.address, o.cityId, o.countryId, o.latitude, o.longitude].some((v) => String(v || "").trim() !== ""))
-            .map((o) => ({ label: o.label.trim() || undefined, address: o.address.trim() || undefined, cityId: o.cityId || undefined, countryId: o.countryId || undefined, latitude: o.latitude.trim() ? Number(o.latitude) : undefined, longitude: o.longitude.trim() ? Number(o.longitude) : undefined, isHeadquarters: o.isHeadquarters || undefined }))
+            .map((o) => ({ label: o.label.trim() || undefined, address: o.address.trim() || undefined, cityId: o.cityId || undefined, countryId: o.countryId || undefined, latitude: o.latitude.trim() ? Number(o.latitude) : undefined, longitude: o.longitude.trim() ? Number(o.longitude) : undefined, isHeadquarters: o.isHeadquarters || undefined, phone: o.phone?.trim() || undefined }))
         : undefined,
       serviceFocus: serviceFocus.length > 0 ? serviceFocus : undefined,
       industryFocus: industryFocus.length > 0 ? industryFocus : undefined,
