@@ -1176,60 +1176,60 @@ export default async function AgencyProfilePage({
       {/* ================================================================ */}
       {/* Cover Image + Hero */}
       {/* ================================================================ */}
-      <section className="relative">
-        {/* Cover */}
+      <section className="relative bg-navy">
+        {/* Cover image */}
         {coverUrl ? (
-          <div className="h-48 sm:h-56 md:h-72 lg:h-80 w-full overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden">
             <img src={coverUrl} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/50 to-navy/20" />
+            <div className="absolute inset-0 bg-gradient-to-b from-navy/70 via-navy/60 to-navy" />
           </div>
         ) : (
-          <div className="h-48 sm:h-56 md:h-64 lg:h-72 w-full bg-gradient-to-br from-navy via-[#1a2744] to-[#0f1b33]">
-            <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }} />
+          <div className="absolute inset-0 bg-gradient-to-br from-navy via-[#1a2744] to-[#0f1b33]">
+            <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M20 20.5V18H0v-2h20v-2H0v-2h20v-2H0V8h20V6H0V4h20V2H0V0h22v20.5h-2zM0 20h2v20H0V20zm4 0h2v20H4V20zm4 0h2v20H8V20zm4 0h2v20h-2V20zm4 0h2v20h-2V20zm4 0h2v20h-2V20z' opacity='.05'/%3E%3C/g%3E%3C/svg%3E\")" }} />
           </div>
         )}
 
-        {/* Agency identity card overlapping the cover */}
-        <div className="relative max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 -mt-20 sm:-mt-24 md:-mt-28 z-10">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sm:p-6 md:p-8">
-            <div className="flex flex-col md:flex-row gap-5 md:gap-8">
+        {/* Hero content */}
+        <div className="relative z-10 pt-10 sm:pt-14 md:pt-20 pb-8 sm:pb-10">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-8">
               {/* Logo */}
-              <div className="shrink-0 -mt-14 sm:-mt-16 md:-mt-20">
+              <div className="shrink-0">
                 <img
                   src={logoUrl}
                   alt={`${agency.name} logo`}
                   width={112}
                   height={112}
-                  className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-lg bg-white object-cover"
+                  className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl border-[3px] border-white/90 shadow-2xl bg-white object-cover"
                 />
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-navy tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
                     {agency.name}
                   </h1>
                   {agency.is_verified && (
-                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-400/20 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full border border-emerald-400/30 backdrop-blur-sm">
                       <BadgeCheck className="w-4 h-4" /> Verified
                     </span>
                   )}
                 </div>
                 {agency.tagline && (
-                  <p className="mt-1.5 text-gray-500 text-base md:text-lg leading-relaxed max-w-2xl">{agency.tagline}</p>
+                  <p className="mt-2 text-gray-300 text-base md:text-lg leading-relaxed max-w-2xl">{agency.tagline}</p>
                 )}
 
                 <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2.5 text-sm">
                   {reviewCount > 0 && (
-                    <a href="#reviews" className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 rounded-full px-3 py-1 hover:bg-amber-100 transition-colors">
+                    <a href="#reviews" className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-sm border border-white/10 rounded-full px-3.5 py-1.5 hover:bg-white/20 transition-colors">
                       <Stars rating={rating} />
-                      <span className="font-bold text-gray-900">{rating.toFixed(1)}</span>
-                      <span className="text-gray-500">({reviewCount})</span>
+                      <span className="font-bold text-white">{rating.toFixed(1)}</span>
+                      <span className="text-gray-300">({reviewCount})</span>
                     </a>
                   )}
                   {displayLocation && (
-                    <span className="inline-flex items-center gap-1.5 text-gray-600">
+                    <span className="inline-flex items-center gap-1.5 text-gray-300">
                       <MapPin className="w-4 h-4 text-gray-400" /> {displayLocation}
                     </span>
                   )}
@@ -1240,14 +1240,14 @@ export default async function AgencyProfilePage({
                       href={agency.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-brand hover:text-brand-dark font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 text-blue-300 hover:text-white font-medium transition-colors"
                     >
                       <Globe className="w-4 h-4" /> {agency.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                       <ExternalLink className="w-3 h-3 opacity-50" />
                     </TrackClick>
                   )}
                   {hqPhone && (
-                    <a href={`tel:${hqPhone}`} className="inline-flex items-center gap-1.5 text-gray-600 hover:text-brand transition-colors">
+                    <a href={`tel:${hqPhone}`} className="inline-flex items-center gap-1.5 text-gray-300 hover:text-white transition-colors">
                       <Phone className="w-4 h-4 text-gray-400" /> {hqPhone}
                     </a>
                   )}
@@ -1255,76 +1255,82 @@ export default async function AgencyProfilePage({
               </div>
 
               {/* CTA (visible on md+) */}
-              <div className="hidden md:flex shrink-0 flex-col gap-2.5 pt-1">
+              <div className="hidden md:flex shrink-0 flex-col gap-2.5 items-end">
                 <Link
                   href={`/get-quotes?agency=${agency.slug}`}
-                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-brand-dark shadow-lg shadow-brand/25 transition-all hover:shadow-brand/40"
+                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-brand-dark shadow-xl shadow-brand/30 transition-all hover:shadow-brand/50 hover:scale-[1.02]"
                 >
                   Get a Free Quote <ArrowRight className="w-4 h-4" />
                 </Link>
                 {agency.claim_status === "unclaimed" && (
                   <Link
                     href={`/agencies/${agency.slug}/claim`}
-                    className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white px-7 py-3 rounded-xl font-semibold hover:bg-emerald-600 shadow-lg shadow-emerald-500/25 transition-all text-sm"
+                    className="inline-flex items-center justify-center gap-2 border border-white/20 text-white/90 bg-white/10 backdrop-blur-sm px-6 py-2.5 rounded-xl font-semibold hover:bg-white/20 transition-all text-sm"
                   >
                     <BadgeCheck className="w-4 h-4" /> Claim This Agency
                   </Link>
                 )}
               </div>
             </div>
-
-            {/* Stats row inside the card */}
-            {(agency.founded_year || agency.company_size || agency.hourly_rate || agency.min_project_size != null) && (
-              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                {agency.founded_year && (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center shrink-0">
-                      <Calendar className="w-5 h-5 text-brand" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Founded</p>
-                      <p className="font-bold text-navy">{agency.founded_year}</p>
-                    </div>
-                  </div>
-                )}
-                {agency.company_size && (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl flex items-center justify-center shrink-0">
-                      <Users className="w-5 h-5 text-violet-600" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Team Size</p>
-                      <p className="font-bold text-navy">{agency.company_size}</p>
-                    </div>
-                  </div>
-                )}
-                {agency.hourly_rate && (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center shrink-0">
-                      <Clock className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Hourly Rate</p>
-                      <p className="font-bold text-navy">{agency.hourly_rate}</p>
-                    </div>
-                  </div>
-                )}
-                {agency.min_project_size != null && (
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                      <DollarSign className="w-5 h-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Min Project</p>
-                      <p className="font-bold text-navy">${Number(agency.min_project_size).toLocaleString()}+</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </section>
+
+      {/* ================================================================ */}
+      {/* Quick Stats Bar */}
+      {/* ================================================================ */}
+      {(agency.founded_year || agency.company_size || agency.hourly_rate || agency.min_project_size != null) && (
+        <section className="bg-white border-b border-gray-200">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-100">
+              {agency.founded_year && (
+                <div className="flex items-center gap-3 py-5 px-4 first:pl-0">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Calendar className="w-5 h-5 text-brand" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Founded</p>
+                    <p className="font-bold text-navy text-lg">{agency.founded_year}</p>
+                  </div>
+                </div>
+              )}
+              {agency.company_size && (
+                <div className="flex items-center gap-3 py-5 px-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Team Size</p>
+                    <p className="font-bold text-navy text-lg">{agency.company_size}</p>
+                  </div>
+                </div>
+              )}
+              {agency.hourly_rate && (
+                <div className="flex items-center gap-3 py-5 px-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Clock className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Hourly Rate</p>
+                    <p className="font-bold text-navy text-lg">{agency.hourly_rate}</p>
+                  </div>
+                </div>
+              )}
+              {agency.min_project_size != null && (
+                <div className="flex items-center gap-3 py-5 px-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                    <DollarSign className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">Min Project</p>
+                    <p className="font-bold text-navy text-lg">${Number(agency.min_project_size).toLocaleString()}+</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ================================================================ */}
       {/* Mobile CTA (sticky bottom bar) */}
