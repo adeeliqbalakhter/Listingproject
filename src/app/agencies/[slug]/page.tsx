@@ -1076,6 +1076,8 @@ export default async function AgencyProfilePage({
   const reviewCount = agency.total_reviews ?? 0;
   const isActive = agency.status === "active";
 
+  const coverUrl = agency.cover_image || null;
+
   const logoUrl =
     agency.logo ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(agency.name)}&size=128&background=2563EB&color=fff&bold=true&format=svg`;
@@ -1171,218 +1173,219 @@ export default async function AgencyProfilePage({
         </div>
       )}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Hero */}
-      {/* ---------------------------------------------------------------- */}
-      <section className="bg-navy">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-          <div className="flex flex-col md:flex-row md:items-center gap-6">
-            {/* Logo */}
-            <div className="shrink-0">
-              <img
-                src={logoUrl}
-                alt={`${agency.name} logo`}
-                width={96}
-                height={96}
-                className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-white/20 shadow-lg"
-              />
-            </div>
+      {/* ================================================================ */}
+      {/* Cover Image + Hero */}
+      {/* ================================================================ */}
+      <section className="relative">
+        {/* Cover */}
+        {coverUrl ? (
+          <div className="h-48 sm:h-56 md:h-72 lg:h-80 w-full overflow-hidden">
+            <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/50 to-navy/20" />
+          </div>
+        ) : (
+          <div className="h-48 sm:h-56 md:h-64 lg:h-72 w-full bg-gradient-to-br from-navy via-[#1a2744] to-[#0f1b33]">
+            <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }} />
+          </div>
+        )}
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white truncate">
-                  {agency.name}
-                </h1>
-                {agency.is_verified && (
-                  <span className="inline-flex items-center gap-1 bg-brand/20 text-brand-light text-xs font-semibold px-2.5 py-1 rounded-full">
-                    <BadgeCheck className="w-4 h-4" /> Verified
-                  </span>
-                )}
+        {/* Agency identity card overlapping the cover */}
+        <div className="relative max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 -mt-20 sm:-mt-24 md:-mt-28 z-10">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sm:p-6 md:p-8">
+            <div className="flex flex-col md:flex-row gap-5 md:gap-8">
+              {/* Logo */}
+              <div className="shrink-0 -mt-14 sm:-mt-16 md:-mt-20">
+                <img
+                  src={logoUrl}
+                  alt={`${agency.name} logo`}
+                  width={112}
+                  height={112}
+                  className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-lg bg-white object-cover"
+                />
               </div>
-              {agency.tagline && (
-                <p className="mt-1 text-gray-300 text-lg">{agency.tagline}</p>
-              )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-300">
-                {/* Rating */}
-                {reviewCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Stars rating={rating} />
-                    <span className="font-semibold text-white">
-                      {rating.toFixed(1)}
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-navy tracking-tight">
+                    {agency.name}
+                  </h1>
+                  {agency.is_verified && (
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
+                      <BadgeCheck className="w-4 h-4" /> Verified
                     </span>
-                    <span>({reviewCount} reviews)</span>
-                  </span>
+                  )}
+                </div>
+                {agency.tagline && (
+                  <p className="mt-1.5 text-gray-500 text-base md:text-lg leading-relaxed max-w-2xl">{agency.tagline}</p>
                 )}
 
-                {/* Location */}
-                {displayLocation && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-4 h-4" /> {displayLocation}
-                  </span>
-                )}
-
-                {/* Website */}
-                {agency.website && (
-                  <TrackClick
-                    agencyId={agency.id as string}
-                    event="website_click"
-                    href={agency.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 hover:text-white transition-colors"
-                  >
-                    <Globe className="w-4 h-4" /> Website
-                    <ExternalLink className="w-3 h-3" />
-                  </TrackClick>
-                )}
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2.5 text-sm">
+                  {reviewCount > 0 && (
+                    <a href="#reviews" className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 rounded-full px-3 py-1 hover:bg-amber-100 transition-colors">
+                      <Stars rating={rating} />
+                      <span className="font-bold text-gray-900">{rating.toFixed(1)}</span>
+                      <span className="text-gray-500">({reviewCount})</span>
+                    </a>
+                  )}
+                  {displayLocation && (
+                    <span className="inline-flex items-center gap-1.5 text-gray-600">
+                      <MapPin className="w-4 h-4 text-gray-400" /> {displayLocation}
+                    </span>
+                  )}
+                  {agency.website && (
+                    <TrackClick
+                      agencyId={agency.id as string}
+                      event="website_click"
+                      href={agency.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-brand hover:text-brand-dark font-medium transition-colors"
+                    >
+                      <Globe className="w-4 h-4" /> {agency.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                      <ExternalLink className="w-3 h-3 opacity-50" />
+                    </TrackClick>
+                  )}
+                  {hqPhone && (
+                    <a href={`tel:${hqPhone}`} className="inline-flex items-center gap-1.5 text-gray-600 hover:text-brand transition-colors">
+                      <Phone className="w-4 h-4 text-gray-400" /> {hqPhone}
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* CTA (visible on md+) */}
-            <div className="hidden md:flex shrink-0 flex-col gap-3">
-              <Link
-                href={`/get-quotes?agency=${agency.slug}`}
-                className="inline-flex items-center justify-center gap-2 bg-brand text-white px-6 py-3 rounded-xl font-medium hover:bg-brand-dark transition-colors"
-              >
-                Get a Free Quote <ArrowRight className="w-4 h-4" />
-              </Link>
-              {agency.claim_status === "unclaimed" && (
+              {/* CTA (visible on md+) */}
+              <div className="hidden md:flex shrink-0 flex-col gap-2.5 pt-1">
                 <Link
-                  href={`/agencies/${agency.slug}/claim`}
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-600 transition-colors text-sm"
+                  href={`/get-quotes?agency=${agency.slug}`}
+                  className="inline-flex items-center justify-center gap-2 bg-brand text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-brand-dark shadow-lg shadow-brand/25 transition-all hover:shadow-brand/40"
                 >
-                  <BadgeCheck className="w-4 h-4" /> Claim This Agency
+                  Get a Free Quote <ArrowRight className="w-4 h-4" />
                 </Link>
-              )}
+                {agency.claim_status === "unclaimed" && (
+                  <Link
+                    href={`/agencies/${agency.slug}/claim`}
+                    className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white px-7 py-3 rounded-xl font-semibold hover:bg-emerald-600 shadow-lg shadow-emerald-500/25 transition-all text-sm"
+                  >
+                    <BadgeCheck className="w-4 h-4" /> Claim This Agency
+                  </Link>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Quick Stats Bar */}
-      {/* ---------------------------------------------------------------- */}
-      <section className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-            {agency.founded_year && (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-brand" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">
-                    Founded
-                  </p>
-                  <p className="font-semibold text-navy">
-                    {agency.founded_year}
-                  </p>
-                </div>
-              </div>
-            )}
-            {agency.company_size && (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-brand" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">
-                    Company Size
-                  </p>
-                  <p className="font-semibold text-navy">
-                    {agency.company_size}
-                  </p>
-                </div>
-              </div>
-            )}
-            {agency.hourly_rate && (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-brand" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">
-                    Hourly Rate
-                  </p>
-                  <p className="font-semibold text-navy">
-                    {agency.hourly_rate}
-                  </p>
-                </div>
-              </div>
-            )}
-            {agency.min_project_size != null && (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-brand" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">
-                    Min Project Size
-                  </p>
-                  <p className="font-semibold text-navy">
-                    ${Number(agency.min_project_size).toLocaleString()}+
-                  </p>
-                </div>
+            {/* Stats row inside the card */}
+            {(agency.founded_year || agency.company_size || agency.hourly_rate || agency.min_project_size != null) && (
+              <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                {agency.founded_year && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                      <Calendar className="w-5 h-5 text-brand" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Founded</p>
+                      <p className="font-bold text-navy">{agency.founded_year}</p>
+                    </div>
+                  </div>
+                )}
+                {agency.company_size && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Team Size</p>
+                      <p className="font-bold text-navy">{agency.company_size}</p>
+                    </div>
+                  </div>
+                )}
+                {agency.hourly_rate && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                      <Clock className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Hourly Rate</p>
+                      <p className="font-bold text-navy">{agency.hourly_rate}</p>
+                    </div>
+                  </div>
+                )}
+                {agency.min_project_size != null && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                      <DollarSign className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Min Project</p>
+                      <p className="font-bold text-navy">${Number(agency.min_project_size).toLocaleString()}+</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* ---------------------------------------------------------------- */}
+      {/* ================================================================ */}
       {/* Mobile CTA (sticky bottom bar) */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 px-4 py-3 flex gap-3">
+      {/* ================================================================ */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-gray-200 px-4 py-3 flex gap-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
         {agency.claim_status === "unclaimed" ? (
           <Link
             href={`/agencies/${agency.slug}/claim`}
-            className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 text-white py-2.5 rounded-xl font-medium text-sm hover:bg-emerald-600 transition-colors"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-emerald-600 transition-colors"
           >
             <BadgeCheck className="w-4 h-4" /> Claim This Agency
           </Link>
         ) : (
           <Link
             href={`/get-quotes?agency=${agency.slug}`}
-            className="flex-1 inline-flex items-center justify-center gap-2 bg-brand text-white py-2.5 rounded-xl font-medium text-sm hover:bg-brand-dark transition-colors"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-brand text-white py-3 rounded-xl font-semibold text-sm hover:bg-brand-dark transition-colors shadow-lg shadow-brand/20"
           >
-            Get a Free Quote
+            Get a Free Quote <ArrowRight className="w-4 h-4" />
           </Link>
         )}
       </div>
 
-      {/* ---------------------------------------------------------------- */}
+      {/* ================================================================ */}
+      {/* Tab navigation (sticky) */}
+      {/* ================================================================ */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-lg border-b border-gray-200 shadow-sm">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex overflow-x-auto gap-0 -mb-px scrollbar-hide">
+            {tabs.map((tab) => (
+              <a
+                key={tab.id}
+                href={`#${tab.id}`}
+                className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-gray-500 hover:text-brand border-b-2 border-transparent hover:border-brand transition-colors shrink-0"
+              >
+                {tab.label}
+              </a>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
       {/* Main content area */}
-      {/* ---------------------------------------------------------------- */}
-      <section className="bg-gray-50 pb-20 md:pb-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-          <div className="lg:grid lg:grid-cols-3 lg:gap-10">
+      {/* ================================================================ */}
+      <section className="bg-gray-50/80 pb-20 md:pb-16">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+          <div className="lg:grid lg:grid-cols-[1fr_380px] lg:gap-10">
             {/* ======================================================== */}
-            {/* Primary column (2/3) */}
+            {/* Primary column */}
             {/* ======================================================== */}
-            <div className="lg:col-span-2 space-y-10">
-              {/* Tab navigation */}
-              <nav className="flex overflow-x-auto gap-1 bg-white rounded-xl p-1 shadow-sm border border-gray-200">
-                {tabs.map((tab) => (
-                  <a
-                    key={tab.id}
-                    href={`#${tab.id}`}
-                    className="whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:text-brand hover:bg-blue-50 transition-colors"
-                  >
-                    {tab.label}
-                  </a>
-                ))}
-              </nav>
+            <div className="min-w-0 space-y-8">
 
               {/* ---- Overview ---- */}
-              <div id="overview" className="scroll-mt-24">
-                <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
-                  <h2 className="text-xl font-bold text-navy">
+              <div id="overview" className="scroll-mt-20">
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
+                  <h2 className="text-xl font-bold text-navy flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-brand" />
                     About {agency.name}
                   </h2>
                   {agency.description ? (
-                    <div className="mt-4 text-gray-600 leading-relaxed whitespace-pre-line">
+                    <div className="mt-4 text-gray-600 leading-relaxed whitespace-pre-line text-[15px]">
                       {agency.description}
                     </div>
                   ) : (
@@ -1395,7 +1398,7 @@ export default async function AgencyProfilePage({
 
               {/* ---- Languages & Timezones ---- */}
               {(languages.length > 0 || timezones.length > 0) && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     {languages.length > 0 && (
                       <div>
@@ -1404,10 +1407,7 @@ export default async function AgencyProfilePage({
                         </h2>
                         <div className="mt-4 flex flex-wrap gap-2">
                           {languages.map((lang) => (
-                            <span
-                              key={lang}
-                              className="inline-flex items-center bg-blue-50 text-brand text-sm font-medium px-3 py-1.5 rounded-full"
-                            >
+                            <span key={lang} className="inline-flex items-center bg-blue-50 text-brand text-sm font-medium px-3 py-1.5 rounded-lg">
                               {lang}
                             </span>
                           ))}
@@ -1421,10 +1421,7 @@ export default async function AgencyProfilePage({
                         </h2>
                         <div className="mt-4 flex flex-wrap gap-2">
                           {timezones.map((tz) => (
-                            <span
-                              key={tz}
-                              className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full"
-                            >
+                            <span key={tz} className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg">
                               {tz}
                             </span>
                           ))}
@@ -1436,13 +1433,13 @@ export default async function AgencyProfilePage({
               )}
 
               {/* ---- Pricing Snapshot ---- */}
-              <div id="pricing" className="scroll-mt-24">
+              <div id="pricing" className="scroll-mt-20">
                 <PricingSnapshot data={pricingData} agencyName={agency.name} />
               </div>
 
               {/* ---- Packages ---- */}
               {packages.length > 0 && (
-                <div id="packages" className="scroll-mt-24">
+                <div id="packages" className="scroll-mt-20">
                   <PackagesSection
                     packages={packages}
                     agencyId={agency.id as string}
@@ -1456,9 +1453,11 @@ export default async function AgencyProfilePage({
 
               {/* ---- Portfolio & Awards ---- */}
               {portfolio.length > 0 && (
-                <div id="portfolio" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
-                    <h2 className="text-xl font-bold text-navy">Portfolio & Awards</h2>
+                <div id="portfolio" className="scroll-mt-20">
+                  <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
+                    <h2 className="text-xl font-bold text-navy flex items-center gap-2">
+                      <Briefcase className="w-5 h-5 text-brand" /> Portfolio & Awards
+                    </h2>
                     <PortfolioSection items={portfolio} />
                   </div>
                 </div>
@@ -1466,21 +1465,19 @@ export default async function AgencyProfilePage({
 
               {/* ---- Service Lines (pie chart) ---- */}
               {serviceFocus.length > 0 && (
-                <div id="services" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                <div id="services" className="scroll-mt-20">
+                  <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
                     <h2 className="text-xl font-bold text-navy">Service Lines</h2>
                     <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
-                      {/* Pie chart */}
                       <div className="shrink-0">
                         <ServiceFocusPie items={serviceFocus} />
                       </div>
-                      {/* Legend + percentages */}
                       <div className="flex-1 space-y-3">
                         {serviceFocus.map((item, i) => (
-                          <div key={item.serviceId} className="flex items-center gap-3">
+                          <div key={item.serviceId} className="flex items-center gap-3 py-1">
                             <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                             <span className="flex-1 text-sm font-medium text-gray-800">{item.serviceName}</span>
-                            <span className="text-sm font-semibold text-navy">{item.percentage}%</span>
+                            <span className="text-sm font-bold text-navy bg-gray-50 px-2 py-0.5 rounded">{item.percentage}%</span>
                           </div>
                         ))}
                       </div>
@@ -1491,21 +1488,19 @@ export default async function AgencyProfilePage({
 
               {/* ---- Services (fallback if no focus data) ---- */}
               {serviceFocus.length === 0 && services.length > 0 && (
-                <div id="services" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                <div id="services" className="scroll-mt-20">
+                  <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
                     <h2 className="text-xl font-bold text-navy">Services</h2>
-                    <div className="mt-6 grid sm:grid-cols-2 gap-4">
+                    <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {services.map((service) => (
                         <div
                           key={service.name}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-brand/30 hover:bg-blue-50/40 transition-colors"
+                          className="flex items-center gap-3 p-3.5 rounded-xl border border-gray-100 hover:border-brand/30 hover:bg-blue-50/40 transition-all group"
                         >
-                          <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                            <Briefcase className="w-4.5 h-4.5 text-brand" />
+                          <div className="w-9 h-9 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg flex items-center justify-center shrink-0 group-hover:from-brand/10 group-hover:to-brand/20 transition-colors">
+                            <Briefcase className="w-4 h-4 text-brand" />
                           </div>
-                          <span className="font-medium text-gray-800">
-                            {service.name}
-                          </span>
+                          <span className="font-medium text-gray-800 text-sm">{service.name}</span>
                         </div>
                       ))}
                     </div>
@@ -1523,8 +1518,8 @@ export default async function AgencyProfilePage({
                       return industries.map((ind, i) => ({ name: ind.name, pct: pctEach + (i < remainder ? 1 : 0) }));
                     })();
                 return (
-                  <div id="industries" className="scroll-mt-24">
-                    <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+                  <div id="industries" className="scroll-mt-20">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
                       <h2 className="text-xl font-bold text-navy">Industry Focus</h2>
                       <div className="mt-6 flex flex-col md:flex-row gap-8 items-start">
                         <div className="shrink-0">
@@ -1532,10 +1527,10 @@ export default async function AgencyProfilePage({
                         </div>
                         <div className="flex-1 space-y-3">
                           {industryItems.map((item, i) => (
-                            <div key={item.name} className="flex items-center gap-3">
+                            <div key={item.name} className="flex items-center gap-3 py-1">
                               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length] }} />
                               <span className="flex-1 text-sm font-medium text-gray-800">{item.name}</span>
-                              <span className="text-sm font-semibold text-navy">{item.pct}%</span>
+                              <span className="text-sm font-bold text-navy bg-gray-50 px-2 py-0.5 rounded">{item.pct}%</span>
                             </div>
                           ))}
                         </div>
@@ -1547,18 +1542,19 @@ export default async function AgencyProfilePage({
 
               {/* ---- Location ---- */}
               {locations.length > 0 && (
-                <div id="location" className="scroll-mt-24">
+                <div id="location" className="scroll-mt-20">
                   <LocationMap locations={locations} />
                 </div>
               )}
 
               {/* ---- About The Team ---- */}
               {teamInfo && (
-                <div id="team" className="scroll-mt-24">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 space-y-8">
-                    <h2 className="text-xl font-bold text-navy">About The Team</h2>
+                <div id="team" className="scroll-mt-20">
+                  <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm space-y-8">
+                    <h2 className="text-xl font-bold text-navy flex items-center gap-2">
+                      <Users className="w-5 h-5 text-brand" /> About The Team
+                    </h2>
 
-                    {/* Our Story */}
                     {teamInfo.story && (
                       <div>
                         <h3 className="text-lg font-semibold text-navy mb-3">Our Story</h3>
@@ -1566,18 +1562,16 @@ export default async function AgencyProfilePage({
                       </div>
                     )}
 
-                    {/* Team Photo */}
                     {teamInfo.teamPhoto && (
-                      <div>
-                        <img src={teamInfo.teamPhoto} alt="Team" className="w-full max-h-80 object-cover rounded-lg" />
+                      <div className="overflow-hidden rounded-xl">
+                        <img src={teamInfo.teamPhoto} alt="Team" className="w-full max-h-96 object-cover" />
                       </div>
                     )}
 
-                    {/* Video */}
                     {teamInfo.videoUrl && (
                       <div>
                         <h3 className="text-lg font-semibold text-navy mb-3">Video</h3>
-                        <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
+                        <div className="aspect-video rounded-xl overflow-hidden bg-gray-100">
                           <iframe
                             src={teamInfo.videoUrl.replace("watch?v=", "embed/")}
                             className="w-full h-full"
@@ -1588,15 +1582,14 @@ export default async function AgencyProfilePage({
                       </div>
                     )}
 
-                    {/* What Sets Us Apart */}
                     {teamInfo.setsApart && teamInfo.setsApart.length > 0 && (
                       <div>
                         <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
                           <Sparkles className="w-5 h-5 text-brand" /> What Sets Us Apart
                         </h3>
-                        <ul className="space-y-2">
+                        <ul className="space-y-2.5">
                           {teamInfo.setsApart.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-gray-700">
+                            <li key={i} className="flex items-start gap-3 text-gray-700">
                               <span className="mt-1.5 w-2 h-2 bg-brand rounded-full shrink-0" />
                               {item}
                             </li>
@@ -1605,14 +1598,13 @@ export default async function AgencyProfilePage({
                       </div>
                     )}
 
-                    {/* Quick Facts */}
                     {teamInfo.quickFacts && teamInfo.quickFacts.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold text-navy mb-3">Quick Facts</h3>
                         <div className="grid sm:grid-cols-2 gap-3">
                           {teamInfo.quickFacts.map((fact, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
-                              <span className="w-6 h-6 bg-brand/10 rounded-full flex items-center justify-center text-brand text-xs font-bold shrink-0">{i + 1}</span>
+                            <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3.5 text-sm text-gray-700">
+                              <span className="w-7 h-7 bg-brand/10 rounded-lg flex items-center justify-center text-brand text-xs font-bold shrink-0">{i + 1}</span>
                               {fact}
                             </div>
                           ))}
@@ -1620,7 +1612,6 @@ export default async function AgencyProfilePage({
                       </div>
                     )}
 
-                    {/* Tools & Technology */}
                     {teamInfo.tools && teamInfo.tools.length > 0 && (
                       <div>
                         <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
@@ -1628,7 +1619,7 @@ export default async function AgencyProfilePage({
                         </h3>
                         <div className="flex flex-wrap gap-2">
                           {teamInfo.tools.map((tool) => (
-                            <span key={tool} className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-full">
+                            <span key={tool} className="inline-flex items-center bg-gray-100 text-gray-700 text-sm font-medium px-3.5 py-1.5 rounded-lg">
                               {tool}
                             </span>
                           ))}
@@ -1636,17 +1627,16 @@ export default async function AgencyProfilePage({
                       </div>
                     )}
 
-                    {/* FAQ */}
                     {teamInfo.faq && teamInfo.faq.length > 0 && (
                       <div>
                         <h3 className="flex items-center gap-2 text-lg font-semibold text-navy mb-3">
                           <HelpCircle className="w-5 h-5 text-brand" /> FAQ
                         </h3>
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {teamInfo.faq.map((item, i) => (
-                            <div key={i} className="border border-gray-100 rounded-lg p-4">
+                            <div key={i} className="border border-gray-100 rounded-xl p-5 hover:border-gray-200 transition-colors">
                               <p className="font-semibold text-navy">{item.question}</p>
-                              <p className="mt-2 text-gray-600 text-sm">{item.answer}</p>
+                              <p className="mt-2 text-gray-600 text-sm leading-relaxed">{item.answer}</p>
                             </div>
                           ))}
                         </div>
@@ -1662,36 +1652,25 @@ export default async function AgencyProfilePage({
               )}
 
               {/* ---- Reviews ---- */}
-              <div id="reviews" className="scroll-mt-24">
-                <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8">
+              <div id="reviews" className="scroll-mt-20">
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-6 md:p-8 shadow-sm">
                   <h2 className="text-xl font-bold text-navy">Reviews</h2>
 
                   {reviewCount > 0 ? (
                     <>
-                      {/* Rating breakdown */}
                       <div className="mt-6 flex flex-col sm:flex-row gap-8">
                         <div className="text-center sm:text-left shrink-0">
-                          <p className="text-5xl font-bold text-navy">
-                            {rating.toFixed(1)}
-                          </p>
+                          <p className="text-5xl font-extrabold text-navy">{rating.toFixed(1)}</p>
                           <Stars rating={rating} size="w-5 h-5" />
-                          <p className="mt-1 text-sm text-gray-500">
-                            {reviewCount} reviews
-                          </p>
+                          <p className="mt-1 text-sm text-gray-500">{reviewCount} reviews</p>
                         </div>
                         <div className="flex-1 space-y-2">
                           {[5, 4, 3, 2, 1].map((star) => (
-                            <RatingBar
-                              key={star}
-                              label={star}
-                              count={ratingBreakdown[star] ?? 0}
-                              total={reviewCount}
-                            />
+                            <RatingBar key={star} label={star} count={ratingBreakdown[star] ?? 0} total={reviewCount} />
                           ))}
                         </div>
                       </div>
 
-                      {/* Filterable review list */}
                       {reviews.length > 0 && (
                         <ReviewsBrowser reviews={reviews as never} agencyName={agency.name} />
                       )}
@@ -1702,145 +1681,149 @@ export default async function AgencyProfilePage({
                     </p>
                   )}
 
-                  {/* Write a Review */}
                   <ReviewForm agencyId={agency.id} agencyName={agency.name} />
                 </div>
               </div>
             </div>
 
             {/* ======================================================== */}
-            {/* Sidebar (1/3) -- desktop only */}
+            {/* Sidebar -- desktop only */}
             {/* ======================================================== */}
-            <aside className="hidden lg:block space-y-6">
-              {/* Contact CTA Card */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-6">
-                <h3 className="text-lg font-bold text-navy">
-                  Ready to get started?
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Tell us about your project and get a custom proposal from{" "}
-                  {agency.name}.
-                </p>
-                <Link
-                  href={`/get-quotes?agency=${agency.slug}`}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand text-white py-3 rounded-xl font-medium hover:bg-brand-dark transition-colors"
-                >
-                  Get a Free Quote <ArrowRight className="w-4 h-4" />
-                </Link>
-                {hqPhone && (
-                  <a
-                    href={`tel:${hqPhone}`}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            <aside className="hidden lg:block">
+              <div className="sticky top-16 space-y-5">
+                {/* Contact CTA Card */}
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-navy">
+                    Ready to get started?
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 leading-relaxed">
+                    Tell us about your project and get a custom proposal from {agency.name}.
+                  </p>
+                  <Link
+                    href={`/get-quotes?agency=${agency.slug}`}
+                    className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand text-white py-3.5 rounded-xl font-semibold hover:bg-brand-dark shadow-lg shadow-brand/20 transition-all hover:shadow-brand/35"
                   >
-                    <Phone className="w-4 h-4" />
-                    {hqPhone}
-                  </a>
-                )}
+                    Get a Free Quote <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  {hqPhone && (
+                    <a
+                      href={`tel:${hqPhone}`}
+                      className="mt-2.5 w-full inline-flex items-center justify-center gap-2 border-2 border-gray-200 text-gray-700 py-3 rounded-xl text-sm font-semibold hover:border-brand/30 hover:text-brand hover:bg-blue-50/50 transition-all"
+                    >
+                      <Phone className="w-4 h-4" />
+                      {hqPhone}
+                    </a>
+                  )}
+                </div>
 
-                {/* Quick info */}
-                <div className="mt-6 space-y-4 border-t border-gray-100 pt-6">
+                {/* Quick info Card */}
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-4">
                   {displayLocation && (
                     <div className="flex items-start gap-3 text-sm">
-                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4 text-gray-500" />
+                      </div>
                       <div>
-                        <p className="text-gray-500">Location</p>
-                        <p className="font-medium text-gray-800">{displayLocation}</p>
+                        <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Location</p>
+                        <p className="font-semibold text-gray-800">{displayLocation}</p>
                       </div>
                     </div>
                   )}
                   {agency.website && (
                     <div className="flex items-start gap-3 text-sm">
-                      <Globe className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-gray-500">Website</p>
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <Globe className="w-4 h-4 text-gray-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Website</p>
                         <TrackClick
                           agencyId={agency.id as string}
                           event="website_click"
                           href={agency.website}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-brand hover:underline"
+                          className="font-semibold text-brand hover:underline truncate block"
                         >
-                          {agency.website.replace(/^https?:\/\//, "")}
+                          {agency.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                         </TrackClick>
                       </div>
                     </div>
                   )}
                   {agency.email && (
                     <div className="flex items-start gap-3 text-sm">
-                      <Mail className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-gray-500">Email</p>
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <Mail className="w-4 h-4 text-gray-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">Email</p>
                         <TrackClick
                           agencyId={agency.id as string}
                           event="email_click"
                           href={`mailto:${agency.email}`}
-                          className="font-medium text-brand hover:underline"
+                          className="font-semibold text-brand hover:underline truncate block"
                         >
                           {agency.email}
                         </TrackClick>
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* Social links */}
-                {Object.keys(socialLinks).length > 0 && (
-                  <div className="mt-6 border-t border-gray-100 pt-6">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">
-                      Follow
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(socialLinks)
-                        .filter(([, url]) => url)
-                        .map(([platform, url]) => {
-                          const iconPath = SOCIAL_ICON_PATHS[platform];
-                          const label = SOCIAL_LABELS[platform] || platform;
-                          return (
-                            <a
-                              key={platform}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={label}
-                              title={label}
-                              className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:text-brand hover:border-brand/30 transition-colors"
-                            >
-                              {iconPath ? (
-                                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d={iconPath} /></svg>
-                              ) : (
-                                <Globe className="w-4 h-4" />
-                              )}
-                            </a>
-                          );
-                        })}
+                  {/* Social links */}
+                  {Object.keys(socialLinks).length > 0 && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider font-medium mb-3">Follow Us</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(socialLinks)
+                          .filter(([, url]) => url)
+                          .map(([platform, url]) => {
+                            const iconPath = SOCIAL_ICON_PATHS[platform];
+                            const label = SOCIAL_LABELS[platform] || platform;
+                            return (
+                              <a
+                                key={platform}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={label}
+                                title={label}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500 hover:text-brand hover:bg-blue-50 transition-colors"
+                              >
+                                {iconPath ? (
+                                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d={iconPath} /></svg>
+                                ) : (
+                                  <Globe className="w-4 h-4" />
+                                )}
+                              </a>
+                            );
+                          })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </aside>
           </div>
         </div>
       </section>
 
-      {/* ---------------------------------------------------------------- */}
+      {/* ================================================================ */}
       {/* Similar Agencies */}
-      {/* ---------------------------------------------------------------- */}
+      {/* ================================================================ */}
       {similarAgencies.length > 0 && (
         <section className="bg-white border-t border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-            <h2 className="text-2xl md:text-3xl font-bold text-navy">
-              Similar Agencies
-            </h2>
-            <p className="mt-2 text-gray-600">
-              Explore other top-rated agencies that match your needs.
-            </p>
-            <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-bold text-navy">Similar Agencies</h2>
+                <p className="mt-2 text-gray-500">Explore other top-rated agencies that match your needs.</p>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {similarAgencies.map((a) => (
                 <Link
                   key={a.slug}
                   href={`/agencies/${a.slug}`}
-                  className="group bg-gray-50 rounded-xl border border-gray-200 p-5 hover:shadow-lg hover:border-brand/30 transition-all"
+                  className="group bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-xl hover:border-brand/20 hover:-translate-y-0.5 transition-all duration-200"
                 >
                   <div className="flex items-center gap-3">
                     <img
@@ -1851,16 +1834,12 @@ export default async function AgencyProfilePage({
                       alt={`${a.name} logo`}
                       width={48}
                       height={48}
-                      className="w-12 h-12 rounded-xl"
+                      className="w-12 h-12 rounded-xl border border-gray-100"
                     />
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-navy group-hover:text-brand transition-colors truncate">
-                        {a.name}
-                      </h3>
+                      <h3 className="font-bold text-navy group-hover:text-brand transition-colors truncate">{a.name}</h3>
                       {a.tagline && (
-                        <p className="text-sm text-gray-500 truncate">
-                          {a.tagline}
-                        </p>
+                        <p className="text-sm text-gray-500 truncate">{a.tagline}</p>
                       )}
                     </div>
                   </div>
@@ -1868,9 +1847,7 @@ export default async function AgencyProfilePage({
                     {a.averageRating != null && (
                       <span className="inline-flex items-center gap-1">
                         <Star className="w-3.5 h-3.5 fill-warning text-warning" />
-                        <span className="font-medium text-gray-800">
-                          {a.averageRating.toFixed(1)}
-                        </span>
+                        <span className="font-semibold text-gray-800">{a.averageRating.toFixed(1)}</span>
                         <span>({a.totalReviews})</span>
                       </span>
                     )}
@@ -1883,16 +1860,11 @@ export default async function AgencyProfilePage({
                   {a.services.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {a.services.map((s) => (
-                        <span
-                          key={s}
-                          className="text-xs bg-blue-50 text-brand font-medium px-2 py-0.5 rounded-full"
-                        >
-                          {s}
-                        </span>
+                        <span key={s} className="text-xs bg-blue-50 text-brand font-medium px-2.5 py-0.5 rounded-lg">{s}</span>
                       ))}
                     </div>
                   )}
-                  <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand group-hover:gap-2 transition-all">
+                  <div className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand group-hover:gap-2 transition-all">
                     View Profile <ChevronRight className="w-4 h-4" />
                   </div>
                 </Link>
