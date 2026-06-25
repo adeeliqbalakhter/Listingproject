@@ -133,7 +133,7 @@ export async function PATCH(request: NextRequest) {
         await neonSql`UPDATE agencies SET is_featured = true WHERE id = ${agencyId}`;
       }
       if (plan.tier === "free") {
-        await neonSql`UPDATE agencies SET is_verified = false, is_featured = false WHERE id = ${agencyId}`;
+        await neonSql`UPDATE agencies SET is_verified = false, is_featured = false, cover_image = NULL, social_links = NULL, packages = NULL WHERE id = ${agencyId}`;
       }
 
       // Grant monthly credits

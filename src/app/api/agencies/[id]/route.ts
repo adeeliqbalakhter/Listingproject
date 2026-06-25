@@ -154,31 +154,49 @@ export async function PATCH(
     }
     const data = parsed.data;
 
-    // Tier-based feature gating
+    // Tier-based feature gating — only block NEW premium feature additions
+    // Allow preserving existing data or clearing/reducing data on any tier
     const caps = await getAgencyCapabilities(id);
+    const existingCover = existing.cover_image as string | null;
+    const existingSocial = existing.social_links as Record<string, string> | null;
 
-    if ("coverImage" in data && data.coverImage && !canUseTierFeature(caps, "coverImage")) {
+    if ("coverImage" in data && data.coverImage && data.coverImage !== existingCover && !canUseTierFeature(caps, "coverImage")) {
       return Response.json({ error: "Cover image requires a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
     }
     if ("packages" in data && data.packages && Array.isArray(data.packages) && data.packages.length > 0 && !canUseTierFeature(caps, "packages")) {
-      return Response.json({ error: "Service packages require a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+      const existingPkgs = existing.packages;
+      const hadPackages = existingPkgs && (typeof existingPkgs === "string" ? JSON.parse(existingPkgs) : existingPkgs);
+      if (!hadPackages || !Array.isArray(hadPackages) || hadPackages.length === 0) {
+        return Response.json({ error: "Service packages require a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+      }
     }
-    if ("teamInfo" in data && data.teamInfo && !canUseTierFeature(caps, "teamShowcase")) {
-      return Response.json({ error: "Team showcase requires a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+
+    // For numeric limits: only block if the new count exceeds BOTH the limit AND the existing count
+    if ("locations" in data && Array.isArray(data.locations) && caps.maxLocations !== -1) {
+      const existingLocs = existing.locations;
+      const existingCount = existingLocs ? (Array.isArray(existingLocs) ? existingLocs : typeof existingLocs === "string" ? JSON.parse(existingLocs) : []).length : 0;
+      if (data.locations.length > caps.maxLocations && data.locations.length > existingCount) {
+        return Response.json({ error: `Your plan allows up to ${caps.maxLocations} location(s). Upgrade to add more.` }, { status: 403 });
+      }
     }
-    const hasSocialData = data.socialLinksData && typeof data.socialLinksData === "object" && Object.keys(data.socialLinksData).length > 0;
-    const hasIndividualSocial = data.linkedinUrl || data.twitterUrl || data.facebookUrl || data.instagramUrl;
-    if ((hasSocialData || hasIndividualSocial) && !canUseTierFeature(caps, "socialLinks")) {
-      return Response.json({ error: "Social media links require a Premium or higher plan. Upgrade to unlock this feature." }, { status: 403 });
+    if (data.serviceIds && caps.maxServiceTags !== -1) {
+      if (data.serviceIds.length > caps.maxServiceTags) {
+        // Check if they're just preserving existing tags
+        const existingSvcRows = await db.execute(sql`SELECT count(*) as count FROM agency_services WHERE agency_id = ${id}`);
+        const existingSvcCount = Number((existingSvcRows as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+        if (data.serviceIds.length > existingSvcCount) {
+          return Response.json({ error: `Your plan allows up to ${caps.maxServiceTags} service tags. Upgrade to add more.` }, { status: 403 });
+        }
+      }
     }
-    if ("locations" in data && Array.isArray(data.locations) && caps.maxLocations !== -1 && data.locations.length > caps.maxLocations) {
-      return Response.json({ error: `Your plan allows up to ${caps.maxLocations} location(s). Upgrade to add more.` }, { status: 403 });
-    }
-    if (data.serviceIds && caps.maxServiceTags !== -1 && data.serviceIds.length > caps.maxServiceTags) {
-      return Response.json({ error: `Your plan allows up to ${caps.maxServiceTags} service tags. Upgrade to add more.` }, { status: 403 });
-    }
-    if (data.industryIds && caps.maxIndustryTags !== -1 && data.industryIds.length > caps.maxIndustryTags) {
-      return Response.json({ error: `Your plan allows up to ${caps.maxIndustryTags} industry tags. Upgrade to add more.` }, { status: 403 });
+    if (data.industryIds && caps.maxIndustryTags !== -1) {
+      if (data.industryIds.length > caps.maxIndustryTags) {
+        const existingIndRows = await db.execute(sql`SELECT count(*) as count FROM agency_industries WHERE agency_id = ${id}`);
+        const existingIndCount = Number((existingIndRows as unknown as Array<{ count: string }>)[0]?.count ?? 0);
+        if (data.industryIds.length > existingIndCount) {
+          return Response.json({ error: `Your plan allows up to ${caps.maxIndustryTags} industry tags. Upgrade to add more.` }, { status: 403 });
+        }
+      }
     }
 
     // Build social links object: prefer new socialLinksData, fall back to individual fields

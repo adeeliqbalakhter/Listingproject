@@ -495,7 +495,11 @@ export default function ProfilePage() {
     };
 
     if (logoPreview) payload.logo = logoPreview;
-    if (coverPreview) payload.coverImage = coverPreview;
+    if (coverPreview) {
+      payload.coverImage = coverPreview;
+    } else {
+      payload.coverImage = null;
+    }
     Object.keys(payload).forEach((k) => { if (payload[k] === "" || payload[k] === undefined) delete payload[k]; });
 
     try {
@@ -699,11 +703,28 @@ export default function ProfilePage() {
 
             {/* Cover + Logo */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className={`h-40 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-center border-b border-gray-100 relative group overflow-hidden ${isPaidTier ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
-                onClick={() => { if (!isPaidTier) return; const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleImageUpload(f, "cover"); }; i.click(); }}>
-                {coverPreview ? <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
-                  : <div className="text-center"><ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-1" /><p className="text-xs text-gray-400">{isPaidTier ? "Cover Image" : "Cover Image (Premium+)"}</p>
-                    {isPaidTier && <button className="mt-1 text-xs text-brand font-medium flex items-center gap-1 mx-auto">{uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} Upload</button>}</div>}
+              <div className={`h-40 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-center border-b border-gray-100 relative group overflow-hidden ${isPaidTier || coverPreview ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                onClick={() => {
+                  if (!isPaidTier && !coverPreview) return;
+                  if (isPaidTier) { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleImageUpload(f, "cover"); }; i.click(); }
+                }}>
+                {coverPreview ? (
+                  <div className="relative w-full h-full">
+                    <img src={coverPreview} alt="Cover" className="w-full h-full object-cover" />
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setCoverPreview(null); }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove cover image">
+                      <X className="w-4 h-4" />
+                    </button>
+                    {!isPaidTier && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-white text-xs py-1 px-3 text-center">
+                        Cover image requires Premium plan &mdash; remove or upgrade
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center"><ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-1" /><p className="text-xs text-gray-400">{isPaidTier ? "Cover Image" : "Cover Image (Premium+)"}</p>
+                    {isPaidTier && <button className="mt-1 text-xs text-brand font-medium flex items-center gap-1 mx-auto">{uploadingCover ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} Upload</button>}</div>
+                )}
               </div>
               <div className="px-6 py-3 flex items-center gap-4">
                 <div className="w-16 h-16 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center -mt-10 relative z-10 bg-white cursor-pointer overflow-hidden"
@@ -939,8 +960,13 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-navy">Locations</h2>
-              <button type="button" onClick={() => setOffices((p) => [...p, emptyOffice()])} className="flex items-center gap-1.5 border border-brand text-brand px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand/5"><Plus className="w-4 h-4" /> Add Office</button>
+              <button type="button" onClick={() => { if (!isPaidTier && offices.length >= 1) { setMessage({ type: "error", text: "Free plan allows 1 location. Upgrade to add more." }); return; } setOffices((p) => [...p, emptyOffice()]); }} className="flex items-center gap-1.5 border border-brand text-brand px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand/5"><Plus className="w-4 h-4" /> Add Office</button>
             </div>
+            {!isPaidTier && offices.length > 1 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                <strong>Note:</strong> Your free plan allows 1 location. You have {offices.length} locations — you can still save but cannot add new ones. Upgrade for unlimited locations.
+              </div>
+            )}
 
             {/* Timezones */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -1073,6 +1099,11 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-navy">Service Lines</h2>
             <p className="text-sm text-gray-600">Allocate service lines based on how much of your business focuses on that line of work. A service line must be 10% or greater. All service lines must add up to 100%.</p>
+            {!isPaidTier && selectedServiceIds.length > 5 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                <strong>Note:</strong> Your free plan allows 5 service tags. You have {selectedServiceIds.length} — you can still save but cannot add new ones. Upgrade for unlimited tags.
+              </div>
+            )}
 
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               {/* Search & add */}
@@ -1156,6 +1187,11 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-navy">Industry Focus</h2>
             <p className="text-sm text-gray-600">Allocate industries based on how much of your business focuses on each industry. An industry must be 10% or greater. All industries must add up to 100%.</p>
+            {!isPaidTier && selectedIndustryIds.length > 5 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                <strong>Note:</strong> Your free plan allows 5 industry tags. You have {selectedIndustryIds.length} — you can still save but cannot add new ones. Upgrade for unlimited tags.
+              </div>
+            )}
 
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="mb-4">
