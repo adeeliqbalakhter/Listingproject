@@ -816,72 +816,63 @@ export async function runMigrations() {
   `);
 
   // ─── Subscription admin override & promo columns ───
-  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_admin_override BOOLEAN DEFAULT false`);
-  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_reason TEXT`);
-  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_by UUID REFERENCES users(id)`);
-  await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS promo_code_id UUID`);
+  try { await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_admin_override BOOLEAN DEFAULT false`); } catch (e) { console.error("[MIGRATE] is_admin_override:", e); }
+  try { await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_reason TEXT`); } catch (e) { console.error("[MIGRATE] override_reason:", e); }
+  try { await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS override_by UUID REFERENCES users(id)`); } catch (e) { console.error("[MIGRATE] override_by:", e); }
+  try { await db.execute(sql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS promo_code_id UUID`); } catch (e) { console.error("[MIGRATE] promo_code_id:", e); }
 
   // ─── Plan description & stripe price ids ───
-  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS description TEXT`);
-  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_monthly_price_id VARCHAR(255)`);
-  await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_yearly_price_id VARCHAR(255)`);
+  try { await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS description TEXT`); } catch (e) { console.error("[MIGRATE] plan desc:", e); }
+  try { await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_monthly_price_id VARCHAR(255)`); } catch (e) { console.error("[MIGRATE] stripe monthly:", e); }
+  try { await db.execute(sql`ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_yearly_price_id VARCHAR(255)`); } catch (e) { console.error("[MIGRATE] stripe yearly:", e); }
 
   // ─── Promo codes ───
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS promo_codes (
-      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-      code VARCHAR(50) NOT NULL UNIQUE,
-      description TEXT,
-      discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
-      discount_value DECIMAL(10,2) NOT NULL,
-      max_uses INTEGER,
-      current_uses INTEGER DEFAULT 0,
-      valid_from TIMESTAMPTZ DEFAULT NOW(),
-      valid_until TIMESTAMPTZ,
-      applicable_tiers JSONB DEFAULT '["premium","pro"]',
-      is_active BOOLEAN DEFAULT true,
-      created_by UUID REFERENCES users(id),
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        code VARCHAR(50) NOT NULL UNIQUE,
+        description TEXT,
+        discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+        discount_value DECIMAL(10,2) NOT NULL,
+        max_uses INTEGER,
+        current_uses INTEGER DEFAULT 0,
+        valid_from TIMESTAMPTZ DEFAULT NOW(),
+        valid_until TIMESTAMPTZ,
+        applicable_tiers JSONB DEFAULT '["premium","pro"]',
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+  } catch (e) { console.error("[MIGRATE] promo_codes table:", e); }
 
   // ─── Update plan pricing to match final structure ───
-  await db.execute(sql`
-    UPDATE plans SET monthly_price = 0, yearly_price = 0, monthly_lead_credits = 5, max_portfolio_items = 5, max_team_members = 1,
-      description = 'Get started with a basic agency profile',
-      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true}'::jsonb
-    WHERE tier = 'free'
-  `);
-  await db.execute(sql`
-    UPDATE plans SET monthly_price = 49, yearly_price = 468, monthly_lead_credits = 25, max_portfolio_items = -1, max_team_members = 5,
-      description = 'Everything you need to grow your agency presence',
-      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true}'::jsonb
-    WHERE tier = 'premium'
-  `);
-  await db.execute(sql`
-    UPDATE plans SET monthly_price = 149, yearly_price = 1428, monthly_lead_credits = 100, max_portfolio_items = -1, max_team_members = -1,
-      description = 'Maximum visibility and lead generation power',
-      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true,"featuredBadge":true,"apiAccess":true,"advancedAnalytics":true,"brandedQuoteForm":true}'::jsonb
-    WHERE tier = 'pro'
-  `);
-  await db.execute(sql`
-    UPDATE plans SET monthly_price = 499, yearly_price = 4788, monthly_lead_credits = -1, max_portfolio_items = -1, max_team_members = -1,
-      description = 'Custom solutions for large agencies',
-      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true,"featuredBadge":true,"apiAccess":true,"advancedAnalytics":true,"brandedQuoteForm":true,"dedicatedManager":true,"sla":true,"customBranding":true}'::jsonb
-    WHERE tier = 'enterprise'
-  `);
+  try {
+    const freeFeatures = JSON.stringify({basicProfile:true,reviews:true,basicAnalytics:true});
+    const premiumFeatures = JSON.stringify({basicProfile:true,reviews:true,basicAnalytics:true,enhancedProfile:true,prioritySearch:true,reviewTools:true,coverImage:true,packages:true,teamShowcase:true,socialLinks:true,verifiedBadge:true});
+    const proFeatures = JSON.stringify({basicProfile:true,reviews:true,basicAnalytics:true,enhancedProfile:true,prioritySearch:true,reviewTools:true,coverImage:true,packages:true,teamShowcase:true,socialLinks:true,verifiedBadge:true,featuredBadge:true,apiAccess:true,advancedAnalytics:true,brandedQuoteForm:true});
+    const enterpriseFeatures = JSON.stringify({basicProfile:true,reviews:true,basicAnalytics:true,enhancedProfile:true,prioritySearch:true,reviewTools:true,coverImage:true,packages:true,teamShowcase:true,socialLinks:true,verifiedBadge:true,featuredBadge:true,apiAccess:true,advancedAnalytics:true,brandedQuoteForm:true,dedicatedManager:true,sla:true,customBranding:true});
+
+    await db.execute(sql`UPDATE plans SET monthly_price = 0, yearly_price = 0, monthly_lead_credits = 5, max_portfolio_items = 5, max_team_members = 1, description = 'Get started with a basic agency profile', features = ${freeFeatures}::jsonb WHERE tier = 'free'`);
+    await db.execute(sql`UPDATE plans SET monthly_price = 49, yearly_price = 468, monthly_lead_credits = 25, max_portfolio_items = -1, max_team_members = 5, description = 'Everything you need to grow your agency presence', features = ${premiumFeatures}::jsonb WHERE tier = 'premium'`);
+    await db.execute(sql`UPDATE plans SET monthly_price = 149, yearly_price = 1428, monthly_lead_credits = 100, max_portfolio_items = -1, max_team_members = -1, description = 'Maximum visibility and lead generation power', features = ${proFeatures}::jsonb WHERE tier = 'pro'`);
+    await db.execute(sql`UPDATE plans SET monthly_price = 499, yearly_price = 4788, monthly_lead_credits = -1, max_portfolio_items = -1, max_team_members = -1, description = 'Custom solutions for large agencies', features = ${enterpriseFeatures}::jsonb WHERE tier = 'enterprise'`);
+  } catch (e) { console.error("[MIGRATE] plan pricing update:", e); }
 
   // ─── Auto-enroll existing agencies without subscriptions into Free plan ───
-  await db.execute(sql`
-    INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
-    SELECT a.id, p.id, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 month'
-    FROM agencies a
-    CROSS JOIN plans p
-    WHERE p.tier = 'free'
-      AND a.deleted_at IS NULL
-      AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.agency_id = a.id)
-    ON CONFLICT (agency_id) DO NOTHING
-  `);
+  try {
+    await db.execute(sql`
+      INSERT INTO subscriptions (agency_id, plan_id, status, billing_cycle, current_period_start, current_period_end)
+      SELECT a.id, p.id, 'active', 'monthly', NOW(), NOW() + INTERVAL '1 month'
+      FROM agencies a
+      CROSS JOIN plans p
+      WHERE p.tier = 'free'
+        AND a.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.agency_id = a.id)
+      ON CONFLICT (agency_id) DO NOTHING
+    `);
+  } catch (e) { console.error("[MIGRATE] auto-enroll:", e); }
 
   // ─── Seed RBAC permissions ───
   await seedPermissions(db);
