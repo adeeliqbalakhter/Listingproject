@@ -195,7 +195,7 @@ export default function AdminSubscriptionsPage() {
           {plans.map((plan) => {
             const style = TIER_STYLES[plan.tier] || TIER_STYLES.free;
             const TierIcon = style.icon;
-            const subCount = subscriptions.filter(s => s.plan_id === plan.id && s.status === "active").length;
+            const subCount = subscriptions.filter(s => s.plan_id === plan.id).length;
             return (
               <div key={plan.id} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -268,7 +268,7 @@ export default function AdminSubscriptionsPage() {
                   const style = TIER_STYLES[sub.tier] || TIER_STYLES.free;
                   const TierIcon = style.icon;
                   return (
-                    <tr key={sub.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={sub.id || sub.agency_id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -285,10 +285,10 @@ export default function AdminSubscriptionsPage() {
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[sub.status] || "bg-gray-100 text-gray-600"}`}>
                           {sub.status === "active" ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {sub.status}
+                          {sub.status || "none"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-gray-500 capitalize">{sub.billing_cycle}</td>
+                      <td className="px-5 py-3.5 text-gray-500 capitalize">{sub.billing_cycle || "—"}</td>
                       <td className="px-5 py-3.5 text-gray-500">
                         {sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : "—"}
                       </td>

@@ -20,30 +20,38 @@ export async function GET(request: NextRequest) {
     const agencyName = searchParams.get("agency") || "";
 
     const conditions: ReturnType<typeof sql>[] = [];
-    if (tier) conditions.push(sql`p.tier = ${tier}`);
+    if (tier === "free") {
+      conditions.push(sql`(p.tier = 'free' OR p.tier IS NULL)`);
+    } else if (tier) {
+      conditions.push(sql`p.tier = ${tier}`);
+    }
     if (agencyName) conditions.push(sql`a.name ILIKE ${`%${agencyName}%`}`);
 
-    const where = conditions.length > 0
-      ? conditions.reduce((acc, cond, i) => i === 0 ? sql`WHERE ${cond}` : sql`${acc} AND ${cond}`)
-      : sql``;
-
     try {
+      // Show ALL agencies, including those without subscriptions (LEFT JOIN)
       const countResult = await db.execute(sql`
         SELECT count(*) as count
-        FROM subscriptions s
-        JOIN agencies a ON s.agency_id = a.id
-        JOIN plans p ON s.plan_id = p.id
-        ${where}
+        FROM agencies a
+        LEFT JOIN subscriptions s ON s.agency_id = a.id
+        LEFT JOIN plans p ON s.plan_id = p.id
+        WHERE a.deleted_at IS NULL
+        ${conditions.length > 0 ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
       `);
       const total = Number((countResult as unknown as Array<{ count: string }>)[0]?.count ?? 0);
 
       const rows = await db.execute(sql`
-        SELECT s.*, a.name as agency_name, p.name as plan_name, p.tier
-        FROM subscriptions s
-        JOIN agencies a ON s.agency_id = a.id
-        JOIN plans p ON s.plan_id = p.id
-        ${where}
-        ORDER BY s.created_at DESC
+        SELECT s.id, s.agency_id, s.plan_id, s.status, s.billing_cycle,
+               s.current_period_start, s.current_period_end, s.created_at,
+               s.is_admin_override, s.override_reason,
+               a.id as agency_id, a.name as agency_name,
+               COALESCE(p.name, 'No Plan') as plan_name,
+               COALESCE(p.tier, 'free') as tier
+        FROM agencies a
+        LEFT JOIN subscriptions s ON s.agency_id = a.id
+        LEFT JOIN plans p ON s.plan_id = p.id
+        WHERE a.deleted_at IS NULL
+        ${conditions.length > 0 ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
+        ORDER BY a.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `);
 

@@ -847,20 +847,28 @@ export async function runMigrations() {
 
   // ─── Update plan pricing to match final structure ───
   await db.execute(sql`
-    UPDATE plans SET yearly_price = 468, description = 'Everything you need to grow your agency presence'
-    WHERE tier = 'premium' AND yearly_price != 468
+    UPDATE plans SET monthly_price = 0, yearly_price = 0, monthly_lead_credits = 5, max_portfolio_items = 5, max_team_members = 1,
+      description = 'Get started with a basic agency profile',
+      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true}'::jsonb
+    WHERE tier = 'free'
   `);
   await db.execute(sql`
-    UPDATE plans SET yearly_price = 1428, description = 'Maximum visibility and lead generation power'
-    WHERE tier = 'pro' AND yearly_price != 1428
+    UPDATE plans SET monthly_price = 49, yearly_price = 468, monthly_lead_credits = 25, max_portfolio_items = -1, max_team_members = 5,
+      description = 'Everything you need to grow your agency presence',
+      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true}'::jsonb
+    WHERE tier = 'premium'
   `);
   await db.execute(sql`
-    UPDATE plans SET description = 'Get started with a basic agency profile'
-    WHERE tier = 'free' AND description IS NULL
+    UPDATE plans SET monthly_price = 149, yearly_price = 1428, monthly_lead_credits = 100, max_portfolio_items = -1, max_team_members = -1,
+      description = 'Maximum visibility and lead generation power',
+      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true,"featuredBadge":true,"apiAccess":true,"advancedAnalytics":true,"brandedQuoteForm":true}'::jsonb
+    WHERE tier = 'pro'
   `);
   await db.execute(sql`
-    UPDATE plans SET description = 'Custom solutions for large agencies'
-    WHERE tier = 'enterprise' AND description IS NULL
+    UPDATE plans SET monthly_price = 499, yearly_price = 4788, monthly_lead_credits = -1, max_portfolio_items = -1, max_team_members = -1,
+      description = 'Custom solutions for large agencies',
+      features = '{"basicProfile":true,"reviews":true,"basicAnalytics":true,"enhancedProfile":true,"prioritySearch":true,"reviewTools":true,"coverImage":true,"packages":true,"teamShowcase":true,"socialLinks":true,"verifiedBadge":true,"featuredBadge":true,"apiAccess":true,"advancedAnalytics":true,"brandedQuoteForm":true,"dedicatedManager":true,"sla":true,"customBranding":true}'::jsonb
+    WHERE tier = 'enterprise'
   `);
 
   // ─── Auto-enroll existing agencies without subscriptions into Free plan ───
